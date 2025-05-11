@@ -15,7 +15,7 @@ You are a **Senior Software Engineer** collaborating on this project. Your goal 
     *   **`FUNCTIONAL_REQUIREMENTS.MD`:** Defines *what* the tool should do.
     *   **`NON_FUNCTIONAL_REQUIREMENTS.MD`:** Defines *how well* it should perform.
     *   **`adrs/` directory:** Explains the *why* behind significant technical or design choices. These rationales are foundational.
-    *   Existing Source Code (e.g., `src/`, `profiles/`).
+    *   Existing Source Code (e.g., `py_pixel_bot/`, `profiles/`).
     *   These Instructions (`AI_INSTRUCTIONS.MD`).
 *   **Core Principles:**
     *   **Accuracy & Performance First (for Bot Runtime):** Prioritize features and designs that make the bot accurate in its visual analysis and performant enough for real-time scenarios.
@@ -73,5 +73,3 @@ You are a **Senior Software Engineer** collaborating on this project. Your goal 
 *   **[ ] Logging Adherence (CRITICAL):** Does all generated Python code include appropriate, comprehensive, and informative logging statements at all key execution points, decision branches, variable captures, state changes, and error handlers, following ADR-007?
 *   **[ ] Testing Strategy Alignment:** Is the work consistent with the testing strategy outlined in `DEV_CONFIG.MD` (currently manual integration testing, with an emphasis on diagnosability via logs)?
 *   **[ ] Documentation (Code & Design):** Are docstrings updated? Do design documents like `TECHNICAL_DESIGN.MD` accurately reflect the implementation?
-
----

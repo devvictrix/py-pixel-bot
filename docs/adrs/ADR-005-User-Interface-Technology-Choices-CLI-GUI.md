@@ -54,7 +54,7 @@ We need Python technologies for both, prioritizing cross-platform compatibility,
 ## Consequences
 
 *   **CLI Development:**
-    *   The CLI is built using Python's `argparse` module, located in `src/py_pixel_bot/ui/cli.py`. It handles parsing commands and options passed at startup.
+    *   The CLI is built using Python's `argparse` module, located in `py_pixel_bot/ui/cli.py`. It handles parsing commands and options passed at startup.
 *   **GUI Development:**
     *   The project has a dependency on the `CustomTkinter` library (and its dependencies, like `Pillow`). This is managed via `requirements.txt`.
     *   The initial GUI component for region selection (`RegionSelectorWindow`) was built with `CustomTkinter`.

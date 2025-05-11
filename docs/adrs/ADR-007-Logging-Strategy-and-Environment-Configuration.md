@@ -80,7 +80,7 @@ We also need a standard method for managing environment-specific settings, prima
 
 *   A `.env` file (e.g., containing `APP_ENV=development`) is expected in the project root for local development. This file **MUST** be added to `.gitignore`.
 *   The `python-dotenv` library is a project dependency (listed in `requirements.txt`).
-*   A dedicated module, `src/py_pixel_bot/core/logging_setup.py`, encapsulates all logging initialization logic.
+*   A dedicated module, `py_pixel_bot/core/logging_setup.py`, encapsulates all logging initialization logic.
 *   Developers must be diligent in adding comprehensive logging statements throughout their code, using appropriate log levels.
 *   The `logs/` directory needs to be created by the application if it doesn't exist and **MUST** be added to `.gitignore`.
 

@@ -1,12 +1,10 @@
-// File: docs/TECHNICAL_DESIGN.MD
-# TECHNICAL_DESIGN.MD
 # Technical Design Document
 
 This document outlines the technical design and architectural considerations for the visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status. As of the last update, AI-Accelerated v1.0.0 and v2.0.0 (Advanced Visual Analysis & Rules) are complete. Development for v3.0.0 (Enhanced GUI & Usability) is now underway, with Phase 1.8.1 (GUI Input Validation & Refinements) of the Full GUI being the current focus.
 
 ## 1. Core Architecture
 
-The tool is modular, comprising several key Python components:
+The tool is modular, comprising several key Python components, all residing within the main `py_pixel_bot` package located at the project root:
 
 *   **`core.config_manager` Module:**
     *   `load_environment_variables()` function: Called at application startup to load `.env` (containing `APP_ENV`) using `python-dotenv` (per ADR-007).
@@ -37,7 +35,7 @@ The tool is modular, comprising several key Python components:
     *   Simulates mouse and keyboard actions using `pyautogui` (per ADR-002).
     *   Calculates target coordinates for actions based on various `target_relation` types.
     *   Handles type conversion (e.g., string to int/float) for action parameters that may have been substituted from string variables, with appropriate validation and logging.
-*   **`main_controller.MainController` Class:**
+*   **`main_controller.MainController` Class:** (Located in `py_pixel_bot/main_controller.py`)
     *   Orchestrates the main bot operation loop for runtime execution.
     *   Runs the monitoring loop in a separate thread (per ADR-006) using `threading.Event` for graceful shutdown.
     *   For each monitored region in a profile:
@@ -58,14 +56,13 @@ The tool is modular, comprising several key Python components:
     *   Rule editing UI supports: editing name/default region; converting condition structure (single/compound); selecting condition/action types; dynamically rendering and editing parameters for selected types (including for sub-conditions); adding/removing sub-conditions.
     *   Implements input validation for all editable fields with user feedback via message boxes.
     *   Manages an "unsaved changes" (dirty) state.
-*   **`__main__.py` (in `src/`):**
-    *   The main application entry point (`python -m py_pixel_bot`).
-    *   Handles initial `sys.path` adjustments for module resolution.
-    *   Loads environment variables via `core.config_manager.load_environment_variables()`.
-    *   Sets up logging via `core.logging_setup.setup_logging()`.
-    *   Parses CLI arguments using `ui.cli.create_parser()`.
+*   **`py_pixel_bot/__main__.py`:** <!-- Updated path -->
+    *   The main application entry point when running as a module (`python -m py_pixel_bot`). The `py_pixel_bot` directory (at the project root) must be discoverable by Python (e.g., by running the command from the project root).
+    *   Loads environment variables via `py_pixel_bot.core.config_manager.load_environment_variables()` (or equivalent relative import like `from .core.config_manager import ...`).
+    *   Sets up logging via `py_pixel_bot.core.logging_setup.setup_logging()`.
+    *   Parses CLI arguments using `py_pixel_bot.ui.cli.create_parser()`.
     *   Adjusts console logging verbosity based on CLI flags.
-    *   Dispatches to the appropriate command handler function in `ui.cli` (e.g., `handle_run` starts `MainController`, `handle_edit` starts `MainAppWindow`).
+    *   Dispatches to the appropriate command handler function in `py_pixel_bot.ui.cli` (e.g., `handle_run` starts `MainController`, `handle_edit` starts `MainAppWindow`).
 
 ## 2. Key Libraries & Justifications (Summary from ADRs)
     *   Environment Management: `python-dotenv` (ADR-007)
@@ -154,7 +151,7 @@ The tool is modular, comprising several key Python components:
 3.  Loop repeats.
 
 ## 7. Logging System (per ADR-007)
-    *   Initialized by `core.logging_setup.setup_logging()` using `APP_ENV` and CLI flags.
+    *   Initialized by `py_pixel_bot.core.logging_setup.setup_logging()` using `APP_ENV` and CLI flags.
     *   Modules use `logging.getLogger(__name__)`.
     *   Comprehensive logging covers:
         *   **Backend:** Application start/stop, profile loading, capture events, analysis results (including selective skips and fallbacks), rule evaluation steps (condition checks, variable capture/substitution, short-circuiting), action execution attempts and outcomes.
@@ -202,5 +199,3 @@ The tool is modular, comprising several key Python components:
 
 ### 9.6. Logging for GUI Operations
     (INFO for major user actions, DEBUG for UI state/rendering, WARNING/ERROR for validation failures or operational errors.)
-
----
