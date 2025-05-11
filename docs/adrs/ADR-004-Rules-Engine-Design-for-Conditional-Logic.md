@@ -1,7 +1,7 @@
 // File: docs/adrs/ADR-004-Rules-Engine-Design-for-Conditional-Logic.md
 # ADR-004: Rules Engine Design for Conditional Logic
 
-*   **Status:** Approved
+*   **Status:** Approved (and implemented, including evolution to Option 2)
 *   **Date:** 2025-05-11
 *   **Deciders:** DevLead
 
@@ -10,51 +10,56 @@
 The tool's core functionality relies on a "Rules Engine" that evaluates conditions based on visual analysis and triggers actions ("IF `visual_condition(s)` MET for `region(s)`, THEN PERFORM `action_sequence`."). We need a clear, extensible, and configurable way to define these rules.
 
 The design should consider:
-*   How conditions are expressed (color match, template found, text present).
-*   Combining multiple conditions (AND/OR logic).
-*   Linking actions to conditions.
-*   Storage in the configuration profile (JSON, per ADR-003).
+*   How conditions are expressed (e.g., color match, template found, text present, dominant color).
+*   The ability to combine multiple conditions using logical operators (AND/OR).
+*   Linking specific actions to these conditions.
+*   How these rules are stored within the configuration profile (JSON, as per ADR-003).
+*   The potential for capturing data from a condition (e.g., OCR text, template coordinates) for use in actions.
 
 ## Considered Options
 
 1.  **Simple List of Single-Condition Rule Objects (JSON):**
-    *   Each rule is an object with a single condition type, parameters, and an action.
-    *   Pros: Simple to understand and implement initially. Easy to parse.
-    *   Cons: Limited expressiveness for complex logic (no direct AND/OR between different condition types on different regions within a single rule block without custom evaluation).
+    *   Each rule is an object with a single condition type, its parameters, and an associated action.
+    *   Pros: Very simple to understand and implement initially. Easy to parse.
+    *   Cons: Limited expressiveness for complex logic. Combining multiple distinct checks (e.g., "color IS X **AND** template Y IS found") would require multiple rules and potentially complex external state management by the user or bot, or lead to very specific, inflexible combined condition types.
 
 2.  **Structured Rule Objects with Compound Conditions (JSON):**
-    *   Rules can have a complex `condition` block supporting AND/OR logic and multiple sub-conditions.
-    *   Pros: More expressive. Keeps related logic within a single rule.
-    *   Cons: More complex to parse and implement evaluation logic. JSON can become more deeply nested.
+    *   Rules can have a more complex `condition` block that supports a primary logical operator (`AND` or `OR`) and a list of `sub_conditions`. Each sub-condition would be similar in structure to the single condition object from Option 1.
+    *   Pros: Far more expressive. Allows users to construct complex logical relationships between different types of visual checks on various regions, all within a single, cohesive rule. Keeps related logic together.
+    *   Cons: More complex to parse and to implement the evaluation logic in the `RulesEngine`. The JSON structure for rules becomes more deeply nested.
 
 3.  **Dedicated Mini-Language or Expression Engine:**
-    *   Define a custom string-based language for conditions.
-    *   Pros: Potentially very expressive and flexible.
-    *   Cons: Significant implementation overhead (parser, evaluator). Steep learning curve for users. Overkill initially.
+    *   Define a custom string-based language or expression syntax for conditions (e.g., `"regionA.pixel(10,10).is_color([0,0,255]) AND regionB.has_template('icon.png')"`).
+    *   Pros: Potentially very expressive and flexible, could allow for arithmetic or string operations within conditions.
+    *   Cons: Significant implementation overhead (parser, lexer, evaluator). Steep learning curve for users not familiar with expression languages. Overkill for the initial and likely medium-term scope.
 
 4.  **Behavior Tree Approach:**
-    *   Represent rules/actions as nodes in a behavior tree.
-    *   Pros: Very powerful for complex sequences and conditional logic.
-    *   Cons: Significant implementation complexity. Overkill initially. User configuration challenging without a dedicated editor.
+    *   Represent rules, conditions, and actions as nodes in a behavior tree (common in game AI and robotics).
+    *   Pros: Extremely powerful for complex sequences, conditional logic, state management, and prioritization.
+    *   Cons: Significant implementation complexity. Likely overkill for the project's primary focus on reacting to visual states. User configuration would be very challenging without a dedicated visual behavior tree editor, which is far beyond the scope of the planned `CustomTkinter` GUI.
 
 ## Decision Outcome
 
-**Chosen Option:** Start with **Option 1 (Simple List of Single-Condition Rule Objects)** and evolve towards **Option 2 (Structured Rule Objects with Compound Conditions)** as the project matures and requirements for more complex logic become clearer.
-*This evolution to Option 2 has been implemented as part of v2.0.0.*
+**Chosen Option:** Start with **Option 1 (Simple List of Single-Condition Rule Objects)** for initial development (v0.x versions) and then **evolve to Option 2 (Structured Rule Objects with Compound Conditions)** as the project matured and the need for more complex logic became evident.
 
-**Justification (for starting with Option 1, then evolving to Option 2):**
-*   **Simplicity and Rapid Initial Development (Option 1):** Easiest to implement for core use cases. Delivers fundamental "IF visual_event THEN action" quickly. Manageable initial configuration.
-*   **Enhanced Expressiveness (Option 2):** Addresses the need for more complex logic by allowing `AND`/`OR` combinations of multiple sub-conditions within a single rule structure. The `condition` part of a rule object can accept a `logical_operator` and a list of `sub_conditions`.
+*   **Status:** The evolution to **Option 2 has been fully implemented** as part of the v2.0.0 feature set. The `RulesEngine` now supports rules with a `condition` block containing a `logical_operator` ("AND" or "OR") and a list of `sub_conditions`. Each sub-condition has its own `type` and parameters. The GUI (`MainAppWindow`) also supports creating and editing this compound structure.
+*   Backwards compatibility for the Option 1 (single condition) format is maintained: if a rule's `condition` object directly contains a `type` field and no `logical_operator`, it's treated as a single condition.
 
-This phased approach balanced delivering initial value quickly with achieving necessary flexibility.
+**Justification for the Evolutionary Approach:**
+*   **Initial Simplicity (Option 1):** Allowed for rapid development of core "IF visual_event THEN action" functionality, delivering value quickly.
+*   **Meeting Evolving Needs (Option 2):** As more analysis types were added and more complex automation scenarios were considered (like your "Hello my wife!" example which requires a sequence of checks), the limitations of Option 1 became clear. Option 2 provides the necessary expressiveness by allowing multiple, potentially different, types of conditions (on same or different regions) to be combined logically within one rule.
+*   **Manageable Complexity:** Option 2, while more complex than Option 1, is still significantly simpler to implement and manage within a JSON configuration and a Python-based `RulesEngine` than Options 3 or 4. The GUI helps abstract this complexity from the end-user.
 
 ## Consequences
 
-*   **Initial Implementation (Option 1 - Completed for v0.x):**
-    *   `rules_engine.py` iterated a list of rule objects, performed single condition check, executed action.
-*   **Evolution (Option 2 - Implemented for v2.0.0):**
-    *   `rules_engine.py` was updated to parse and evaluate complex condition structures with `logical_operator` and `sub_conditions`.
-    *   JSON schema for rules was extended, while maintaining backwards compatibility for single-condition rules where `logical_operator` is absent.
-*   Rule object structure (fields for `name`, `region` (default), `condition` object, `action` object) is clearly defined in `TECHNICAL_DESIGN.MD`.
+*   **`RulesEngine` Implementation:**
+    *   Initially handled a simple list of rules with single conditions.
+    *   Was refactored (as part of v2.0.0) to parse the new compound condition structure. This involved recursive or iterative evaluation of `sub_conditions` based on the `logical_operator`, including short-circuiting.
+*   **JSON Profile Schema:**
+    *   The `condition` object within a rule in the JSON profile was extended. It can now either be a simple object with a `type` (for single conditions) OR an object with `logical_operator` and `sub_conditions` (an array of simple condition objects). This schema is documented in `TECHNICAL_DESIGN.MD`.
+*   **GUI Development (`MainAppWindow`):**
+    *   The GUI needed to be designed to allow users to create and edit both single and compound conditions, including adding/removing sub-conditions and selecting the logical operator. This has been a significant part of the v3.0.0 GUI effort.
+    *   The "Convert Condition Structure" button was added to easily switch a rule's condition between single and compound forms.
+*   **Variable Capture & Usage:** The design of sub-conditions also needed to accommodate variable capture (`capture_as`) within a sub-condition and the use of those variables in subsequent sub-conditions or the rule's action, which has also been implemented.
 
 ---

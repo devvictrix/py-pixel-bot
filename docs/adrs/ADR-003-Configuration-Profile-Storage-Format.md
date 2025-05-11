@@ -9,48 +9,51 @@
 
 The visual automation tool needs to store user configurations (bot profiles), which include:
 *   Definitions of screen regions to monitor.
-*   Analysis parameters for these regions.
-*   Rules that link analysis outcomes to specific actions.
-*   Details of the actions to be performed.
+*   Paths to template images for matching.
+*   Analysis parameters for these regions/conditions.
+*   Rules that link analysis outcomes to specific actions (single or compound conditions).
+*   Details of the actions to be performed, including parameters for variable capture and use.
+*   General profile settings (e.g., monitoring interval).
 
-This collection of settings needs to be saved to a file and loaded back. The format should be human-readable, easy to parse by Python, and flexible.
+This collection of settings needs to be saved to a file and loaded back. The format should be human-readable (to a degree), easy to parse by Python, and flexible enough to accommodate evolving rule structures and features.
 
 ## Considered Options
 
 1.  **JSON (JavaScript Object Notation):**
-    *   Pros: Widely adopted, human-readable. Natively supported by Python's `json` module. Good for nested data.
-    *   Cons: No native comments. Strict syntax.
+    *   Pros: Widely adopted, human-readable. Natively supported by Python's `json` module. Good for nested data structures like rules, conditions, and actions.
+    *   Cons: No native comments. Strict syntax (though less of an issue when primarily GUI-managed).
 
 2.  **INI File Format (via `configparser`):**
     *   Pros: Simple, supports comments. Python's `configparser` module.
-    *   Cons: Less suited for deeply nested data. Values read as strings requiring conversion.
+    *   Cons: Less suited for deeply nested or complex data structures (like lists of rules, each with nested conditions/actions). Values are read as strings, requiring manual conversion.
 
 3.  **YAML (YAML Ain't Markup Language):**
-    *   Pros: Very human-readable, supports comments. Good for complex, nested data.
-    *   Cons: Requires an external library (e.g., `PyYAML`). Parsing can be slower.
+    *   Pros: Very human-readable, supports comments. Excellent for complex, nested data.
+    *   Cons: Requires an external library (e.g., `PyYAML`). Parsing can be slower than JSON. Potential security concerns with default `yaml.load()` if not using `yaml.safe_load()`.
 
 4.  **Custom Binary Format (e.g., using `pickle`):**
-    *   Pros: Efficient storage/parsing. Can serialize Python objects.
-    *   Cons: Not human-readable. Python-specific. Security risks with `pickle`. Version compatibility.
+    *   Pros: Efficient storage/parsing. Can directly serialize Python objects.
+    *   Cons: Not human-readable. Python-specific. Significant security risks with `pickle` if loading untrusted files. Version compatibility issues between Python versions or application versions if object structures change.
 
 ## Decision Outcome
 
 **Chosen Option:** JSON
 
 **Justification:**
-*   **Human Readability & Editability:** JSON strikes a good balance and is familiar.
-*   **Native Python Support:** The built-in `json` module is trivial to integrate, no external dependencies for this core function.
-*   **Sufficient Data Structuring:** JSON's support for nested objects (dictionaries) and arrays (lists) is well-suited for representing regions, rules, and actions.
-*   **Wide Adoption:** De facto standard for configuration files.
-*   **Performance:** Adequate for anticipated profile sizes.
+*   **Human Readability & Editability:** JSON strikes a good balance. While not as comment-friendly as YAML, its structure is widely understood, and manual inspection/tweaking is possible if necessary (though the GUI is the primary editor).
+*   **Native Python Support:** The built-in `json` module is trivial to integrate and requires no external dependencies for this core function, which is a significant advantage.
+*   **Sufficient Data Structuring:** JSON's support for nested objects (Python dictionaries) and arrays (Python lists) is perfectly suited for representing the hierarchical nature of profiles: a profile contains lists of regions, templates, and rules; rules contain condition objects (which can be compound with sub-conditions) and action objects, all with various parameters.
+*   **Wide Adoption:** It's a de facto standard for configuration files and data interchange in many applications.
+*   **Performance:** JSON parsing is generally fast and efficient for the anticipated sizes of profile files.
+*   **GUI Focus:** Since the GUI (`MainAppWindow`) will be the primary means of creating and editing profiles, the lack of comments in JSON is less of a drawback. The GUI can provide context and descriptions for all fields.
 
-The lack of comments is a minor drawback mitigated by clear key naming and the potential for a `"comment"` field within objects if needed. The primary interface for editing profiles will be the GUI.
+The strict syntax of JSON is managed by `json.dump()` for saving (ensuring well-formed output) and `json.load()` for loading (which will raise errors on malformed files, aiding in data integrity).
 
 ## Consequences
 
-*   Bot profiles will be stored in `.json` files, typically in a `profiles/` directory.
-*   The application will use Python's `json` module for loading and saving profiles.
-*   A clear schema for the JSON profiles will be defined and documented (e.g., in `TECHNICAL_DESIGN.MD` or a dedicated schema file).
-*   Manual editing by users, while possible, should be approached with caution. GUI tools will be the primary interface.
+*   Bot profiles will be stored in `.json` files, typically within a `profiles/` directory located next to the main application or in a user-configurable location managed by `ConfigManager`. Template images associated with a profile will be stored in a `templates/` subdirectory next to their respective profile JSON file.
+*   The application (`ConfigManager`) will use Python's built-in `json` module for loading and saving profiles.
+*   A clear schema or an example of the JSON profile structure (including regions, templates, rules with single/compound conditions, variable capture, actions, and settings) will be documented in `TECHNICAL_DESIGN.MD` and exemplified by sample profiles.
+*   The GUI editor (`MainAppWindow`) will be responsible for presenting these JSON structures in a user-friendly way and ensuring that user inputs are correctly translated back into the valid JSON format upon saving.
 
 ---

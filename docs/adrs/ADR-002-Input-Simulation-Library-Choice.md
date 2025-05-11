@@ -19,6 +19,7 @@ The visual automation tool requires the ability to programmatically simulate mou
         *   Relatively easy to install and use.
     *   Cons:
         *   Can sometimes have issues with certain games or applications that use low-level input hooks.
+        *   Has dependencies like Pillow, which is acceptable as Pillow is already chosen for capture/image manipulation (see ADR-001).
 
 2.  **`pynput` (for control):**
     *   Pros:
@@ -43,12 +44,13 @@ The visual automation tool requires the ability to programmatically simulate mou
 *   **Cross-Platform Support:** This is a critical requirement, and `pyautogui` is designed for this.
 *   **Sufficient for Project Needs:** For simulating clicks and key presses based on visual analysis, `pyautogui`'s capabilities are well-suited.
 *   **Community and Maintenance:** It's a mature and actively maintained library.
+*   **Dependency Alignment:** Its dependency on Pillow aligns with other technology choices.
 
 ## Consequences
 
 *   The project will have a dependency on `pyautogui`.
-*   Developers will need to be familiar with the `pyautogui` API for action execution.
-*   Potential limitations in highly specialized environments (e.g., some full-screen games) might need to be addressed on a case-by-case basis if they arise.
-*   Ensure `pyautogui`'s dependencies (like Pillow, Xlib on Linux, etc.) are handled correctly during installation.
+*   Developers will need to be familiar with the `pyautogui` API for action execution (`ActionExecutor` module).
+*   Potential limitations in highly specialized environments (e.g., some full-screen games with anti-cheat or low-level input blocking) might need to be addressed on a case-by-case basis if they arise, potentially by exploring `pynput` as a fallback for specific scenarios if `pyautogui` fails.
+*   Ensure `pyautogui`'s dependencies (like Pillow, Xlib on Linux, etc.) are handled correctly during installation (covered by `requirements.txt`).
 
 ---

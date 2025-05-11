@@ -39,20 +39,21 @@ We need to select foundational Python libraries for these core tasks.
 
 ## Decision Outcome
 
-**Chosen Option:** `OpenCV-Python` as the primary library for screen capture and image analysis (including template matching), supplemented by `pytesseract` for OCR capabilities. `mss` will be kept in consideration for future performance optimization of screen capture if needed. Pillow is also included as `pyautogui` and `CustomTkinter` (for `CTkImage`) depend on it, and it's useful for direct screen capture on Windows (`ImageGrab.grab()`).
+**Chosen Option:** `Pillow` (specifically `ImageGrab.grab()` on Windows) for primary screen capture due to its simplicity and good performance on the initial target OS (Windows), `OpenCV-Python` for image processing and analysis (including template matching), supplemented by `pytesseract` for OCR capabilities. `mss` and OpenCV's direct capture methods are kept in consideration for future performance optimization or cross-platform capture enhancements if needed.
 
 **Justification:**
-*   **Unified Toolkit:** OpenCV provides a vast range of functionalities needed (capture, image manipulation, filtering, template matching) within a single, well-integrated ecosystem. Pillow provides simple and fast cross-platform image manipulation and capture, especially effective on Windows.
-*   **Power and Flexibility:** They offer the depth required for future, more complex analysis features.
-*   **Cross-Platform Abstraction:** While performance can vary, OpenCV and Pillow aim to provide a consistent API across platforms for capture.
-*   **Industry Standard:** OpenCV, Pillow, and Tesseract are de facto standards in their respective domains.
-*   **Performance Path:** While `mss` is noted for speed, OpenCV's capabilities are broad. If specific capture bottlenecks arise with OpenCV's default methods or Pillow's `ImageGrab`, `mss` can be integrated as an alternative capture source, feeding data into the OpenCV pipeline for analysis.
+*   **Simplicity & Performance on Target OS (Pillow for Windows Capture):** `ImageGrab.grab()` is straightforward and performs well on Windows for capturing screen regions.
+*   **Comprehensive Analysis (OpenCV):** OpenCV provides a vast range of functionalities needed for image manipulation, filtering, and template matching.
+*   **Standard OCR (pytesseract):** `pytesseract` is the de facto standard Python wrapper for Tesseract.
+*   **Power and Flexibility:** The combination offers the depth required for current and future complex analysis features.
+*   **Industry Standard:** OpenCV, Pillow, and Tesseract are well-known in their domains.
+*   **Performance Path:** If Pillow's `ImageGrab` shows limitations or for broader cross-platform capture, direct OpenCV capture or `mss` can be integrated, feeding data into the OpenCV pipeline for analysis.
 
 ## Consequences
 
-*   The project will have dependencies on `opencv-python`, `numpy` (usually comes with OpenCV), `Pillow`, and `pytesseract`.
-*   Users will need to install the Tesseract OCR engine separately for OCR features to work. This needs to be clearly documented in `README.md` and user guides.
-*   Initial development will focus on leveraging Pillow's `ImageGrab` for Windows screen capture due to its simplicity and good performance there, and OpenCV for image processing. Performance testing will guide if/when to explore other capture methods or optimize.
-*   Developers will need to be familiar with OpenCV's API for image processing, Pillow for capture/basic manipulation, and `pytesseract` for OCR.
+*   The project has dependencies on `Pillow`, `opencv-python`, `numpy` (usually comes with OpenCV), and `pytesseract`.
+*   Users will need to install the Tesseract OCR engine separately for OCR features to work. This is documented in `README.md`.
+*   Initial development of `CaptureEngine` focuses on `Pillow.ImageGrab.grab()` for Windows, converting to OpenCV format for analysis.
+*   Developers need familiarity with Pillow for capture, OpenCV for image processing, and `pytesseract` for OCR.
 
 ---
