@@ -1,0 +1,47 @@
+{
+    "profile_description": "A basic example to log the average color of a defined screen area and demonstrate a simple rule.",
+    "settings": {
+        "monitoring_interval_seconds": 2.5
+    },
+    "regions": [
+        {
+            "name": "top_left_quadrant",
+            "x": 0,
+            "y": 0,
+            "width": 400,
+            "height": 300,
+            "comment": "A general area at the top-left of the primary screen."
+        }
+    ],
+    "templates": [],
+    "rules": [
+        {
+            "name": "LogAverageColorOfTopLeft",
+            "region": "top_left_quadrant",
+            "condition": {
+                "type": "always_true"
+            },
+            "action": {
+                "type": "log_message",
+                "message": "Periodic check of top_left_quadrant."
+            }
+        },
+        {
+            "name": "IfTopLeftIsVeryDarkThenLog",
+            "region": "top_left_quadrant",
+            "condition": {
+                "type": "average_color_is",
+                "expected_bgr": [
+                    10,
+                    10,
+                    10
+                ],
+                "tolerance": 20
+            },
+            "action": {
+                "type": "log_message",
+                "message": "Top-left quadrant is currently very dark."
+            }
+        }
+    ]
+}

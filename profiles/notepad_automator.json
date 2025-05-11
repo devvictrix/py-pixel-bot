@@ -1,0 +1,54 @@
+{
+    "profile_description": "Automates simple tasks in Notepad based on OCR and color.",
+    "settings": {
+        "monitoring_interval_seconds": 1.5
+    },
+    "regions": [
+        {
+            "name": "notepad_text_area",
+            "x": 50, 
+            "y": 100, 
+            "width": 500, 
+            "height": 300,
+            "comment": "CRITICAL: Adjust x,y,w,h to accurately fit an open Notepad window's main text editing area."
+        },
+        {
+            "name": "notepad_menu_bar_file_approx",
+            "x": 2, 
+            "y": 2, 
+            "width": 40, 
+            "height": 25,
+            "comment": "Approximate small area for 'File' menu text in Notepad. Adjust coordinates for your system's Notepad."
+        }
+    ],
+    "templates": [],
+    "rules": [
+        {
+            "name": "AppendDetailsToTodoInNotepad",
+            "region": "notepad_text_area",
+            "condition": {
+                "type": "ocr_contains_text",
+                "text_to_find": "TODO:",
+                "case_sensitive": true 
+            },
+            "action": {
+                "type": "type_text",
+                "text": " - ACTION REQUIRED!",
+                "pyautogui_pause_before": 0.2 
+            }
+        },
+        {
+            "name": "LogIfFileMenuAreaIsStandardWindowsMenuBarColor",
+            "region": "notepad_menu_bar_file_approx",
+            "condition": {
+                "type": "average_color_is",
+                "expected_bgr": [240, 240, 240], 
+                "tolerance": 15 
+            },
+            "action": {
+                "type": "log_message",
+                "message": "Notepad 'File' menu area background color matches typical light gray menu."
+            }
+        }
+    ]
+}
