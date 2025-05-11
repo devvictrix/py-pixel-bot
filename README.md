@@ -1,170 +1,241 @@
-# PyPixelBot - Visual Automation Tool for Windows
+# PyPixelBot: A Visual Automation Tool
 
-PyPixelBot is a Python-based desktop automation tool for Windows. It captures and analyzes specific, user-defined regions of the screen in real-time. Based on this visual analysis (e.g., detecting colors, matching images/templates, or recognizing text via OCR), it can perform actions like mouse clicks and keyboard inputs.
+PyPixelBot is a Python-based desktop automation tool that captures specific screen regions, analyzes their content (colors, images, text via OCR, dominant colors), and performs actions (mouse clicks, keyboard inputs) based on user-defined rules. It features a comprehensive GUI for creating and managing automation profiles, alongside a CLI for running bots.
 
-This tool is designed for automating tasks that rely on visual cues, especially in applications or games that may not offer traditional APIs for automation.
+**Current Development: v3.0.0 (Enhanced GUI & Usability)**
+*   AI-Accelerated v1.0.0: Completed (Core features, basic GUI for region selection)
+*   v2.0.0 (Advanced Visual Analysis & Rules): Completed (Compound conditions, OCR confidence, dominant colors, variables, selective analysis)
+*   v3.0.0: In Progress (Full GUI Profile Editor - core editing features largely implemented, focus on refinements)
 
-## Features (AI-Accelerated v1.0.0)
+## Table of Contents
 
-*   **Targeted Screen Region Analysis:** Define specific rectangular areas on your screen to monitor.
-*   **Visual Analysis Capabilities:**
-    *   **Pixel Color:** Check the color of specific pixels.
-    *   **Average Color:** Determine the average color of a region.
-    *   **Template Matching:** Find occurrences of a predefined image (template) within a region.
-    *   **OCR (Optical Character Recognition):** Extract text from a region.
-*   **Conditional Actions:** Define rules (IF visual condition is MET THEN perform action).
-*   **Supported Actions:**
-    *   Mouse clicks (left, right, middle) at specific or relative coordinates.
-    *   Typing text.
-    *   Pressing individual keys or hotkeys.
-*   **Configuration via JSON Profiles:** Define regions, rules, and actions in human-readable JSON files.
-*   **Command-Line Interface (CLI):**
-    *   Run bot profiles.
-    *   Graphically add/update regions to profiles using a built-in GUI selector.
-*   **Environment-Aware Logging:** Comprehensive logging with configurable verbosity for development, UAT, and production.
+- [PyPixelBot: A Visual Automation Tool](#pypixelbot-a-visual-automation-tool)
+  - [Table of Contents](#table-of-contents)
+  - [Core Features](#core-features)
+  - [How it Works](#how-it-works)
+  - [Technology Stack](#technology-stack)
+  - [Setup Instructions](#setup-instructions)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+    - [Environment Configuration](#environment-configuration)
+    - [PYTHONPATH Configuration](#pythonpath-configuration)
+  - [Usage (CLI)](#usage-cli)
+    - [Running a Bot Profile](#running-a-bot-profile)
+    - [Adding/Updating a Region (Simple GUI Tool)](#addingupdating-a-region-simple-gui-tool)
+    - [Editing a Profile (Full GUI Editor)](#editing-a-profile-full-gui-editor)
+  - [Configuration Profiles (.json)](#configuration-profiles-json)
+    - [Structure Overview](#structure-overview)
+    - [Example Profiles](#example-profiles)
+  - [Logging](#logging)
+  - [Development](#development)
+  - [Contributing (Future)](#contributing-future)
+  - [License](#license)
 
-## Prerequisites
+## Core Features
 
-1.  **Python:** Version 3.9+ (developed with 3.12.x on Windows). Download from [python.org](https://www.python.org/downloads/windows/).
-    *   During installation, **ensure "Add Python to PATH" is checked.**
-2.  **Tesseract OCR Engine (for OCR functionality):**
-    *   Download a Tesseract installer for Windows (e.g., from [UB Mannheim Tesseract builds](https://github.com/UB-Mannheim/tesseract/wiki)).
-    *   During Tesseract installation, **ensure it is added to your system's PATH.**
-    *   Install language data files (e.g., `eng.traineddata`) for Tesseract.
-3.  **Git (Optional):** For cloning.
+*   **Region-Based Screen Capture:** Define specific rectangular areas on your screen to monitor.
+*   **Advanced Visual Analysis:**
+    *   **Pixel & Average Color Analysis:** Check specific or average colors within a region.
+    *   **Template Matching:** Detect if a small image (template) is present, with confidence scoring.
+    *   **OCR Text Extraction:** Extract text using Tesseract, including average confidence scores.
+    *   **Dominant Color Analysis:** Identify the main colors in a region using K-Means clustering.
+*   **Flexible Rule Engine:**
+    *   Define rules with **single conditions** or **compound conditions** (AND/OR logic with multiple sub-conditions).
+    *   Utilize OCR confidence and dominant color properties in conditions.
+    *   **Capture variables** from analysis results (e.g., OCR text, template match details) for use in subsequent conditions or actions.
+*   **Versatile Actions:**
+    *   **Mouse Simulation:** Clicks (left, right, middle), targeted precisely.
+    *   **Keyboard Simulation:** Type text or press keys/hotkeys.
+    *   **Log Custom Messages:** Action to write to logs.
+    *   Use captured variables to make action parameters dynamic.
+*   **Performance Optimization:** Selective analysis ensures only necessary computations are performed during bot runtime.
+*   **Interfaces:**
+    *   **Command-Line Interface (CLI):** For running bots and launching GUI tools.
+    *   **Full GUI Profile Editor (v3.0.0 - In Progress):** Comprehensive `CustomTkinter`-based GUI for creating, editing, and managing all aspects of profiles (settings, regions, templates, rules with all parameters and structures).
+    *   **Simple Region Selector GUI:** A focused tool for graphically defining screen regions.
+*   **Comprehensive Logging:** Detailed, persistent, and configurable logs for diagnostics and monitoring.
+
+## How it Works
+
+1.  **Configuration (via GUI Editor or JSON):** You define automation tasks in a JSON "profile" file. This profile specifies:
+    *   `settings`: Global parameters like monitoring interval, `analysis_dominant_colors_k`.
+    *   `regions`: Areas of the screen to monitor (name, x, y, width, height).
+    *   `templates`: Definitions for template matching (name, relative filename). Template images are typically stored in a `templates/` subdirectory next to the profile.
+    *   `rules`: A list of conditions to check and actions to perform. Each rule links visual conditions (single or compound, with parameters like OCR confidence, variable captures) in a region to specific actions (which can use captured variables).
+2.  **Bot Runtime (`run` command):**
+    *   The bot loads the specified profile.
+    *   It enters a continuous loop (threaded for CLI responsiveness).
+    *   **Capture:** Captures images of all defined regions.
+    *   **Selective Analysis:** Performs only those general analyses (OCR, dominant color, average color) on each region that are required by active rules.
+    *   **Rule Evaluation:** Iterates through rules. For each rule:
+        *   Creates a temporary variable context.
+        *   Evaluates its condition (single or compound), substituting any variable placeholders.
+        *   Performs on-demand analyses (pixel color, template match) if needed.
+        *   Captures specified values into variables if conditions are met.
+    *   **Action:** If a rule's condition is true, its action parameters are processed for variable substitution, and the action is executed.
+3.  **Profile Editing (GUI - `edit` command):**
+    *   Launches the `MainAppWindow`.
+    *   Allows users to create new profiles or open existing ones.
+    *   Provides a visual interface to manage all profile components: settings, regions (including graphical selection), templates (including image preview and file management), and rules (including condition types, parameters, compound logic, sub-conditions, action types, and action parameters).
+    *   Includes input validation and feedback.
+    *   Saves changes back to the JSON profile file.
+
+## Technology Stack
+
+*   **Language:** Python 3.9+
+*   **Screen Capture:** Pillow (`ImageGrab`), OpenCV-Python
+*   **Image Processing/Analysis:** OpenCV-Python, NumPy, Pillow
+*   **OCR:** Tesseract OCR via `pytesseract`
+*   **Input Simulation:** `pyautogui`
+*   **GUI:** `CustomTkinter`
+*   **Configuration:** JSON
+*   **CLI:** `argparse`
+*   **Environment Management:** `python-dotenv`
+*   **Logging:** Python `logging` module
+*   **Concurrency (Bot Runtime):** `threading`
 
 ## Setup Instructions
 
-1.  **Clone/Download:** Get the source code and navigate to the `py-pixel-bot` directory.
+### Prerequisites
+
+*   **Python:** Version 3.9 or newer.
+*   **Tesseract OCR Engine:** **Required for OCR features.**
+    *   **Windows:** Download and run the installer from [UB Mannheim Tesseract releases](https://github.com/UB-Mannheim/tesseract/wiki).
+        *   **Important:** During installation, ensure you select to "Add Tesseract to system PATH" or manually add the Tesseract installation directory (e.g., `C:\Program Files\Tesseract-OCR`) to your system's `PATH` environment variable.
+        *   Install language data packs (e.g., `eng` for English) with Tesseract.
+    *   **macOS:** `brew install tesseract tesseract-lang`
+    *   **Linux (Debian/Ubuntu):** `sudo apt-get install tesseract-ocr tesseract-ocr-all`
+    *   Verify Tesseract by typing `tesseract --version` in a terminal.
+*   **Pip:** Python package installer.
+*   **Git:** For cloning the repository (if applicable).
+
+### Installation
+
+1.  **Clone/Download:** Obtain the project files.
+    ```bash
+    # If cloning:
+    # git clone <repository_url>
+    # cd py-pixel-bot 
+    ```
+    Navigate to the project's root directory.
+
 2.  **Virtual Environment (Recommended):**
     ```bash
-    # In project root (py-pixel-bot)
-    py -m venv .venv
-    .venv\Scripts\activate 
+    python -m venv .venv
     ```
+    *   Windows: `.venv\Scripts\activate`
+    *   macOS/Linux: `source .venv/bin/activate`
+
 3.  **Install Dependencies:**
+    Ensure you have a `requirements.txt` file in the project root (as provided in the sync output). Then run:
     ```bash
     pip install -r requirements.txt
     ```
-4.  **Create `.env` File:**
-    In `py-pixel-bot` root, create `.env` with:
-    ```dotenv
-    APP_ENV=development
+
+### Environment Configuration
+
+1.  Create a file named `.env` in the project root.
+2.  Add for local development: `APP_ENV=development`
+    *   This controls logging verbosity. Other values: `uat`, `production`.
+    *   The `.env` file should be in your `.gitignore`.
+
+### PYTHONPATH Configuration
+
+The application is designed to be run as a module from the project root directory (e.g., `python -m py_pixel_bot ...`). The `src/__main__.py` script attempts to correctly adjust `sys.path` so that modules within `src/py_pixel_bot/` can be imported.
+
+*   **Primary Method:** Run from the project's root directory:
+    ```bash
+    # (ensure virtual env is active)
+    python -m py_pixel_bot --help 
     ```
-    *   Options: `development` (verbose logs), `uat`, `production`.
+*   **If `ModuleNotFoundError` occurs:** This usually means Python cannot find the `py_pixel_bot` package.
+    *   Ensure your current working directory IS the project root (`py-pixel-bot/`).
+    *   Alternatively, you can explicitly set the `PYTHONPATH` environment variable to include the `src` directory (or its parent, the project root, depending on how you invoke).
+        *   Linux/macOS (temp): `export PYTHONPATH="/path/to/your/py-pixel-bot/src:$PYTHONPATH"` or `export PYTHONPATH="/path/to/your/py-pixel-bot:$PYTHONPATH"`
+        *   Windows CMD (temp): `set PYTHONPATH=C:\path\to\your\py-pixel-bot\src;%PYTHONPATH%` or `set PYTHONPATH=C:\path\to\your\py-pixel-bot;%PYTHONPATH%`
 
-## Basic Usage
+## Usage (CLI)
 
-All commands are run from the project root (`py-pixel-bot/`) with the virtual environment activated.
+Ensure your virtual environment is activated. All commands are typically run from the project's root directory.
 
-### 1. Adding/Updating a Region to a Profile (GUI)
-
-Launches a GUI to select a screen region.
 ```bash
-python -m py_pixel_bot add-region <profile_filename> [--name <initial_region_name>] [-v[v]]
+python -m py_pixel_bot <command> [options]
 ```
-*   `<profile_filename>`: In `profiles/` (e.g., `my_game` or `my_game.json`). Created if new.
-*   `--name <initial_region_name>` (Optional): Initial name for the region in GUI.
-*   `-v` / `-vv` (Optional): Increases console log verbosity.
 
-**Example:**
+### Running a Bot Profile
+
+Starts the bot's monitoring and action loop using a specified profile.
 ```bash
-python -m py_pixel_bot add-region my_profile --name ScreenTopLeft -vv
+python -m py_pixel_bot run <profile_name_or_path> [-v | -vv]
 ```
-Select a region, name it (if needed), click "Confirm Region". Press `ESC` or "Redraw/Cancel" to restart selection or close.
+*   `<profile_name_or_path>`: Name (e.g., `example_profile` looks for `profiles/example_profile.json`) or full/relative path.
+*   `-v`: INFO level console logging.
+*   `-vv`: DEBUG level console logging.
+Press `Ctrl+C` to stop the bot.
 
-### 2. Running a Bot Profile
+### Adding/Updating a Region (Simple GUI Tool)
 
-Executes the defined automation.
+Launches a simple GUI tool to draw/name a screen region and save/update it in a profile.
 ```bash
-python -m py_pixel_bot run <profile_filename> [-v[v]]
+python -m py_pixel_bot add-region <profile_name_or_path>
 ```
-*   `<profile_filename>`: Profile in `profiles/`.
-*   `-v` / `-vv` (Optional): Increases console log verbosity.
+The profile will be created if it doesn't exist.
 
-**Example:**
+### Editing a Profile (Full GUI Editor)
+
+Launches the comprehensive GUI Profile Editor.
 ```bash
-python -m py_pixel_bot run my_profile -v
+python -m py_pixel_bot edit [profile_name_or_path]
 ```
-Press `Ctrl+C` in the console to stop the bot.
+*   `[profile_name_or_path]`: (Optional) If provided, loads this profile on startup. Otherwise, starts with a new, empty profile.
 
-## Profile JSON Structure (`profiles/<your_profile_name>.json`)
+## Configuration Profiles (.json)
 
-A profile defines regions to watch, templates to find, and rules for actions.
+Bot behavior is defined in JSON files (typically in `profiles/`). Template images for a profile should be placed in a `templates/` subdirectory next to that profile's JSON file (e.g., `profiles/my_bot/templates/icon.png` if profile is `profiles/my_bot/my_bot_profile.json`). The GUI's "Add Template" feature handles copying selected images to this location.
 
-*   **`profile_description`**: (String) A brief description.
-*   **`settings`**: (Object) Bot-wide settings.
-    *   `monitoring_interval_seconds`: (Float) How often the bot checks regions (e.g., `1.0`).
-*   **`regions`**: (List of Objects) Areas on the screen. Each object:
-    *   `name`: (String) Unique identifier for the region.
-    *   `x`, `y`: (Integer) Top-left screen coordinates.
-    *   `width`, `height`: (Integer) Dimensions of the region.
-    *   `comment` (Optional String): Notes about the region.
-*   **`templates` (Optional List of Objects)**: Defines template images for matching.
-    *   `name`: (String) Unique identifier for this template definition (can be used by rules, though currently rules use `template_filename` directly).
-    *   `filename`: (String) The image filename (e.g., `my_icon.png`). **Place these image files in a `profiles/templates/` subdirectory.**
-*   **`rules`**: (List of Objects) Logic for the bot. Each rule object:
-    *   `name`: (String) Descriptive name for the rule.
-    *   `region`: (String) The `name` of a region (from the `regions` list) where this rule's condition is checked.
-    *   `condition`: (Object) What to check.
-        *   `type`: (String) Type of check:
-            *   `"pixel_color"`: Checks a specific pixel.
-                *   `relative_x`, `relative_y`: (Integer) Coordinates relative to the region's top-left.
-                *   `expected_bgr`: (List of 3 Integers) `[Blue, Green, Red]` color values.
-            *   `"average_color_is"`: Checks the region's average color.
-                *   `expected_bgr`: (List of 3 Integers) `[B, G, R]`.
-                *   `tolerance`: (Integer, Optional, default `0`) Allowed deviation per channel.
-            *   `"template_match_found"`: Checks if a template image is found.
-                *   `template_filename`: (String) Filename of the template image (from `profiles/templates/`).
-                *   `min_confidence`: (Float, Optional, default `0.8`) Minimum similarity (0.0 to 1.0).
-            *   `"ocr_contains_text"`: Checks if extracted text contains a substring.
-                *   `text_to_find`: (String) The text to search for.
-                *   `case_sensitive`: (Boolean, Optional, default `false`).
-            *   `"always_true"`: (For testing) Condition always met.
-    *   `action`: (Object) What to do if the condition is met.
-        *   `type`: (String) Type of action: `click`, `type_text`, `press_key`, `log_message`.
-        *   `target_region` (Optional String): Name of a region to target for the action (if different from the condition's `region`). If omitted, often implies the condition's region or screen-relative based on other params.
-        *   **For `click`:**
-            *   `x`, `y`: (Integer, Optional) Absolute screen coordinates.
-            *   `target_relation` (Optional String): How to calculate click point if `x,y` not given:
-                *   `"center_of_region"`: Center of the `action.target_region` (or rule's `region` if `action.target_region` omitted).
-                *   `"offset_from_region_tl"`: Offset from Top-Left of `action.target_region`.
-                *   `"center_of_last_match"`: Center of the template found by the triggering rule's condition (if applicable).
-                *   `"offset_from_last_match_tl"`: Offset from Top-Left of found template.
-            *   `x_offset`, `y_offset`: (Integer, Optional, default `0`) Additional offset for relative clicks.
-            *   `button`: (String, Optional, default `"left"`) Mouse button: `"left"`, `"right"`, `"middle"`.
-            *   `clicks`: (Integer, Optional, default `1`) Number of clicks.
-            *   `interval`: (Float, Optional, default `0.1`) Seconds between multiple clicks.
-        *   **For `type_text`:**
-            *   `text`: (String) The text to type.
-            *   `interval`: (Float, Optional, default `0.01`) Seconds between keystrokes.
-        *   **For `press_key`:**
-            *   `key`: (String or List of Strings) Key name(s) (e.g., `"enter"`, `"f5"`, `["ctrl", "c"]` for hotkeys). See PyAutoGUI docs for key names.
-        *   **For `log_message`:**
-            *   `message`: (String) The message to log at INFO level.
-        *   `pyautogui_pause_before`: (Float, Optional, default `0.05`) Seconds to pause before PyAutoGUI executes the action.
+### Structure Overview
 
-## Example Profiles
+A profile contains:
+*   `profile_description` (string)
+*   `settings` (object): e.g., `monitoring_interval_seconds`, `analysis_dominant_colors_k`.
+*   `regions` (array of objects): `name`, `x`, `y`, `width`, `height`.
+*   `templates` (array of objects): `name`, `filename` (relative path within the profile's `templates/` dir).
+*   `rules` (array of objects):
+    *   `name` (string)
+    *   `region` (string, default region for conditions)
+    *   `condition` (object):
+        *   Single: `{"type": "...", param: val, "capture_as": "var"}`
+        *   Compound: `{"logical_operator": "AND"|"OR", "sub_conditions": [array_of_single_conditions]}`
+    *   `action` (object): `{"type": "...", param: val}` (params can use `{var}` for substitution).
 
-See the `profiles/` directory for examples:
+See `TECHNICAL_DESIGN.MD` and example profiles in the `profiles/` directory for full schema details.
 
-*   **`example_profile.json`**: A very basic starting point.
-*   **`notepad_automator.json`**: Demonstrates OCR for interacting with Notepad.
-    *   *Setup*: Open Notepad and ensure its text area covers the screen coordinates defined in `regions[0]`. Type "TODO:" into Notepad.
-*   **`simple_game_helper.json`**: Simulates a game helper using average color (for a health bar) and template matching (for an action icon).
-    *   *Setup*: You'll need to create a `profiles/templates/action_icon.png`. Then, arrange elements on your screen that match the colors and show the icon in the defined regions.
+### Example Profiles
 
-**Adjust coordinates in `regions` within these profiles to match your screen setup before running!**
+The `profiles/` directory contains examples like:
+*   `example_profile.json`: Basic color checking and logging.
+*   `notepad_automator.json`: Simple Notepad automation using OCR.
+*   `simple_game_helper.json`: Hypothetical game helper.
+*   `line_messenger_abc.json`, `line_wife_message_ai.json`: More complex template-based automation for LINE messenger (require user-created template images).
 
 ## Logging
 
-Log files are created daily in the `logs/` directory (e.g., `2025-05-11.log`).
-Log verbosity is controlled by `APP_ENV` in `.env` and CLI flags (`-v`, `-vv`).
+*   Logs are written to the `logs/` directory in the project root (e.g., `YYYY-MM-DD.log`).
+*   Verbosity is controlled by `APP_ENV` in `.env` and CLI flags (`-v`, `-vv` for console).
+    *   `development`: DEBUG to console and file.
+    *   `uat`/`production`: INFO to console (or WARNING) and file.
+*   Comprehensive logging is crucial for debugging and understanding bot/GUI behavior.
 
 ## Development
 
-(Future: Contribution guidelines, advanced testing.)
+*   See `docs/DEV_CONFIG.MD` for development choices.
+*   ADRs (Architectural Decision Records) are in `docs/adrs/`.
+*   Key design documents: `docs/TECHNICAL_DESIGN.MD`, `docs/FEATURE_ROADMAP.MD`.
+
+## Contributing (Future)
+
+Contribution guidelines will be added if the project is opened for wider collaboration.
 
 ## License
 
-(To be determined)
+This project is intended to be licensed under a permissive open-source license like MIT (LICENSE.MD file to be formally added). It uses third-party libraries which have their own licenses (see their respective documentation and license files, e.g., OpenCV, CustomTkinter themes). The NumPy random number generator component included in the consolidated sources has its own dual NCSA/3-Clause BSD license.
