@@ -1,4 +1,4 @@
-// File: DEV_CONFIG.MD
+// File: docs/DEV_CONFIG.MD
 # Development Configuration & Choices
 
 This document outlines key development choices, current phase settings, and environment setup for the project.
@@ -19,15 +19,16 @@ This document outlines key development choices, current phase settings, and envi
 *   **`.gitignore`:** The `.env` file MUST be added to `.gitignore` to prevent committing environment-specific or sensitive settings.
 
 ## 2. Current Development Phase Focus
-*   **Overall Goal for First Major Deliverable:** `AI-Accelerated v1.0.0`
-    *   This version aims to deliver a comprehensive suite of core functionalities as the first major output, leveraging AI-assisted development. Details are in `FEATURE_ROADMAP.MD`.
-*   **Active Version (Current Focus for Implementation):** `v0.1.0 (Core Modules & Basic Interactions for AI-Accelerated v1.0.0)`
-    *   *This version, set here, dictates the immediate components and features being developed by the AI collaborator, contributing towards the larger AI-Accelerated v1.0.0 goal.*
-*   **Primary Goal for Active Version:** Implement core modules for region definition, capture, basic analysis (pixel/color), simple rule evaluation, foundational logging setup, and CLI control. Establish the backbone for the AI-Accelerated v1.0.0.
-*   **Testing Strategy for Active Version (and towards AI-Accelerated v1.0.0):**
+*   **Overall Goal for First Major Deliverable:** `AI-Accelerated v1.0.0` - **COMPLETED**
+*   **Overall Goal for Second Major Deliverable (Current Target):** `v2.0.0 (Advanced Visual Analysis & Rules)`
+    *   This version aims to enhance the rule engine's capabilities, introduce more sophisticated analysis options, and improve performance. Details are in `FEATURE_ROADMAP.MD`.
+*   **Active Version (Current Focus for Implementation):** `v2.0.0 (Analysis - OCR Confidence Thresholds)`
+    *   *This version, set here, dictates the immediate components and features being developed by the AI collaborator, contributing towards the larger v2.0.0 goal.*
+*   **Primary Goal for Active Version:** Enhance OCR analysis to include confidence scores and enable rules to use these scores as part of their conditions (e.g., "IF text CONTAINS 'X' AND overall_ocr_confidence > 0.85"). This involves updates to `AnalysisEngine`, `MainController` (for data packet), JSON schema for rules, and `RulesEngine`.
+*   **Testing Strategy for Active Version (and towards v2.0.0):**
     *   **Unit Tests:** Deferred until core components are more stable, or upon explicit DevLead enablement.
         *   **Status:** `Pending DevLead Enablement`
-    *   **Integration Tests:** Manual, focused on end-to-end scenarios for the AI-Accelerated v1.0.0 features. Log outputs will be crucial for validation.
+    *   **Integration Tests:** Manual, focused on end-to-end scenarios for the v2.0.0 features. Log outputs will be crucial for validation.
 *   **Linting/Formatting Setup:** Basic setup during initial module development (e.g., Flake8, Black to be integrated later as per Tooling Choices).
 
 ## 3. Architectural & Design Approach
@@ -55,29 +56,29 @@ This document outlines key development choices, current phase settings, and envi
 ## 5. Version Control
 *   **System:** Git
 *   **Branching (Simplified Strategy):**
-    *   `main`: Represents the latest stable release (or the AI-Accelerated v1.0.0 once achieved).
-    *   `develop`: Active development branch for ongoing work towards the current overall goal. Feature branches are created from `develop`.
-    *   Feature branches: e.g., `feature/core-capture-engine`, `feature/gui-region-selector`.
+    *   `main`: Represents the latest stable release (AI-Accelerated v1.0.0).
+    *   `develop`: Active development branch for ongoing work towards the current overall goal (v2.0.0). Feature branches are created from `develop`.
+    *   Feature branches: e.g., `feature/ocr-confidence-thresholds`, `feature/color-palette-analysis`.
 *   **Commit Messages:** Aim for conventional commit style if possible (e.g., `feat: ...`, `fix: ...`, `docs: ...`).
 
 ## 6. Documentation
 *   **Docstring Style:** Google Python Style.
 *   **Project Documentation Status:**
-    *   **`CHANGELOG.MD`:** Deferred until AI-Accelerated v1.0.0 is near completion.
+    *   **`CHANGELOG.MD`:** Deferred until v2.0.0 is near completion.
         *   **Status:** `Pending DevLead Enablement`
     *   **`CONTRIBUTING.MD`:** Deferred.
         *   **Status:** `Pending DevLead Enablement`
     *   **Core Docs (Overview, Requirements, Design, ADRs):** Established, will be updated iteratively.
-*   **README.md (Project Root):** A good `README.md` should be created early, outlining the project, setup instructions (including virtual environment and `.env` file), and basic usage.
+*   **README.md (Project Root):** v1.0.0 version complete and accurate.
 
 ## 7. Development Environment
 *   **Target OS for Bot:** **Windows**
 *   **Development OS:** **Windows**
 *   **Key Dependencies Installation (Windows Focus):**
     ```bash
-    # Example for a requirements.txt (to be created)
+    # From requirements.txt
     # pip install opencv-python numpy Pillow pytesseract pyautogui python-dotenv CustomTkinter
     ```
-    Ensure Tesseract OCR for Windows is installed system-wide if OCR features are being developed/tested.
+    Ensure Tesseract OCR for Windows is installed system-wide and in PATH.
 
 ---

@@ -1,3 +1,4 @@
+// File: docs/FEATURE_ROADMAP.MD
 # Feature Roadmap & Status
 
 This document tracks planned features and their status for this visual automation tool. The primary goal is to achieve the "AI-Accelerated v1.0.0" as the first major deliverable, followed by further enhancements.
@@ -25,6 +26,7 @@ This document tracks planned features and their status for this visual automatio
 | **Initial GUI (Region Selection)**     | v0.4.0 (GUI Tool for Region Selection, Naming, Confirming, CLI Integration Save)     | Done               | High     |
 | **Logging & Error Handling**           | ADR-007 Impl., Error Handling Review & Initial Pass                                  | Done               | Critical |
 | **User Documentation (Basic)**         | `README.md` first draft complete (incl. setup, usage, examples)                      | Done               | High     |
+| **AI-Accelerated v1.0.0 STABILIZATION & DOCUMENTATION** | Integration Testing, README Finalization, Error Handling Review | Done               | Critical |
 
 ---
 
@@ -59,12 +61,12 @@ This document tracks planned features and their status for this visual automatio
 | v0.4.0  | Done        | High     | Usability                  | GUI Tool for Region Selection                      | GUI (`CustomTkinter`) to draw, name, confirm regions.                                                                                      | `CustomTkinter`.                                                                          |
 | v0.4.0  | Done        | Medium   | Configuration              | GUI for Profile Management (Add Region to Profile) | CLI command `--add-region` uses GUI to update profile via `ConfigManager`.                                                                 | `CustomTkinter`, `ConfigManager`.                                                         |
 | **AI-Accelerated v1.0.0 - STABILIZATION & DOCUMENTATION** |
-| v1.0.0  | In Progress | Critical | Integration & Testing      | Consolidate & Test All AI-Accelerated v1.0.0 Features | Thoroughly test the `run` and `add-region` commands with various profiles and screen conditions. Identify and fix bugs. Log extensively. | All modules.                                                                              |
-| v1.0.0  | In Progress | High     | Documentation              | User Guide & README Finalization                   | Review and finalize the `README.md` to ensure it's accurate, clear, and complete for a v1.0.0 user. Add more example profiles.         | Markdown.                                                                                 |
-| v1.0.0  | In Progress | Critical | Error Handling             | Robust Global Error Handling & Logging Review      | Final review of error messages and log clarity based on testing experiences. Ensure graceful failure modes.                                | Python `logging`, try-except.                                                             |
+| v1.0.0  | Done        | Critical | Integration & Testing      | Consolidate & Test All AI-Accelerated v1.0.0 Features | Thoroughly test the `run` and `add-region` commands with various profiles and screen conditions. Identify and fix bugs. Log extensively. | All modules.                                                                              |
+| v1.0.0  | Done        | High     | Documentation              | User Guide & README Finalization                   | Review and finalize the `README.md` to ensure it's accurate, clear, and complete for a v1.0.0 user. Add more example profiles.         | Markdown.                                                                                 |
+| v1.0.0  | Done        | Critical | Error Handling             | Robust Global Error Handling & Logging Review      | Final review of error messages and log clarity based on testing experiences. Ensure graceful failure modes.                                | Python `logging`, try-except.                                                             |
 | **v2.0.0 (Advanced Visual Analysis & Rules - Post AI-Accelerated v1.0.0)** |
-| v2.0.0  | Not Started | High     | Rules Engine Enhancement   | Compound Conditions (AND/OR Logic)                 | Evolve RulesEngine to support ADR-004 Option 2: multiple conditions per rule with AND/OR logic.                                          | Enhanced `rules_engine.py`, JSON profile schema update.                                   |
-| v2.0.0  | Not Started | High     | Advanced Analysis          | OCR Confidence Thresholds in Rules                 | Allow rules to use OCR confidence scores (e.g., "IF text CONTAINS 'X' AND confidence > 0.85").                                         | `pytesseract` features, `rules_engine.py`.                                                |
+| v2.0.0  | Done        | High     | Rules Engine Enhancement   | Compound Conditions (AND/OR Logic)                 | Evolve RulesEngine to support ADR-004 Option 2: multiple conditions per rule with AND/OR logic.                                          | Enhanced `rules_engine.py`, JSON profile schema update.                                   |
+| v2.0.0  | In Progress | High     | Advanced Analysis          | OCR Confidence Thresholds in Rules                 | Allow rules to use OCR confidence scores (e.g., "IF text CONTAINS 'X' AND confidence > 0.85").                                         | `pytesseract` features, `rules_engine.py`.                                                |
 | v2.0.0  | Not Started | Medium   | Advanced Analysis          | Color Palette Analysis / Dominant Color            | Analyze region for dominant colors or presence of a specific color palette.                                                              | `OpenCV-Python` (histograms, k-means).                                                    |
 | v2.0.0  | Not Started | Medium   | Rules Engine               | Variables in Rules / Actions                       | Allow defining temporary variables based on analysis (e.g., extracted number from OCR) and using them in subsequent actions or conditions. | Custom parsing/evaluation in `rules_engine.py`.                                           |
 | v2.0.0  | Not Started | Medium   | Performance                | Selective Analysis per Rule                        | Optimize `MainController` to only run specific analyses on a region if an active rule actually requires that analysis type.               | `main_controller.py`, `rules_engine.py` interaction.                                      |
@@ -90,13 +92,16 @@ This document tracks planned features and their status for this visual automatio
 
 **Summary & Next Steps:**
 
-*   **Current Status:** The "AI-Accelerated v1.0.0" is feature-complete in terms of its initial implementation. All core modules and functionalities outlined for this version have been developed and have passed initial targeted tests.
-*   **Immediate Focus (Finalizing AI-Accelerated v1.0.0):**
-    1.  **Rigorous End-to-End Testing:** Thoroughly test the `run` command with all example profiles (`example_profile.json`, `notepad_automator.json`, `simple_game_helper.json`) under various screen conditions on Windows. Specifically test OCR and Template Matching rules by setting up the screen to meet their conditions. Test edge cases.
-    2.  **Bug Fixing:** Address any issues identified during this rigorous testing. Pay close attention to logs for unexpected behavior or errors.
-    3.  **README.md Polish:** Add any final clarifications, troubleshooting tips, or setup details (e.g., more explicit `PYTHONPATH` guidance if still needed after `src/__main__.py` sys.path change) to `README.md` based on testing.
-    4.  **Final Logging Review:** One last check to ensure logs are providing clear, actionable information.
-*   **Declaration of v1.0.0:** Once the above steps are complete and we are confident in the stability and functionality of the current feature set, we will update the status of all "AI-Accelerated v1.0.0" items and the overall v1.0.0 target in this roadmap to "Done".
-*   **Next Major Development (Post v1.0.0):** After v1.0.0 is declared stable, `DEV_CONFIG.MD` will be updated to set a new `Active Version` (e.g., `v2.0.0 (Advanced Rule Logic)`) to guide development of the next set of features.
+*   **AI-Accelerated v1.0.0 Complete:** The "AI-Accelerated v1.0.0" feature set is stable and documented.
+*   **v2.0.0 - Compound Conditions Complete:** The `RulesEngine` now successfully supports compound conditions (AND/OR logic) with appropriate schema updates and comprehensive logging, maintaining backwards compatibility.
+*   **Current Development Focus: `v2.0.0 (Advanced Visual Analysis & Rules)`**
+*   **Immediate Next Step:** Begin development of the next feature for v2.0.0: **"OCR Confidence Thresholds in Rules"**. This involves:
+    1.  Modifying `AnalysisEngine.ocr_extract_text` to return not just the text but also detailed data from `pytesseract.image_to_data` (like word-level confidences, bounding boxes, etc.) or overall average confidence if simpler for a start.
+    2.  Storing this enhanced OCR data (including confidence scores) in the `region_data` packet prepared by `MainController`.
+    3.  Designing new condition `type` or parameters for `ocr_contains_text` (or a new `ocr_match_with_confidence` type) in the JSON profile schema to allow specifying minimum confidence levels.
+    4.  Updating `RulesEngine._evaluate_single_condition_logic` to parse and use these confidence thresholds when evaluating OCR-based conditions.
+    5.  Updating `TECHNICAL_DESIGN.MD` to reflect these changes.
+    6.  Ensuring comprehensive logging.
+*   We will proceed with the design and implementation plan for "OCR Confidence Thresholds in Rules".
 
 ---
