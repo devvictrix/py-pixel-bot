@@ -1,0 +1,95 @@
+{
+    "profile_description": "Sends 'abc' to a specific user in LINE messenger.",
+    "settings": {
+        "monitoring_interval_seconds": 3.0
+    },
+    "regions": [
+        {
+            "name": "line_user_list_area",
+            "x": 74,
+            "y": 126,
+            "width": 383,
+            "height": 191
+        },
+        {
+            "name": "line_chat_window_area",
+            "x": 450,
+            "y": 979,
+            "width": 1461,
+            "height": 153
+        }
+    ],
+    "templates": [
+        {
+            "name": "wife_id_tpl",
+            "filename": "wife_identifier_template.png"
+        },
+        {
+            "name": "msg_field_tpl",
+            "filename": "message_input_field_template.png"
+        }
+    ],
+    "rules": [
+        {
+            "name": "R1_FindAndClickWifeInList",
+            "region": "line_user_list_area",
+            "condition": {
+                "type": "template_match_found",
+                "template_filename": "wife_identifier_template.png",
+                "min_confidence": 0.75
+            },
+            "action": {
+                "type": "click",
+                "target_relation": "center_of_last_match",
+                "button": "left",
+                "pyautogui_pause_before": 0.3
+            }
+        },
+        {
+            "name": "R2_FindAndClickMessageInputField",
+            "region": "line_chat_window_area",
+            "condition": {
+                "type": "template_match_found",
+                "template_filename": "message_input_field_template.png",
+                "min_confidence": 0.7
+            },
+            "action": {
+                "type": "click",
+                "target_relation": "center_of_last_match",
+                "button": "left",
+                "pyautogui_pause_before": 0.3
+            }
+        },
+        {
+            "name": "R3_TypeMessageIfFieldStillVisible",
+            "region": "line_chat_window_area",
+            "condition": {
+                "type": "template_match_found",
+                "template_filename": "message_input_field_template.png",
+                "min_confidence": 0.65,
+                "comment": "Assumes field is still identifiable after being clicked. Confidence might need to be lower if appearance changes slightly after focus."
+            },
+            "action": {
+                "type": "type_text",
+                "text": "abc",
+                "interval": 0.05,
+                "pyautogui_pause_before": 0.1
+            }
+        },
+        {
+            "name": "R4_PressEnterIfFieldStillVisibleAfterTyping",
+            "region": "line_chat_window_area",
+            "condition": {
+                "type": "template_match_found",
+                "template_filename": "message_input_field_template.png",
+                "min_confidence": 0.65,
+                "comment": "Assumes field is still identifiable after typing 'abc'. This is the weakest link."
+            },
+            "action": {
+                "type": "press_key",
+                "key": "enter",
+                "pyautogui_pause_before": 0.1
+            }
+        }
+    ]
+}
