@@ -1,163 +1,267 @@
 import logging
-import sys 
-from pathlib import Path 
+import pyautogui # type: ignore
+from typing import Dict, Any, Optional, List, Union # Added Union
 
-try:
-    import pyautogui
-    PYAUTOGUI_AVAILABLE = True
-except ImportError:
-    PYAUTOGUI_AVAILABLE = False
+from py_pixel_bot.core.config_manager import ConfigManager # Assuming this path is correct based on structure
 
 logger = logging.getLogger(__name__)
 
 class ActionExecutor:
-    def __init__(self):
-        logger.info("ActionExecutor initialized.")
-        if not PYAUTOGUI_AVAILABLE:
-            logger.error("PyAutoGUI library not found. Mouse/Keyboard actions will NOT work.")
-        else:
-            logger.debug("PyAutoGUI library successfully imported.")
-        self.pyautogui_available = PYAUTOGUI_AVAILABLE
+    """
+    Executes actions like mouse clicks and keyboard inputs based on action specifications.
+    Handles parameter validation and type conversion for substituted variables.
+    """
 
-    def _calculate_target_coordinates(self, action_spec: dict, 
-                                      analysis_results_for_triggering_region: dict = None, 
-                                      target_region_info: dict = None) -> tuple[int, int] | None:
-        log_prefix_coord = f"CoordCalc for action type '{action_spec.get('type')}':"
-        logger.debug(f"{log_prefix_coord} Spec: {action_spec}, TrigAnalysis: {analysis_results_for_triggering_region is not None}, TargetRegion: {target_region_info.get('name') if target_region_info else 'None'}")
-        abs_x = action_spec.get("x")
-        abs_y = action_spec.get("y")
-        if abs_x is not None and abs_y is not None:
-            logger.debug(f"{log_prefix_coord} Using absolute coordinates from action_spec: ({abs_x},{abs_y})")
-            return int(abs_x), int(abs_y)
+    def __init__(self, config_manager: ConfigManager):
+        """
+        Initializes the ActionExecutor.
+
+        Args:
+            config_manager: The ConfigManager instance, used to resolve region coordinates
+                            if an action targets a region not directly provided in its context.
+        """
+        self.config_manager = config_manager
+        pyautogui.FAILSAFE = True  # Move mouse to top-left (0,0) to abort PyAutoGUI actions
+        # pyautogui.PAUSE = 0.0 # Default pause between PyAutoGUI actions; we use explicit pauses.
+        logger.info("ActionExecutor initialized. PyAutoGUI FAILSAFE is ON.")
+
+    def _validate_and_convert_coord_param(
+        self, value: Any, param_name: str, action_type_for_log: str, rule_name_for_log: str
+    ) -> Optional[int]:
+        """
+        Validates and converts a coordinate parameter (potentially from a substituted variable) to an integer.
+        Logs errors and shows messagebox on failure.
+        """
+        if isinstance(value, (int, float)):
+            logger.debug(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Param '{param_name}' is numeric ({value}), converting to int.")
+            return int(value)
+        if isinstance(value, str):
+            try:
+                # Try float first to handle "10.0", then int
+                val_int = int(float(value.strip()))
+                logger.debug(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Param '{param_name}' string '{value}' converted to int {val_int}.")
+                return val_int
+            except ValueError:
+                logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Param '{param_name}' has invalid numeric string value '{value}'. Cannot convert to integer.")
+                messagebox.showerror("Action Execution Error", f"Rule '{rule_name_for_log}': Invalid numeric value '{value}' for '{param_name}' in action '{action_type_for_log}'.")
+                return None
+        logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Param '{param_name}' has unexpected type '{type(value)}' (value: {value}). Expected number or numeric string.")
+        messagebox.showerror("Action Execution Error", f"Rule '{rule_name_for_log}': Invalid type for '{param_name}' in action '{action_type_for_log}'. Expected number.")
+        return None
+
+    def _validate_and_convert_float_param(
+        self, value: Any, param_name: str, action_type_for_log: str, rule_name_for_log: str, default_val: float, min_val: Optional[float] = None
+    ) -> float:
+        """
+        Validates and converts a parameter to float, with optional min bound.
+        Logs errors and shows messagebox on failure, returning default.
+        """
+        if isinstance(value, (int, float)):
+            val_float = float(value)
+        elif isinstance(value, str):
+            try:
+                val_float = float(value.strip())
+            except ValueError:
+                logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Param '{param_name}' has invalid float string value '{value}'. Using default {default_val}.")
+                messagebox.showwarning("Action Execution Warning", f"Rule '{rule_name_for_log}': Invalid value '{value}' for '{param_name}' in action '{action_type_for_log}'. Using default {default_val}.")
+                return default_val
+        else:
+            logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Param '{param_name}' has unexpected type '{type(value)}'. Using default {default_val}.")
+            messagebox.showwarning("Action Execution Warning", f"Rule '{rule_name_for_log}': Invalid type for '{param_name}' in action '{action_type_for_log}'. Using default {default_val}.")
+            return default_val
+
+        if min_val is not None and val_float < min_val:
+            logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Param '{param_name}' value {val_float} is less than minimum {min_val}. Using default {default_val}.")
+            messagebox.showwarning("Action Execution Warning", f"Rule '{rule_name_for_log}': Value for '{param_name}' ({val_float}) is too small. Using default {default_val}.")
+            return default_val
+        
+        logger.debug(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Param '{param_name}' validated to float {val_float}.")
+        return val_float
+
+
+    def _get_target_coords(self, action_spec: Dict[str, Any], context: Dict[str, Any]) -> Optional[tuple[int, int]]:
+        """
+        Calculates target (x, y) screen coordinates based on action_spec and context.
+        Handles potential string to int conversion for coordinate values.
+        """
         target_relation = action_spec.get("target_relation")
-        x_offset = int(action_spec.get("x_offset", 0))
-        y_offset = int(action_spec.get("y_offset", 0))
-        base_screen_x, base_screen_y = None, None 
-        element_width, element_height = 0, 0     
-        if target_relation == "center_of_region" or target_relation == "offset_from_region_tl":
-            if target_region_info:
-                base_screen_x = target_region_info.get("x", 0)
-                base_screen_y = target_region_info.get("y", 0)
-                element_width = target_region_info.get("width", 0)
-                element_height = target_region_info.get("height", 0)
-                logger.debug(f"{log_prefix_coord} Base is target_region '{target_region_info.get('name')}': screen_x={base_screen_x}, screen_y={base_screen_y}, w={element_width}, h={element_height}")
-            else:
-                logger.warning(f"{log_prefix_coord} Relation to region specified, but target_region_info is missing.")
-                return None
-        elif target_relation == "center_of_last_match" or target_relation == "offset_from_last_match_tl":
-            if analysis_results_for_triggering_region:
-                match_info = analysis_results_for_triggering_region.get('_last_template_match_info')
-                if match_info:
-                    if target_region_info: # Match coords are relative to the region they were found in
-                        match_rel_x = match_info.get("x", 0)
-                        match_rel_y = match_info.get("y", 0)
-                        base_screen_x = target_region_info.get("x", 0) + match_rel_x 
-                        base_screen_y = target_region_info.get("y", 0) + match_rel_y 
-                        element_width = match_info.get("width", 0)
-                        element_height = match_info.get("height", 0)
-                        logger.debug(f"{log_prefix_coord} Base is last_match: screen_x={base_screen_x}, screen_y={base_screen_y}, w={element_width}, h={element_height} (found in region '{target_region_info.get('name')}')")
-                    else:
-                        logger.warning(f"{log_prefix_coord} Relation to last_match needs target_region_info to resolve match coordinates to screen.")
-                        return None
-                else:
-                    logger.warning(f"{log_prefix_coord} Relation to last_match, but no '_last_template_match_info' found.")
-                    return None
-            else:
-                logger.warning(f"{log_prefix_coord} Relation to last_match, but no analysis_results_for_triggering_region.")
-                return None
-        else: 
-            logger.warning(f"{log_prefix_coord} No absolute coords and no valid 'target_relation' in action_spec: {action_spec}.")
-            return None
-        final_x, final_y = None, None
-        if "center_of_" in (target_relation or ""):
-            final_x = base_screen_x + (element_width // 2) + x_offset
-            final_y = base_screen_y + (element_height // 2) + y_offset
-        elif "offset_from_" in (target_relation or ""): 
-            final_x = base_screen_x + x_offset
-            final_y = base_screen_y + y_offset
-        if final_x is not None and final_y is not None:
-            logger.debug(f"{log_prefix_coord} Calculated target screen coordinates: ({final_x},{final_y}) using relation '{target_relation}' and offset ({x_offset},{y_offset})")
-            return int(final_x), int(final_y)
-        else:
-            logger.error(f"{log_prefix_coord} Failed to derive final coordinates. Relation: {target_relation}")
+        action_type_for_log = action_spec.get("type", "unknown_action")
+        rule_name_for_log = context.get("rule_name", "UnknownRule")
+        
+        x_val: Optional[int] = None
+        y_val: Optional[int] = None
+
+        if target_relation == "absolute":
+            x_val = self._validate_and_convert_coord_param(action_spec.get("x"), "x", action_type_for_log, rule_name_for_log)
+            y_val = self._validate_and_convert_coord_param(action_spec.get("y"), "y", action_type_for_log, rule_name_for_log)
+            if x_val is not None and y_val is not None:
+                return x_val, y_val
+            logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Missing or invalid 'x' or 'y' for absolute targeting.")
             return None
 
-    def execute_action(self, action_spec: dict, 
-                       analysis_results_for_triggering_region: dict = None, 
-                       target_region_info: dict = None):
-        action_type = action_spec.get("type")
-        region_name_for_log = target_region_info.get("name", "N/A") if target_region_info else "N/A"
-        log_prefix = f"Action '{action_type}' for target_region '{region_name_for_log}':"
-        logger.info(f"{log_prefix} Attempting with spec: {action_spec}")
-        if not self.pyautogui_available:
-            logger.error(f"{log_prefix} Cannot execute. PyAutoGUI library is not available.")
-            return
+        # For relative targeting, we need a base region.
+        # The action_spec might have "target_region" (from GUI) or rely on rule's default region (in context["condition_region"])
+        target_region_name = action_spec.get("target_region") if action_spec.get("target_region") else context.get("condition_region")
+        target_region_config = None
+        if target_region_name:
+            target_region_config = self.config_manager.get_region_config(target_region_name) # Fetches from loaded profile
+        
+        if not target_region_config and target_relation in ["center_of_region", "relative_to_region"]:
+            logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Target region '{target_region_name}' config not found for relation '{target_relation}'.")
+            messagebox.showerror("Action Error", f"Rule '{rule_name_for_log}': Region '{target_region_name}' not found for action.")
+            return None
+        
+        region_x, region_y, region_w, region_h = 0,0,0,0
+        if target_region_config: # Should be true if needed
+            region_x = target_region_config.get("x", 0)
+            region_y = target_region_config.get("y", 0)
+            region_w = target_region_config.get("width", 0)
+            region_h = target_region_config.get("height", 0)
+
+        if target_relation == "center_of_region":
+            if not target_region_config: return None # Already logged
+            return region_x + region_w // 2, region_y + region_h // 2
+        
+        elif target_relation == "relative_to_region":
+            if not target_region_config: return None # Already logged
+            rel_x = self._validate_and_convert_coord_param(action_spec.get("x"), "relative_x", action_type_for_log, rule_name_for_log)
+            rel_y = self._validate_and_convert_coord_param(action_spec.get("y"), "relative_y", action_type_for_log, rule_name_for_log)
+            if rel_x is not None and rel_y is not None:
+                return region_x + rel_x, region_y + rel_y
+            logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Missing or invalid relative 'x' or 'y' for region-relative targeting.")
+            return None
+
+        elif target_relation == "center_of_last_match":
+            last_match_info = context.get("last_match_info", {})
+            if not last_match_info.get("found"):
+                logger.warning(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': 'center_of_last_match' requested, but no template match found in context.")
+                return None
+            
+            matched_region_name = last_match_info.get("matched_region_name")
+            if not matched_region_name:
+                logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': 'center_of_last_match' - matched_region_name missing from last_match_info.")
+                return None
+            
+            matched_region_config = self.config_manager.get_region_config(matched_region_name)
+            if not matched_region_config:
+                logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': 'center_of_last_match' - Config for matched_region '{matched_region_name}' not found.")
+                messagebox.showerror("Action Error", f"Rule '{rule_name_for_log}': Region '{matched_region_name}' (from template match) not found.")
+                return None
+
+            base_x = matched_region_config.get("x", 0)
+            base_y = matched_region_config.get("y", 0)
+            
+            # These are from the template match result, should be numbers if match was successful
+            match_rel_x = last_match_info.get("location_x", 0) 
+            match_rel_y = last_match_info.get("location_y", 0)
+            match_w = last_match_info.get("width", 0)
+            match_h = last_match_info.get("height", 0)
+            
+            center_x = base_x + match_rel_x + match_w // 2
+            center_y = base_y + match_rel_y + match_h // 2
+            return center_x, center_y
+        
+        logger.error(f"Rule '{rule_name_for_log}', Action '{action_type_for_log}': Unknown or unsupported target_relation '{target_relation}'.")
+        return None
+
+
+    def execute_action(self, full_action_spec: Dict[str, Any]):
+        """
+        Executes a given action based on its specification.
+
+        Args:
+            full_action_spec: The dictionary defining the action and its context.
+                              Includes 'type', parameters, and 'context'.
+        """
+        action_type = full_action_spec.get("type")
+        context = full_action_spec.get("context", {})
+        rule_name = context.get("rule_name", "UnknownRule")
+        
+        # PyAutoGUI pause before action
+        pause_val_str = full_action_spec.get("pyautogui_pause_before", "0.0") # Assume string from GUI/JSON
+        pause_duration = self._validate_and_convert_float_param(pause_val_str, "pyautogui_pause_before", str(action_type), rule_name, 0.0, min_val=0.0)
+
+        if pause_duration > 0:
+            logger.debug(f"Rule '{rule_name}', Action '{action_type}': Pausing for {pause_duration:.2f}s before execution.")
+            try:
+                pyautogui.sleep(pause_duration)
+            except Exception as e_sleep: # PyAutoGUI can sometimes have issues with sleep, though rare
+                logger.warning(f"Rule '{rule_name}', Action '{action_type}': Error during pyautogui.sleep({pause_duration}): {e_sleep}. Continuing action.")
+
+
+        logger.info(f"Rule '{rule_name}': Executing action of type '{action_type}'. Spec (excluding context): "
+                    f"{ {k:v for k,v in full_action_spec.items() if k != 'context'} }")
+
         try:
             if action_type == "click":
-                coords = self._calculate_target_coordinates(action_spec, analysis_results_for_triggering_region, target_region_info)
+                coords = self._get_target_coords(full_action_spec, context)
                 if coords:
-                    click_x, click_y = coords
-                    button = action_spec.get("button", "left").lower()
-                    num_clicks = int(action_spec.get("clicks", 1))
-                    interval = float(action_spec.get("interval", 0.1))
-                    pyautogui.PAUSE = float(action_spec.get("pyautogui_pause_before", 0.05)) 
-                    logger.info(f"{log_prefix} Simulating {num_clicks} {button} click(s) at screen ({click_x},{click_y}) with interval {interval}s.")
-                    pyautogui.click(x=click_x, y=click_y, clicks=num_clicks, interval=interval, button=button)
-                else:
-                    logger.error(f"{log_prefix} Could not determine target coordinates for click. Action spec: {action_spec}")
-            elif action_type == "type_text":
-                text_to_type = action_spec.get("text")
-                if text_to_type is not None: 
-                    interval = float(action_spec.get("interval", 0.01)) 
-                    pyautogui.PAUSE = float(action_spec.get("pyautogui_pause_before", 0.05))
-                    logger.info(f"{log_prefix} Simulating typing text: '{text_to_type[:50]}...' with interval {interval}s.")
-                    pyautogui.typewrite(text_to_type, interval=interval)
-                else:
-                    logger.error(f"{log_prefix} 'type_text' action missing 'text' in spec: {action_spec}")
-            elif action_type == "press_key":
-                key_names = action_spec.get("key")
-                if key_names:
-                    pyautogui.PAUSE = float(action_spec.get("pyautogui_pause_before", 0.05))
-                    if isinstance(key_names, list): 
-                        logger.info(f"{log_prefix} Simulating hotkey press: {key_names}")
-                        pyautogui.hotkey(*key_names)
-                    else: 
-                        logger.info(f"{log_prefix} Simulating single key press: '{key_names}'")
-                        pyautogui.press(key_names)
-                else:
-                    logger.error(f"{log_prefix} 'press_key' action missing 'key' in spec: {action_spec}")
-            elif action_type == "log_message":
-                message = action_spec.get("message", "Default log action message.")
-                logger.info(f"[ACTION_LOG from rule for region '{region_name_for_log}'] {message}")
-            else:
-                logger.warning(f"{log_prefix} Unknown or unsupported action type in spec: {action_spec}")
-        except Exception as e:
-            logger.error(f"{log_prefix} Error during execution: {e}", exc_info=True)
+                    x_coord, y_coord = coords
+                    button = str(full_action_spec.get("button", "left")).lower()
+                    
+                    num_clicks_str = str(full_action_spec.get("clicks", "1"))
+                    num_clicks = self._validate_and_convert_coord_param(num_clicks_str, "clicks", action_type, rule_name)
+                    if num_clicks is None or num_clicks <= 0: num_clicks = 1; logger.warning(f"R '{rule_name}', A 'click': Invalid 'clicks' val, defaulting to 1.")
+                    
+                    interval_str = str(full_action_spec.get("interval", "0.0"))
+                    interval_val = self._validate_and_convert_float_param(interval_str, "interval", action_type, rule_name, 0.0, min_val=0.0)
 
-if __name__ == '__main__':
-    current_script_path = Path(__file__).resolve()
-    project_src_dir = current_script_path.parent.parent.parent 
-    if str(project_src_dir) not in sys.path:
-        sys.path.insert(0, str(project_src_dir))
-    from py_pixel_bot.core.config_manager import load_environment_variables
-    load_environment_variables() 
-    from py_pixel_bot.core.logging_setup import setup_logging
-    setup_logging() 
-    test_logger = logging.getLogger(__name__ + "_test")
-    test_logger.info("--- ActionExecutor Test Start (with refined coordinate calculation) ---")
-    executor = ActionExecutor()
-    if not executor.pyautogui_available:
-        test_logger.critical("PyAutoGUI not available. Cannot run most action tests.")
-    else:
-        target_region_for_action = {"name": "action_target_area", "x": 500, "y": 600, "width": 100, "height": 50}
-        analysis_data_from_triggering_rule = {"_last_template_match_info": {"x": 10, "y": 15, "width": 20, "height": 10, "confidence": 0.9}}
-        test_logger.info(f"--- Testing _calculate_target_coordinates with target_region_for_action: {target_region_for_action.get('name')} ---")
-        action_spec1 = {"type": "click", "x": 50, "y": 75}; coords1 = executor._calculate_target_coordinates(action_spec1)
-        test_logger.info(f"Test 1 (Absolute): Coords={coords1} (Expected: (50,75))"); assert coords1 == (50,75)
-        action_spec2 = {"type": "click", "target_relation": "center_of_region"}; coords2 = executor._calculate_target_coordinates(action_spec2, target_region_info=target_region_for_action)
-        test_logger.info(f"Test 2 (Center of Region): Coords={coords2} (Expected: (550,625))"); assert coords2 == (550,625)
-        action_spec4 = {"type": "click", "target_relation": "center_of_last_match"}; coords4 = executor._calculate_target_coordinates(action_spec4, analysis_results_for_triggering_region=analysis_data_from_triggering_rule, target_region_info=target_region_for_action)
-        test_logger.info(f"Test 4 (Center of Last Match): Coords={coords4} (Expected: (520,620))"); assert coords4 == (520,620)
-        test_logger.info("Coordinate calculation tests completed.")
-        test_logger.info("--- Skipping actual PyAutoGUI actions in this consolidated view to prevent unintended input during review. ---")
-    test_logger.info("--- ActionExecutor Test End ---")
+                    logger.info(f"Rule '{rule_name}': Simulating {button} click ({num_clicks}x, interval {interval_val:.2f}s) at ({x_coord},{y_coord}).")
+                    pyautogui.click(x=x_coord, y=y_coord, clicks=num_clicks, interval=interval_val, button=button)
+                else:
+                    logger.error(f"Rule '{rule_name}', Action 'click': Could not determine target coordinates. Action skipped.")
+
+            elif action_type == "type_text":
+                text_to_type = str(full_action_spec.get("text", "")) # Ensure it's a string
+                interval_str = str(full_action_spec.get("interval", "0.0"))
+                interval_val = self._validate_and_convert_float_param(interval_str, "interval", action_type, rule_name, 0.0, min_val=0.0)
+
+                if text_to_type: # Allow empty string to be "typed" (effectively does nothing)
+                    logger.info(f"Rule '{rule_name}': Typing text (len: {len(text_to_type)}): '{text_to_type[:50].replace(os.linesep, ' ')}...' with interval {interval_val:.2f}s.")
+                    pyautogui.typewrite(text_to_type, interval=interval_val)
+                else:
+                    logger.info(f"Rule '{rule_name}', Action 'type_text': No text provided to type (or text is empty string).")
+
+            elif action_type == "press_key":
+                key_or_keys_param = full_action_spec.get("key") 
+                
+                keys_to_press: Union[str, List[str], None] = None
+                if isinstance(key_or_keys_param, str):
+                    keys_to_press = key_or_keys_param.strip()
+                    if not keys_to_press: # Handle empty string after strip
+                        logger.warning(f"Rule '{rule_name}', Action 'press_key': 'key' parameter is an empty string. Action skipped.")
+                        keys_to_press = None
+                elif isinstance(key_or_keys_param, list):
+                    keys_to_press = [str(k).strip() for k in key_or_keys_param if str(k).strip()]
+                    if not keys_to_press: # Handle list of empty strings
+                        logger.warning(f"Rule '{rule_name}', Action 'press_key': 'key' parameter list is empty or contains only empty strings. Action skipped.")
+                        keys_to_press = None
+                
+                if keys_to_press:
+                    if isinstance(keys_to_press, str):
+                        logger.info(f"Rule '{rule_name}': Pressing key: '{keys_to_press}'.")
+                        pyautogui.press(keys_to_press)
+                    elif isinstance(keys_to_press, list): # This implies it's a hotkey sequence
+                        logger.info(f"Rule '{rule_name}': Pressing keys (hotkey sequence): {keys_to_press}.")
+                        pyautogui.hotkey(*keys_to_press) 
+                else:
+                    logger.warning(f"Rule '{rule_name}', Action 'press_key': No valid key(s) provided in 'key' parameter: '{key_or_keys_param}'. Action skipped.")
+            
+            elif action_type == "log_message":
+                message = str(full_action_spec.get("message", "Default log message from rule."))
+                level_str = str(full_action_spec.get("level", "INFO")).upper()
+                log_level = getattr(logging, level_str, logging.INFO) 
+                # Use a distinct logger name for rule-triggered logs for easier filtering if needed
+                rule_event_logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.RuleActionLog")
+                rule_event_logger.log(log_level, f"Rule '{rule_name}': {message}")
+
+            else:
+                logger.error(f"Rule '{rule_name}': Unknown action type '{action_type}'. Action skipped.")
+        
+        except pyautogui.FailSafeException:
+            logger.critical(f"Rule '{rule_name}', Action '{action_type}': PyAutoGUI FAILSAFE triggered! Mouse moved to a corner.")
+            # Potentially re-raise or signal main controller to stop
+            raise # Re-raise to be caught by MainController's loop handler or __main__
+        except Exception as e:
+            logger.exception(f"Rule '{rule_name}', Action '{action_type}': Error during execution. Error: {e}")
+            # Avoid crashing the whole bot for a single action error if possible, but log it critically.
