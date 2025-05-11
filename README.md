@@ -5,7 +5,7 @@ PyPixelBot is a Python-based desktop automation tool that captures specific scre
 **Current Development: v3.0.0 (Enhanced GUI & Usability)**
 *   AI-Accelerated v1.0.0: Completed (Core features, basic GUI for region selection)
 *   v2.0.0 (Advanced Visual Analysis & Rules): Completed (Compound conditions, OCR confidence, dominant colors, variables, selective analysis)
-*   v3.0.0: In Progress (Full GUI Profile Editor - core editing features largely implemented, focus on refinements)
+*   v3.0.0: In Progress (Full GUI Profile Editor - core editing features including input validation implemented, focus on refinements)
 
 ## Table of Contents
 
@@ -51,7 +51,7 @@ PyPixelBot is a Python-based desktop automation tool that captures specific scre
 *   **Performance Optimization:** Selective analysis ensures only necessary computations are performed during bot runtime.
 *   **Interfaces:**
     *   **Command-Line Interface (CLI):** For running bots and launching GUI tools.
-    *   **Full GUI Profile Editor (v3.0.0 - In Progress):** Comprehensive `CustomTkinter`-based GUI for creating, editing, and managing all aspects of profiles (settings, regions, templates, rules with all parameters and structures).
+    *   **Full GUI Profile Editor (v3.0.0 - In Progress):** Comprehensive `CustomTkinter`-based GUI for creating, editing, and managing all aspects of profiles (settings, regions, templates, rules with all parameters and structures, including input validation).
     *   **Simple Region Selector GUI:** A focused tool for graphically defining screen regions.
 *   **Comprehensive Logging:** Detailed, persistent, and configurable logs for diagnostics and monitoring.
 
@@ -60,7 +60,7 @@ PyPixelBot is a Python-based desktop automation tool that captures specific scre
 1.  **Configuration (via GUI Editor or JSON):** You define automation tasks in a JSON "profile" file. This profile specifies:
     *   `settings`: Global parameters like monitoring interval, `analysis_dominant_colors_k`.
     *   `regions`: Areas of the screen to monitor (name, x, y, width, height).
-    *   `templates`: Definitions for template matching (name, relative filename). Template images are typically stored in a `templates/` subdirectory next to the profile.
+    *   `templates`: Definitions for template matching (name, relative filename). Template images are stored in a `templates/` subdirectory next to the profile by the GUI.
     *   `rules`: A list of conditions to check and actions to perform. Each rule links visual conditions (single or compound, with parameters like OCR confidence, variable captures) in a region to specific actions (which can use captured variables).
 2.  **Bot Runtime (`run` command):**
     *   The bot loads the specified profile.
@@ -150,9 +150,7 @@ The application is designed to be run as a module from the project root director
     ```
 *   **If `ModuleNotFoundError` occurs:** This usually means Python cannot find the `py_pixel_bot` package.
     *   Ensure your current working directory IS the project root (`py-pixel-bot/`).
-    *   Alternatively, you can explicitly set the `PYTHONPATH` environment variable to include the `src` directory (or its parent, the project root, depending on how you invoke).
-        *   Linux/macOS (temp): `export PYTHONPATH="/path/to/your/py-pixel-bot/src:$PYTHONPATH"` or `export PYTHONPATH="/path/to/your/py-pixel-bot:$PYTHONPATH"`
-        *   Windows CMD (temp): `set PYTHONPATH=C:\path\to\your\py-pixel-bot\src;%PYTHONPATH%` or `set PYTHONPATH=C:\path\to\your\py-pixel-bot;%PYTHONPATH%`
+    *   Alternatively, you can explicitly set the `PYTHONPATH` environment variable to include the `src` directory. The project root (parent of `src`) is usually added to `sys.path` when running with `python -m`.
 
 ## Usage (CLI)
 
@@ -179,7 +177,7 @@ Launches a simple GUI tool to draw/name a screen region and save/update it in a 
 ```bash
 python -m py_pixel_bot add-region <profile_name_or_path>
 ```
-The profile will be created if it doesn't exist.
+The profile will be created if it doesn't exist by the `ConfigManager` used by the tool.
 
 ### Editing a Profile (Full GUI Editor)
 
@@ -187,11 +185,11 @@ Launches the comprehensive GUI Profile Editor.
 ```bash
 python -m py_pixel_bot edit [profile_name_or_path]
 ```
-*   `[profile_name_or_path]`: (Optional) If provided, loads this profile on startup. Otherwise, starts with a new, empty profile.
+*   `[profile_name_or_path]`: (Optional) If provided, loads this profile on startup. Otherwise, starts with a new, unsaved profile.
 
 ## Configuration Profiles (.json)
 
-Bot behavior is defined in JSON files (typically in `profiles/`). Template images for a profile should be placed in a `templates/` subdirectory next to that profile's JSON file (e.g., `profiles/my_bot/templates/icon.png` if profile is `profiles/my_bot/my_bot_profile.json`). The GUI's "Add Template" feature handles copying selected images to this location.
+Bot behavior is defined in JSON files (typically in `profiles/`). Template images for a profile should be placed in a `templates/` subdirectory next to that profile's JSON file (e.g., `profiles/my_bot_profile_dir/templates/icon.png` if profile is `profiles/my_bot_profile_dir/my_bot_profile.json`). The GUI's "Add Template" feature handles copying selected images to this location.
 
 ### Structure Overview
 
@@ -212,15 +210,11 @@ See `TECHNICAL_DESIGN.MD` and example profiles in the `profiles/` directory for 
 
 ### Example Profiles
 
-The `profiles/` directory contains examples like:
-*   `example_profile.json`: Basic color checking and logging.
-*   `notepad_automator.json`: Simple Notepad automation using OCR.
-*   `simple_game_helper.json`: Hypothetical game helper.
-*   `line_messenger_abc.json`, `line_wife_message_ai.json`: More complex template-based automation for LINE messenger (require user-created template images).
+The `profiles/` directory contains examples. Note that profiles using template matching (e.g., `line_messenger_abc.json`) require you to create the referenced `.png` template images and place them in a `templates/` subdirectory next to the respective profile file for them to work. The GUI editor helps manage this.
 
 ## Logging
 
-*   Logs are written to the `logs/` directory in the project root (e.g., `YYYY-MM-DD.log`).
+*   Logs are written to the `logs/` directory in the project root (e.g., `YYYY-MM-DD.log`). This directory is created if it doesn't exist.
 *   Verbosity is controlled by `APP_ENV` in `.env` and CLI flags (`-v`, `-vv` for console).
     *   `development`: DEBUG to console and file.
     *   `uat`/`production`: INFO to console (or WARNING) and file.
@@ -238,4 +232,4 @@ Contribution guidelines will be added if the project is opened for wider collabo
 
 ## License
 
-This project is intended to be licensed under a permissive open-source license like MIT (LICENSE.MD file to be formally added). It uses third-party libraries which have their own licenses (see their respective documentation and license files, e.g., OpenCV, CustomTkinter themes). The NumPy random number generator component included in the consolidated sources has its own dual NCSA/3-Clause BSD license.
+This project is intended to be licensed under a permissive open-source license like MIT (a `LICENSE.MD` file will be formally added). It utilizes third-party libraries which have their own licenses (e.g., OpenCV, CustomTkinter, Pillow, PyAutoGUI, Pytesseract, python-dotenv). Please refer to their respective documentation for specific license details. The NumPy `random` component included in the initially provided consolidated sources has its own dual NCSA/3-Clause BSD license, though the direct usage of this specific sub-component by PyPixelBot might be minimal or indirect via OpenCV/NumPy main usage.

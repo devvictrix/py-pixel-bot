@@ -1,39 +1,42 @@
 {
-    "profile_description": "AI-assisted profile to send a message to '\u0e2b\u0e19\u0e39\u0e19\u0e34\u0e27' in LINE.",
+    "profile_description": "AI-assisted profile to send 'Hello from PyPixelBot! \ud83d\ude0a' to a user identified by 'wife_identifier_template.png' in LINE. Assumes templates are in a 'templates' subdirectory.",
     "settings": {
-        "monitoring_interval_seconds": 1.5
+        "monitoring_interval_seconds": 1.8,
+        "analysis_dominant_colors_k": 3
     },
     "regions": [
         {
             "name": "line_contact_list_zone",
-            "x": 78,
-            "y": 134,
-            "width": 380,
-            "height": 89
+            "x": 70, 
+            "y": 120,
+            "width": 400,
+            "height": 700,
+            "comment": "Area covering the contact list in LINE."
         },
         {
-            "name": "line_active_chat_zone",
-            "x": 461,
-            "y": 993,
-            "width": 1422,
-            "height": 103
+            "name": "line_active_chat_input_zone",
+            "x": 500,
+            "y": 800,
+            "width": 1000,
+            "height": 200,
+            "comment": "Area covering the chat input field once a chat is open."
         }
     ],
     "templates": [
         {
             "name": "wife_user_entry_template",
             "filename": "wife_identifier_template.png",
-            "comment": "Create this template: a unique part of '\u0e2b\u0e19\u0e39\u0e19\u0e34\u0e27's entry in the user list (e.g., part of profile pic or name)."
+            "comment": "User needs to create this: a unique visual part of the target user's entry in the contact list."
         },
         {
             "name": "message_field_template",
             "filename": "message_input_field_template.png",
-            "comment": "Create this template: a unique part of the 'Enter a message' input field/area."
+            "comment": "User needs to create this: a unique part of the 'Enter a message' input field/area."
         }
     ],
     "rules": [
         {
-            "name": "R1_FindAndClickWife",
+            "name": "R1_FindAndClickWifeInList",
             "region": "line_contact_list_zone",
             "condition": {
                 "type": "template_match_found",
@@ -43,13 +46,12 @@
             "action": {
                 "type": "click",
                 "target_relation": "center_of_last_match",
-                "button": "left",
-                "pyautogui_pause_before": 0.5
+                "pyautogui_pause_before": 0.6
             }
         },
         {
-            "name": "R2_FindAndClickMessageField",
-            "region": "line_active_chat_zone",
+            "name": "R2_FindAndClickMessageInputField",
+            "region": "line_active_chat_input_zone",
             "condition": {
                 "type": "template_match_found",
                 "template_filename": "message_input_field_template.png",
@@ -58,39 +60,38 @@
             "action": {
                 "type": "click",
                 "target_relation": "center_of_last_match",
-                "button": "left",
-                "pyautogui_pause_before": 0.3
+                "pyautogui_pause_before": 0.4
             }
         },
         {
             "name": "R3_TypeGreetingMessage",
-            "region": "line_active_chat_zone",
+            "region": "line_active_chat_input_zone",
             "condition": {
                 "type": "template_match_found",
                 "template_filename": "message_input_field_template.png",
                 "min_confidence": 0.65,
-                "comment": "Condition to ensure message field is still 'active' or matchable before typing. Adjust confidence if needed."
+                "comment": "Ensure message field is still matchable before typing."
             },
             "action": {
                 "type": "type_text",
                 "text": "Hello from PyPixelBot! \ud83d\ude0a",
-                "interval": 0.05,
+                "interval": 0.04,
                 "pyautogui_pause_before": 0.2
             }
         },
         {
             "name": "R4_PressEnterToSend",
-            "region": "line_active_chat_zone",
+            "region": "line_active_chat_input_zone",
             "condition": {
                 "type": "template_match_found",
                 "template_filename": "message_input_field_template.png",
-                "min_confidence": 0.65,
-                "comment": "Condition to ensure field is still targetable for pressing Enter. This assumes typing doesn't drastically change the template match for the field itself."
+                "min_confidence": 0.6, 
+                "comment": "Ensure field is targetable after typing. Appearance might change."
             },
             "action": {
                 "type": "press_key",
                 "key": "enter",
-                "pyautogui_pause_before": 0.2
+                "pyautogui_pause_before": 0.3
             }
         }
     ]

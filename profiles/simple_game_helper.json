@@ -1,50 +1,74 @@
 {
-    "profile_description": "Example helper for a simple hypothetical game.",
+    "profile_description": "A simple helper for a hypothetical game. Reacts to a 'low health' color and clicks an 'action icon' template. Requires 'action_icon.png' in a 'templates' subdirectory.",
     "settings": {
-        "monitoring_interval_seconds": 0.5 
+        "monitoring_interval_seconds": 0.7,
+        "analysis_dominant_colors_k": 2
     },
     "regions": [
         {
-            "name": "health_bar_area",
+            "name": "health_bar_zone",
             "x": 100, "y": 50, "width": 150, "height": 20,
             "comment": "Area representing a health bar. Expects reddish color for low health."
         },
         {
-            "name": "action_icon_zone",
-            "x": 300, "y": 200, "width": 100, "height": 100,
-            "comment": "Zone where an action icon (template) might appear."
+            "name": "special_action_icon_zone",
+            "x": 300, "y": 200, "width": 80, "height": 80,
+            "comment": "Zone where a specific game action icon (template) might appear."
         }
     ],
     "templates": [
-        {"name": "game_action_icon_def", "filename": "action_icon.png"}
+        {
+            "name": "game_action_icon", 
+            "filename": "action_icon.png",
+            "comment": "User needs to create 'action_icon.png' for this to work."
+        }
     ],
     "rules": [
         {
-            "name": "WarnOnLowHealth",
-            "region": "health_bar_area",
+            "name": "WarnAndLogOnLowHealth",
+            "region": "health_bar_zone",
             "condition": {
                 "type": "average_color_is",
                 "expected_bgr": [40, 40, 200], 
-                "tolerance": 60 
+                "tolerance": 60,
+                "comment": "Looking for a reddish average color, allowing for some variation."
             },
             "action": {
                 "type": "log_message",
-                "message": "WARNING: Health bar is reddish - low health detected!"
+                "message": "PROFILE TRIGGER: WARNING! Health bar is reddish - low health detected in 'health_bar_zone'!",
+                "level": "WARNING"
             }
         },
         {
             "name": "ClickActionIconWhenVisible",
-            "region": "action_icon_zone",
+            "region": "special_action_icon_zone",
             "condition": {
                 "type": "template_match_found",
                 "template_filename": "action_icon.png", 
-                "min_confidence": 0.75
+                "min_confidence": 0.70,
+                "capture_as": "icon_info"
             },
             "action": {
                 "type": "click",
                 "target_relation": "center_of_last_match",
                 "button": "left",
-                "pyautogui_pause_before": 0.1
+                "pyautogui_pause_before": 0.1,
+                "comment": "Clicks the center of where 'action_icon.png' was found."
+            }
+        },
+        {
+            "name": "LogIfIconWasClicked",
+            "region": "special_action_icon_zone", 
+            "condition": {
+                 "type": "ocr_contains_text",
+                 "text_to_find": "Activated",
+                 "min_ocr_confidence": 50,
+                 "comment": "Example: Check if clicking icon changes some text on screen. This depends on game UI."
+            },
+            "action": {
+                "type": "log_message",
+                "message": "PROFILE TRIGGER: Action icon click seems to have resulted in 'Activated' text.",
+                "level": "INFO"
             }
         }
     ]

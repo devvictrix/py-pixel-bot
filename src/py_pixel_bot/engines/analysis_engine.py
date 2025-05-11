@@ -1,313 +1,367 @@
 import logging
-import sys 
-from pathlib import Path 
-import os # Needed for os.path.exists and the tesseract_cmd workaround
+from typing import Optional, Dict, Any, List
 
-try:
-    import numpy as np
-    import cv2 
-    IMAGING_LIBS_AVAILABLE = True
-except ImportError:
-    IMAGING_LIBS_AVAILABLE = False
-    # Optional: print a warning if critical libs are missing at module import time
-    # print("WARNING (AnalysisEngine import): NumPy or OpenCV (cv2) Python library not found.")
+import cv2
+import numpy as np
+import pytesseract
+from pytesseract import Output
+# from PIL import Image # Not directly used here, but good to remember it's available for CTkImage
 
-try:
-    import pytesseract
-    PYTESSERACT_PYTHON_LIB_AVAILABLE = True # Indicates the Python wrapper is installed
-
-    # --- EXPLICIT TESSERACT PATH WORKAROUND ---
-    # This attempts to set the path to tesseract.exe directly.
-    # This is a common workaround if the system PATH isn't picked up correctly by Python/pytesseract.
-    # Ensure this path matches your Tesseract installation directory.
-    _tesseract_exe_path_windows = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
-
-    if sys.platform.startswith('win'): # Apply only on Windows for this specific path
-        if os.path.exists(_tesseract_exe_path_windows):
-            pytesseract.pytesseract.tesseract_cmd = _tesseract_exe_path_windows
-            # This print occurs at module import time, before full logging might be set up.
-            # It's for immediate feedback during development/startup if this path is used.
-            print(f"INFO (AnalysisEngine Pre-Log): Explicitly set pytesseract.tesseract_cmd to: '{_tesseract_exe_path_windows}'")
-        else:
-            # If the explicit path doesn't exist, pytesseract will rely on finding tesseract in PATH.
-            print(f"WARNING (AnalysisEngine Pre-Log): Explicit Tesseract path not found: '{_tesseract_exe_path_windows}'. OCR will rely on system PATH.")
-    # --- END OF WORKAROUND ---
-
-except ImportError:
-    PYTESSERACT_PYTHON_LIB_AVAILABLE = False
-    print("WARNING (AnalysisEngine import): pytesseract Python library not found. OCR functionality will be unavailable.")
-
-logger = logging.getLogger(__name__) # Gets a logger like "py_pixel_bot.engines.analysis_engine"
+logger = logging.getLogger(__name__)
+# Ensure APP_ROOT_LOGGER_NAME is defined if used for hierarchical logging (e.g. in main or logging_setup)
+# For now, assume __name__ resolves correctly under py_pixel_bot.engines
 
 class AnalysisEngine:
-    def __init__(self):
-        logger.info("AnalysisEngine initialized.")
-        self.imaging_libs_available = IMAGING_LIBS_AVAILABLE # Store module-level import status
-        self.tesseract_engine_usable = False # Assume Tesseract engine is not usable until verified
+    """
+    Performs various visual analyses on captured image regions (NumPy BGR arrays).
+    """
 
-        if not self.imaging_libs_available:
-            logger.error("NumPy or OpenCV (cv2) not installed. Some analysis functions will fail.")
-        else:
-            logger.debug("NumPy and OpenCV Python libraries successfully imported for AnalysisEngine.")
-        
-        if not PYTESSERACT_PYTHON_LIB_AVAILABLE:
-            logger.warning("pytesseract Python library not found (on import). OCR functionality will be unavailable.")
-            # self.tesseract_engine_usable remains False
-        else:
-            logger.debug("pytesseract Python library successfully imported.")
-            # Now check if the Tesseract *engine* can be accessed
+    def __init__(self, ocr_command: Optional[str] = None, ocr_config: str = ""):
+        """
+        Initializes the AnalysisEngine.
+
+        Args:
+            ocr_command: The command or path to the Tesseract executable.
+                         If None, pytesseract will try to find it in PATH.
+            ocr_config: Additional Tesseract configuration string (e.g., '--psm 6').
+        """
+        self.ocr_command = ocr_command
+        if self.ocr_command:
             try:
-                # This call will use pytesseract.tesseract_cmd if set, otherwise system PATH.
-                tesseract_version = pytesseract.get_tesseract_version()
-                logger.info(f"Tesseract OCR version {tesseract_version} successfully accessed by pytesseract.")
-                self.tesseract_engine_usable = True # Mark Tesseract engine as usable
-            except pytesseract.TesseractNotFoundError:
-                logger.error(
-                    "Tesseract OCR engine NOT FOUND by pytesseract. "
-                    "This can happen if tesseract.exe is not in your system PATH "
-                    "AND the explicit path set in AnalysisEngine (if any) is incorrect or tesseract.exe is missing there. "
-                    "OCR will FAIL. Please verify Tesseract installation and PATH settings."
-                )
-                # self.tesseract_engine_usable remains False
-            except Exception as e:
-                logger.warning(f"Could not get Tesseract version (or other Tesseract init error). Error: {e}. OCR might fail or be unreliable.")
-                # self.tesseract_engine_usable remains False, as we couldn't confirm version.
-
-    def analyze_pixel_color(self, image_bgr, x: int, y: int) -> tuple | None:
-        """
-        Checks the color of a specific pixel in the BGR image.
-        Coordinates are relative to the top-left of the provided image.
-        Returns (B, G, R) tuple or None on error.
-        """
-        if not self.imaging_libs_available:
-            logger.error("analyze_pixel_color: Required imaging libraries (NumPy/OpenCV) are not available.")
-            return None
-        if image_bgr is None:
-            logger.warning("analyze_pixel_color received None image.")
-            return None
-
-        logger.debug(f"Analyzing pixel color at relative image coordinates ({x},{y})")
-        try:
-            height, width = image_bgr.shape[:2]
-            if 0 <= y < height and 0 <= x < width:
-                pixel_bgr_values = image_bgr[y, x]
-                color_tuple = tuple(int(c) for c in pixel_bgr_values)
-                logger.info(f"Pixel color at relative ({x},{y}): BGR={color_tuple}")
-                return color_tuple
-            else:
-                logger.warning(f"Pixel coordinates ({x},{y}) are out of image bounds (Image H: {height}, W: {width}).")
-                return None
-        except IndexError: # More specific error if x,y are somehow still bad after check (e.g. not 3 channels)
-             logger.error(f"IndexError analyzing pixel color at ({x},{y}) - possibly malformed image or coords. Image shape: {image_bgr.shape}", exc_info=True)
-             return None
-        except Exception as e:
-            logger.error(f"Error analyzing pixel color at ({x},{y}): {e}", exc_info=True)
-            return None
-
-    def analyze_average_color(self, image_bgr) -> tuple | None:
-        """
-        Calculates the average color of the BGR image.
-        Returns (B_avg, G_avg, R_avg) tuple or None on error.
-        """
-        if not self.imaging_libs_available:
-            logger.error("analyze_average_color: Required imaging libraries (NumPy/OpenCV) are not available.")
-            return None
-        if image_bgr is None:
-            logger.warning("analyze_average_color received None image.")
-            return None
-        if image_bgr.size == 0 : # Handle empty image
-            logger.warning("analyze_average_color received an empty image.")
-            return None
-
-
-        logger.debug(f"Analyzing average color of image with shape {image_bgr.shape}")
-        try:
-            # Ensure it's a 3-channel image for BGR average
-            if len(image_bgr.shape) < 3 or image_bgr.shape[2] != 3:
-                logger.warning(f"analyze_average_color expected 3-channel BGR image, got shape {image_bgr.shape}.")
-                return None
-            avg_color_bgr_float = np.mean(image_bgr, axis=(0, 1))
-            avg_color_bgr_int = tuple(int(c) for c in avg_color_bgr_float)
-            logger.info(f"Average image color: BGR={avg_color_bgr_int}")
-            return avg_color_bgr_int
-        except Exception as e:
-            logger.error(f"Error analyzing average color: {e}", exc_info=True)
-            return None
-
-    def match_template(self, image_bgr, template_bgr, threshold=0.8) -> list:
-        """
-        Matches a template image (BGR) within a larger image (BGR) using cv2.TM_CCOEFF_NORMED.
-        Returns a list of match dictionaries [{"x", "y", "width", "height", "confidence"}].
-        """
-        if not self.imaging_libs_available:
-            logger.error("match_template: Required imaging libraries (NumPy, OpenCV) are not available.")
-            return []
-        if image_bgr is None or template_bgr is None:
-            logger.warning("match_template: Input image_bgr or template_bgr is None.")
-            return []
-        if image_bgr.size == 0 or template_bgr.size == 0:
-            logger.warning("match_template: Input image_bgr or template_bgr is empty.")
-            return []
-
-
-        logger.debug(f"Attempting to match template (shape: {template_bgr.shape}) in image (shape: {image_bgr.shape}) with threshold={threshold}")
-        
-        try:
-            # Ensure images are suitable for matchTemplate (typically 8-bit, 1 or 3 channel)
-            # cv2.matchTemplate can handle grayscale template in color image and vice-versa if channels differ,
-            # but it's often better to ensure consistency or handle grayscale explicitly if intended.
-            # For now, we assume BGR for both as per type hints, but add checks.
-
-            # Convert to uint8 if not already
-            if image_bgr.dtype != np.uint8: image_bgr = np.array(image_bgr, dtype=np.uint8)
-            if template_bgr.dtype != np.uint8: template_bgr = np.array(template_bgr, dtype=np.uint8)
-
-            # Ensure 3 channels if they are color images, or convert template to match image channels if one is gray
-            if len(image_bgr.shape) == 2: image_bgr = cv2.cvtColor(image_bgr, cv2.COLOR_GRAY2BGR)
-            if len(template_bgr.shape) == 2: template_bgr = cv2.cvtColor(template_bgr, cv2.COLOR_GRAY2BGR)
-
-            if image_bgr.shape[2] != 3 or template_bgr.shape[2] != 3:
-                logger.error(f"match_template: Images must be 3-channel BGR. Image shape: {image_bgr.shape}, Template shape: {template_bgr.shape}")
-                return []
-            
-            if template_bgr.shape[0] > image_bgr.shape[0] or \
-               template_bgr.shape[1] > image_bgr.shape[1]:
-                logger.warning(f"Template (h={template_bgr.shape[0]}, w={template_bgr.shape[1]}) "
-                               f"is larger than image (h={image_bgr.shape[0]}, w={image_bgr.shape[1]}). No match possible.")
-                return []
-
-            result = cv2.matchTemplate(image_bgr, template_bgr, cv2.TM_CCOEFF_NORMED)
-            loc = np.where(result >= threshold)
-            
-            matches = []
-            template_h, template_w = template_bgr.shape[:2]
-            
-            for pt_y, pt_x in zip(*loc): # Correct iteration for np.where output
-                confidence = float(result[pt_y, pt_x]) 
-                match_info = {
-                    "x": int(pt_x), "y": int(pt_y),
-                    "width": int(template_w), "height": int(template_h),
-                    "confidence": confidence
-                }
-                matches.append(match_info)
-            
-            if matches:
-                matches.sort(key=lambda m: m["confidence"], reverse=True)
-                logger.info(f"Template matched at {len(matches)} location(s) with confidence >= {threshold}.")
-                logger.debug(f"Best match details: {matches[0]}")
-            else:
-                logger.debug(f"Template not matched with confidence >= {threshold}.")
-            return matches
-            
-        except cv2.error as e_cv2: # Catch specific OpenCV errors
-             logger.error(f"OpenCV error during template matching: {e_cv2}", exc_info=True)
-             return []
-        except Exception as e:
-            logger.error(f"Generic error during template matching: {e}", exc_info=True)
-            return []
-
-    def ocr_extract_text(self, image_bgr, lang='eng', psm=3, oem=3) -> str | None:
-        """
-        Extracts text from a BGR image using Tesseract OCR via pytesseract.
-        """
-        if not self.tesseract_engine_usable: # This flag is set in __init__
-            logger.error("Cannot extract text: Tesseract OCR engine is not usable (not found or pytesseract library missing).")
-            return None
-        if not self.imaging_libs_available: # Should be redundant if tesseract_engine_usable is true
-            logger.error("Cannot extract text: NumPy/OpenCV not available for image handling.")
-            return None
-        if image_bgr is None:
-            logger.warning("ocr_extract_text received None image.")
-            return None
-        if image_bgr.size == 0:
-            logger.warning("ocr_extract_text received an empty image.")
-            return "" # Return empty string for empty image, not None (which implies error)
-
-        logger.debug(f"Attempting OCR text extraction with lang='{lang}', psm={psm}, oem={oem} on image shape {image_bgr.shape}")
-        
-        try:
-            # Convert BGR (OpenCV default) to RGB (Pytesseract/Pillow default)
-            image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-            
-            custom_config = f'--oem {oem} --psm {psm}'
-            
-            # Perform OCR
-            text = pytesseract.image_to_string(image_rgb, lang=lang, config=custom_config)
-            
-            stripped_text = text.strip()
-            if stripped_text:
-                logger.info(f"OCR Extracted text (first 100 chars): '{stripped_text[:100].replace('\n', ' ')}'")
-            else:
-                logger.info("OCR successfully ran but extracted no text or only whitespace.")
-            return stripped_text
-            
-        except pytesseract.TesseractNotFoundError:
-            # This specific error is critical if Tesseract goes missing at runtime
-            # after __init__ thought it was okay (e.g., PATH changed, Tesseract uninstalled).
-            logger.error("Tesseract OCR engine NOT FOUND by pytesseract at runtime. "
-                         "Please ensure Tesseract is installed AND in your system's PATH "
-                         "or the explicit path in AnalysisEngine is correct.")
-            self.tesseract_engine_usable = False # Update runtime status
-            return None
-        except Exception as e:
-            logger.error(f"OCR extraction failed: {e}", exc_info=True)
-            return None # Indicates an error during OCR processing itself
-
-if __name__ == '__main__':
-    current_script_path = Path(__file__).resolve()
-    project_src_dir = current_script_path.parent.parent.parent 
-    if str(project_src_dir) not in sys.path:
-        sys.path.insert(0, str(project_src_dir))
-
-    from py_pixel_bot.core.config_manager import load_environment_variables
-    load_environment_variables() 
-    from py_pixel_bot.core.logging_setup import setup_logging
-    setup_logging() 
-    
-    test_logger = logging.getLogger(__name__ + "_test") # For test-specific logs
-    test_logger.info("--- AnalysisEngine Test Start (with explicit Tesseract path if applicable) ---")
-    
-    engine = AnalysisEngine() # __init__ attempts to set tesseract_cmd and checks version
-    
-    if not engine.imaging_libs_available:
-        test_logger.critical("NumPy or OpenCV not available. Cannot run detailed analysis tests.")
-    else:
-        # Create a dummy image with text for OCR testing
-        img_h, img_w = 100, 350 # Wider for more text
-        ocr_test_image = np.full((img_h, img_w, 3), 255, dtype=np.uint8) # White background
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        text_to_draw = "PyPixelBot OCR Test ABC 123 XYZ"
-        # Place text with some margin
-        cv2.putText(ocr_test_image, text_to_draw, (10, img_h // 2 + 10), font, 0.8, (0,0,0), 2, cv2.LINE_AA) 
-        test_logger.info(f"Created dummy image with text: '{text_to_draw}' for OCR test.")
-        
-        # Save for inspection if needed
-        # logs_dir_test = project_src_dir.parent / "logs"
-        # logs_dir_test.mkdir(exist_ok=True)
-        # cv2.imwrite(str(logs_dir_test / "ocr_test_image_analysis_engine.png"), ocr_test_image)
-        # test_logger.debug("Saved ocr_test_image_analysis_engine.png to logs directory for inspection.")
-
-        if engine.tesseract_engine_usable: # Check the flag set by __init__
-            test_logger.info("Testing ocr_extract_text (Tesseract engine expected to be usable)...")
-            extracted_text = engine.ocr_extract_text(ocr_test_image, lang='eng')
-            
-            if extracted_text is not None:
-                test_logger.info(f"OCR Extracted: '{extracted_text}'")
-                # Tesseract might add form feed '\f' or other chars, be a bit lenient in test
-                normalized_extracted = extracted_text.lower().replace('\f', '').replace('\n', ' ').strip()
-                normalized_drawn = text_to_draw.lower().strip()
-                
-                if normalized_drawn in normalized_extracted:
-                    test_logger.info(f"PASS: OCR test successfully extracted drawn text (or a superset containing it).")
-                else:
-                    test_logger.warning(f"WARN: OCR extracted text does not precisely contain the drawn text. "
-                                     f"Drawn='{normalized_drawn}', Extracted (normalized)='{normalized_extracted}'. This might be due to OCR accuracy.")
-            else: 
-                # This case implies an error during pytesseract.image_to_string itself,
-                # even if Tesseract was initially found.
-                test_logger.error("FAIL: OCR extraction returned None, indicating an error during the OCR process. Check Tesseract logs if any or image quality.")
+                pytesseract.pytesseract.tesseract_cmd = self.ocr_command
+                logger.info(f"Tesseract command explicitly set to: '{self.ocr_command}'")
+            except Exception as e: # Catch potential errors if path is invalid during assignment (though unlikely)
+                logger.error(f"Error setting tesseract_cmd to '{self.ocr_command}': {e}. Pytesseract will try PATH.")
         else:
-            test_logger.warning("Skipping OCR specific tests as Tesseract engine was marked unusable during AnalysisEngine initialization.")
-            test_logger.warning("If you expected OCR to work, please check Tesseract installation, PATH, and any explicit path in AnalysisEngine.")
+            logger.info("Tesseract command not specified, pytesseract will search in PATH.")
+            
+        self.ocr_config = ocr_config
+        logger.info(f"AnalysisEngine initialized. Tesseract OCR config: '{self.ocr_config if self.ocr_config else 'Default'}'.")
 
-    test_logger.info("--- AnalysisEngine Test End ---")
+
+    def analyze_pixel_color(
+        self,
+        image_data: np.ndarray,
+        x: int,
+        y: int,
+        expected_bgr: List[int], # Changed from list[int] for older Python type hint compatibility
+        tolerance: int = 0,
+    ) -> bool:
+        """
+        Checks the color of a specific pixel against an expected BGR color.
+
+        Args:
+            image_data: The image (NumPy array in BGR format).
+            x: The x-coordinate of the pixel (relative to the image_data).
+            y: The y-coordinate of the pixel (relative to the image_data).
+            expected_bgr: A list of 3 integers representing the expected BGR color [B, G, R].
+            tolerance: The allowed difference for each B, G, R component (0 to 255).
+
+        Returns:
+            True if the pixel color is within tolerance of the expected color, False otherwise.
+        """
+        if image_data is None:
+            logger.warning("analyze_pixel_color: image_data is None. Cannot perform analysis.")
+            return False
+        
+        # Validate coordinates and expected_bgr structure
+        if not (isinstance(x, int) and isinstance(y, int)):
+            logger.warning(f"analyze_pixel_color: Coordinates ({x},{y}) are not integers.")
+            return False
+        if not (isinstance(expected_bgr, list) and len(expected_bgr) == 3 and all(isinstance(c, int) for c in expected_bgr)):
+            logger.warning(f"analyze_pixel_color: expected_bgr '{expected_bgr}' is not a list of 3 integers.")
+            return False
+        if not (isinstance(tolerance, int) and 0 <= tolerance <= 255):
+            logger.warning(f"analyze_pixel_color: Tolerance '{tolerance}' is not a valid integer between 0-255. Using 0.")
+            tolerance = 0
+
+        height, width, channels = image_data.shape
+        if channels != 3:
+            logger.warning(f"analyze_pixel_color: image_data does not have 3 channels (BGR). Shape: {image_data.shape}")
+            return False
+        if not (0 <= y < height and 0 <= x < width):
+            logger.warning(
+                f"analyze_pixel_color: Pixel ({x},{y}) is out of bounds for image size ({width}x{height})."
+            )
+            return False
+
+        actual_bgr = image_data[y, x]
+        logger.debug(
+            f"Pixel color check at ({x},{y}): Actual BGR {actual_bgr.tolist()}, Expected BGR {expected_bgr}, Tolerance {tolerance}"
+        )
+
+        return all(
+            abs(int(actual) - int(expected)) <= tolerance # Ensure components are int for abs
+            for actual, expected in zip(actual_bgr, expected_bgr)
+        )
+
+    def analyze_average_color(self, image_data: np.ndarray) -> Optional[List[int]]:
+        """
+        Calculates the average BGR color of an image.
+
+        Args:
+            image_data: The image (NumPy array in BGR format).
+
+        Returns:
+            A list of 3 integers representing the average BGR color [B, G, R], or None if image_data is invalid.
+        """
+        if image_data is None or image_data.size == 0:
+            logger.warning("analyze_average_color: image_data is None or empty. Cannot perform analysis.")
+            return None
+        if image_data.ndim != 3 or image_data.shape[2] != 3:
+            logger.warning(f"analyze_average_color: image_data is not a valid BGR image. Shape: {image_data.shape}")
+            return None
+
+        # Calculate mean across height and width (axis 0 and 1)
+        avg_bgr_float = np.mean(image_data, axis=(0, 1))
+        avg_bgr_int = avg_bgr_float.astype(int).tolist() # Convert to int list [B, G, R]
+        logger.debug(f"Average color of image (shape: {image_data.shape}): BGR {avg_bgr_int}")
+        return avg_bgr_int
+
+    def match_template(
+        self, image: np.ndarray, template: np.ndarray, threshold: float = 0.8
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Finds a template within an image using OpenCV's template matching (TM_CCOEFF_NORMED).
+
+        Args:
+            image: The image to search within (BGR format).
+            template: The template image to find (BGR format).
+            threshold: The minimum confidence score (0.0 to 1.0) to consider a match.
+
+        Returns:
+            A dictionary with match details:
+            {'location': (x,y_top_left_of_match_in_image), 'confidence': score, 
+             'width': template_width, 'height': template_height}
+            if found above threshold, otherwise None.
+        """
+        if image is None or template is None or image.size == 0 or template.size == 0:
+            logger.warning("match_template: Image or template is None or empty. Cannot perform matching.")
+            return None
+        if not (isinstance(threshold, float) and 0.0 <= threshold <= 1.0):
+            logger.warning(f"match_template: Invalid threshold '{threshold}'. Must be float between 0.0-1.0. Using 0.8.")
+            threshold = 0.8
+            
+        if image.ndim != 3 or template.ndim != 3 or image.shape[2] != 3 or template.shape[2] != 3:
+            logger.warning(f"match_template: Image (shape {image.shape}) or template (shape {template.shape}) is not a valid BGR image.")
+            return None
+
+        img_h, img_w = image.shape[:2]
+        tpl_h, tpl_w = template.shape[:2]
+
+        if img_h < tpl_h or img_w < tpl_w:
+            logger.warning(
+                f"match_template: Template (h={tpl_h}, w={tpl_w}) is larger than "
+                f"image (h={img_h}, w={img_w}). Cannot perform matching."
+            )
+            return None
+
+        try:
+            # TM_CCOEFF_NORMED is generally good for varying lighting if normalized
+            result = cv2.matchTemplate(image, template, cv2.TM_CCOEFF_NORMED)
+            _min_val, max_val, _min_loc, max_loc = cv2.minMaxLoc(result) # max_loc is (x,y) of top-left
+
+            logger.debug(
+                f"Template matching: Max confidence value {max_val:.4f} found at {max_loc}. Required threshold: {threshold:.4f}"
+            )
+
+            if max_val >= threshold:
+                match_details = {
+                    "location": max_loc,  # (x, y) top-left coordinates of the found template in the image
+                    "confidence": float(max_val), # Ensure float
+                    "width": tpl_w,
+                    "height": tpl_h,
+                }
+                logger.info(
+                    f"Template matched with confidence {max_val:.4f} at {max_loc} (Threshold: {threshold:.4f}). Template size: {tpl_w}x{tpl_h}."
+                )
+                return match_details
+            else:
+                logger.debug(f"Template not matched above threshold {threshold:.4f} (max confidence was {max_val:.4f}).")
+                return None
+        except cv2.error as e_cv2:
+            logger.error(f"OpenCV error during template matching: {e_cv2}. This can happen if the template dimensions are invalid relative to the image after some internal processing.")
+            return None
+        except Exception as e:
+            logger.exception(f"Unexpected error during template matching: {e}")
+            return None
+
+    def ocr_extract_text(self, image_data: np.ndarray, region_name_context: str = "UnknownRegion") -> Optional[Dict[str, Any]]:
+        """
+        Extracts text from an image using Tesseract OCR and calculates average word confidence.
+
+        Args:
+            image_data: The image (NumPy array in BGR format).
+            region_name_context: Name of the region being OCR'd, for logging context.
+
+        Returns:
+            A dictionary containing:
+            {
+                "text": "The extracted string, joined by spaces",
+                "average_confidence": 85.5,  # Float, 0-100 for actual words, or 0.0 if no confident words
+                "raw_data": pytesseract_output_dict # The raw dict from image_to_data for debugging
+            }
+            or None if OCR fails, Tesseract is not found, or image_data is invalid.
+        """
+        if image_data is None or image_data.size == 0:
+            logger.warning(f"OCR for region '{region_name_context}': image_data is None or empty. Cannot perform OCR.")
+            return None
+        if image_data.ndim != 3 or image_data.shape[2] != 3:
+            logger.warning(f"OCR for region '{region_name_context}': image_data is not a valid BGR image. Shape: {image_data.shape}")
+            return None
+
+        try:
+            # Pytesseract generally prefers RGB, but often handles BGR.
+            # Explicit conversion can sometimes improve reliability.
+            # image_rgb = cv2.cvtColor(image_data, cv2.COLOR_BGR2RGB)
+            # For now, passing BGR directly as it has worked. If issues, uncomment conversion.
+            
+            # Use Tesseract's page segmentation mode that assumes a single uniform block of text if config not specific.
+            # Custom config from self.ocr_config can override this.
+            # Example: '--psm 6' for assuming a single uniform block of text.
+            # Default language is 'eng'.
+            ocr_data_dict = pytesseract.image_to_data(
+                image_data, lang="eng", config=self.ocr_config, output_type=Output.DICT
+            )
+            
+            if logger.isEnabledFor(logging.DEBUG): # Avoid costly formatting if not needed
+                # Log a snippet or summary of raw_data if it's too large
+                log_raw_data = {k: (v[:10] if isinstance(v, list) and len(v) > 10 else v) for k,v in ocr_data_dict.items()}
+                logger.debug(f"OCR for region '{region_name_context}': Raw pytesseract data (summary): {log_raw_data}")
+
+            extracted_words: List[str] = []
+            confidences: List[float] = []
+            num_entries = len(ocr_data_dict.get("level", [])) # Get length safely
+
+            for i in range(num_entries):
+                # Only consider entries that are actual words (level 5)
+                # and have a positive confidence (Tesseract uses -1 for non-word blocks or uncertain parts)
+                if ocr_data_dict["level"][i] == 5: # Level 5 is word
+                    word_text = ocr_data_dict["text"][i].strip()
+                    word_conf = float(ocr_data_dict["conf"][i])
+                    if word_text and word_conf > 0: # Only append if text exists and confidence is positive
+                        extracted_words.append(word_text)
+                        confidences.append(word_conf)
+            
+            full_text = " ".join(extracted_words)
+            average_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+
+            logger.info(
+                f"OCR for region '{region_name_context}': Extracted text (len {len(full_text)}): '{full_text[:70].replace(os.linesep, ' ')}...', "
+                f"Avg Word Confidence: {average_confidence:.1f}% (from {len(confidences)} words)."
+            )
+
+            return {
+                "text": full_text,
+                "average_confidence": average_confidence,
+                "raw_data": ocr_data_dict # Included for potential advanced debugging or future features
+            }
+
+        except pytesseract.TesseractNotFoundError:
+            logger.error(
+                "Tesseract OCR engine is not installed or not found in your system's PATH. "
+                "OCR functionality will not work. Please install Tesseract and ensure it's in PATH."
+            )
+            return None # Critical failure for OCR
+        except Exception as e:
+            logger.exception(f"OCR for region '{region_name_context}': An unexpected error occurred during text extraction. Error: {e}")
+            return None
+
+    def analyze_dominant_colors(
+        self, image_data: np.ndarray, num_colors: int = 3, region_name_context: str = "UnknownRegion"
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Finds the N most dominant colors in an image using K-Means clustering.
+
+        Args:
+            image_data: The image (NumPy array in BGR format).
+            num_colors: The number (K) of dominant colors to find. Must be > 0.
+            region_name_context: Name of the region for logging context.
+
+        Returns:
+            A list of dictionaries, each representing a dominant color, sorted by percentage:
+            [{"bgr_color": [B, G, R], "percentage": 45.5}, ...], 
+            or None if analysis fails or image_data is unsuitable.
+        """
+        if image_data is None or image_data.size == 0:
+            logger.warning(f"Dominant color analysis for region '{region_name_context}': image_data is None or empty.")
+            return None
+        if image_data.ndim != 3 or image_data.shape[2] != 3:
+            logger.warning(f"Dominant color analysis for region '{region_name_context}': image_data is not a valid BGR image. Shape: {image_data.shape}")
+            return None
+        if not (isinstance(num_colors, int) and num_colors > 0):
+            logger.warning(f"Dominant color analysis for region '{region_name_context}': Invalid num_colors '{num_colors}'. Must be int > 0. Defaulting to 3.")
+            num_colors = 3
+        
+        # K-Means requires at least as many samples (pixels) as clusters (num_colors)
+        num_pixels = image_data.shape[0] * image_data.shape[1]
+        if num_pixels < num_colors :
+            logger.warning(
+                f"Dominant color analysis for region '{region_name_context}': Image has only {num_pixels} pixels, "
+                f"which is less than the requested {num_colors} dominant colors. Reducing k to {num_pixels} or returning None if 0."
+            )
+            if num_pixels == 0: return None
+            num_colors = num_pixels # Adjust k
+
+        try:
+            logger.debug(
+                f"Dominant color analysis for region '{region_name_context}': Starting with k={num_colors}. Image shape: {image_data.shape}"
+            )
+            
+            pixels = image_data.reshape((-1, 3)) # Reshape to (W*H, 3)
+            pixels_float32 = np.float32(pixels)   # Convert to float32 for K-Means
+
+            # Define K-Means criteria: (type, max_iter, epsilon)
+            # cv2.TERM_CRITERIA_EPS: stop when specified accuracy (epsilon) is reached.
+            # cv2.TERM_CRITERIA_MAX_ITER: stop after max_iter iterations.
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2) # Max 100 iterations or epsilon 0.2
+            attempts = 10 # Number of times algorithm is executed with different initial labellings
+
+            compactness, labels, centers = cv2.kmeans(
+                pixels_float32, num_colors, None, criteria, attempts, cv2.KMEANS_RANDOM_CENTERS
+            )
+            # `centers` are the dominant colors in float BGR format.
+            # `labels` is an array assigning each pixel to a cluster (0 to k-1).
+
+            # Calculate the percentage of pixels belonging to each cluster
+            unique_labels, counts = np.unique(labels, return_counts=True)
+            total_pixels = pixels_float32.shape[0] # Same as num_pixels above
+            
+            dominant_colors_result: List[Dict[str, Any]] = []
+            for i, label_val in enumerate(unique_labels):
+                # Ensure center corresponds to this unique label index if K-Means returns fewer than `num_colors` centers
+                # (e.g., if image had very few unique colors). `centers` rows correspond to cluster indices 0 to k-1.
+                # `unique_labels` might be a subset if some clusters end up empty or merged.
+                if label_val < len(centers):
+                    bgr_color_float = centers[label_val]
+                    bgr_color_int = [int(c) for c in bgr_color_float] # Convert float centers to int BGR
+                    percentage = (counts[i] / total_pixels) * 100.0
+                    dominant_colors_result.append({"bgr_color": bgr_color_int, "percentage": float(percentage)})
+                else:
+                    logger.warning(f"Dominant color analysis: Label value {label_val} is out of bounds for centers array (len {len(centers)}). Skipping this label.")
+
+            
+            # Sort by percentage in descending order
+            dominant_colors_result.sort(key=lambda x: x["percentage"], reverse=True)
+
+            if not dominant_colors_result:
+                 logger.warning(f"Dominant color analysis for region '{region_name_context}' (k={num_colors}): No dominant colors were resolved (result list is empty).")
+                 return None # Or empty list depending on how RulesEngine handles it
+
+            formatted_results = [f"BGR: {d['bgr_color']}, Perc: {d['percentage']:.1f}%" for d in dominant_colors_result]
+            logger.info(
+                f"Dominant color analysis for region '{region_name_context}' (k={num_colors}): Found {len(dominant_colors_result)} colors: [{'; '.join(formatted_results)}]"
+            )
+            return dominant_colors_result
+
+        except cv2.error as e_cv2:
+            logger.error(
+                f"Dominant color analysis for region '{region_name_context}': OpenCV error during K-Means (k={num_colors}). Error: {e_cv2}. "
+                "This can happen if image is too small for k, or other internal OpenCV issues."
+            )
+            return None
+        except Exception as e:
+            logger.exception(
+                f"Dominant color analysis for region '{region_name_context}': Unexpected error (k={num_colors}). Error: {e}"
+            )
+            return None

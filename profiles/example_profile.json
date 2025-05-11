@@ -1,46 +1,82 @@
 {
-    "profile_description": "A basic example to log the average color of a defined screen area and demonstrate a simple rule.",
+    "profile_description": "A basic example to demonstrate core functionalities like region definition, average color checking, and conditional logging. Also shows basic settings.",
     "settings": {
-        "monitoring_interval_seconds": 2.5
+        "monitoring_interval_seconds": 3.0,
+        "analysis_dominant_colors_k": 3,
+        "tesseract_cmd_path": null,
+        "tesseract_config_custom": ""
     },
     "regions": [
         {
-            "name": "top_left_quadrant",
-            "x": 0,
-            "y": 0,
+            "name": "top_left_small_area",
+            "x": 10,
+            "y": 10,
+            "width": 200,
+            "height": 150,
+            "comment": "A small area at the top-left of the primary screen."
+        },
+        {
+            "name": "center_screen_zone",
+            "x": 500,
+            "y": 300,
             "width": 400,
             "height": 300,
-            "comment": "A general area at the top-left of the primary screen."
+            "comment": "A zone roughly in the center of a 1920x1080 screen."
         }
     ],
     "templates": [],
     "rules": [
         {
-            "name": "LogAverageColorOfTopLeft",
-            "region": "top_left_quadrant",
+            "name": "LogAvgColorOfTopLeft",
+            "region": "top_left_small_area",
             "condition": {
                 "type": "always_true"
             },
             "action": {
                 "type": "log_message",
-                "message": "Periodic check of top_left_quadrant."
+                "message": "Periodic check of top_left_small_area. Average color will be in MainController logs if selective analysis requires it for another rule, or if fallback occurs.",
+                "level": "INFO"
             }
         },
         {
             "name": "IfTopLeftIsVeryDarkThenLog",
-            "region": "top_left_quadrant",
+            "region": "top_left_small_area",
             "condition": {
                 "type": "average_color_is",
-                "expected_bgr": [
-                    10,
-                    10,
-                    10
-                ],
-                "tolerance": 20
+                "expected_bgr": [10, 10, 10],
+                "tolerance": 25
             },
             "action": {
                 "type": "log_message",
-                "message": "Top-left quadrant is currently very dark."
+                "message": "PROFILE TRIGGER: Top-left area is currently very dark.",
+                "level": "WARNING"
+            }
+        },
+        {
+            "name": "IfCenterIsBrightBlueLogAndCapture",
+            "region": "center_screen_zone",
+            "condition": {
+                "logical_operator": "AND",
+                "sub_conditions": [
+                    {
+                        "type": "average_color_is",
+                        "expected_bgr": [200, 100, 50], 
+                        "tolerance": 50,
+                        "comment": "Checks for a generally bluish average color"
+                    },
+                    {
+                        "type": "ocr_contains_text",
+                        "text_to_find": "Status",
+                        "case_sensitive": false,
+                        "min_ocr_confidence": 60,
+                        "capture_as": "status_text_block"
+                    }
+                ]
+            },
+            "action": {
+                "type": "log_message",
+                "message": "PROFILE TRIGGER: Center zone is bright blue AND contains 'Status'. Full text captured: {status_text_block}",
+                "level": "INFO"
             }
         }
     ]

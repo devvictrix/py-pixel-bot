@@ -1,56 +1,76 @@
 {
-    "profile_description": "Automates simple tasks in Notepad based on OCR and color.",
+    "profile_description": "Automates simple tasks in Notepad. Checks for 'TODO:' text and appends a message. Also checks menu bar color.",
     "settings": {
-        "monitoring_interval_seconds": 1.5
+        "monitoring_interval_seconds": 2.0,
+        "analysis_dominant_colors_k": 3 
     },
     "regions": [
         {
             "name": "notepad_text_area",
-            "x": 12,
-            "y": 90,
-            "width": 652,
-            "height": 88
+            "x": 10, 
+            "y": 80, 
+            "width": 700,
+            "height": 400,
+            "comment": "Adjust to cover the main text editing area of your Notepad window."
         },
         {
-            "name": "notepad_menu_bar_file_approx",
-            "x": 2,
-            "y": 2,
-            "width": 40,
+            "name": "notepad_file_menu_area",
+            "x": 5,  
+            "y": 5,  
+            "width": 50, 
             "height": 25,
-            "comment": "Approximate small area for 'File' menu text in Notepad. Adjust coordinates for your system's Notepad."
+            "comment": "Approximate small area for 'File' menu text in Notepad (Windows). Adjust for your system's theme/Notepad version."
         }
     ],
     "templates": [],
     "rules": [
         {
-            "name": "AppendDetailsToTodoInNotepad",
+            "name": "AppendToTodoInNotepad",
             "region": "notepad_text_area",
             "condition": {
                 "type": "ocr_contains_text",
                 "text_to_find": "TODO:",
-                "case_sensitive": true
+                "case_sensitive": true,
+                "min_ocr_confidence": 50,
+                "capture_as": "todo_line_text"
             },
             "action": {
                 "type": "type_text",
-                "text": " - ACTION REQUIRED!",
-                "pyautogui_pause_before": 0.2
+                "text": " - ACTION REQUIRED by PyPixelBot! (Original: {todo_line_text})",
+                "interval": 0.02,
+                "pyautogui_pause_before": 0.3
             }
         },
         {
-            "name": "LogIfFileMenuAreaIsStandardWindowsMenuBarColor",
-            "region": "notepad_menu_bar_file_approx",
+            "name": "LogIfFileMenuIsStandardMenuBarColor",
+            "region": "notepad_file_menu_area",
             "condition": {
                 "type": "average_color_is",
-                "expected_bgr": [
-                    240,
-                    240,
-                    240
-                ],
-                "tolerance": 15
+                "expected_bgr": [240, 240, 240], 
+                "tolerance": 20,
+                "comment": "Typical light gray for Windows menu bars. May vary with themes."
             },
             "action": {
                 "type": "log_message",
-                "message": "Notepad 'File' menu area background color matches typical light gray menu."
+                "message": "PROFILE TRIGGER: Notepad 'File' menu area background color matches typical light gray menu.",
+                "level": "INFO"
+            }
+        },
+        {
+            "name": "CheckDominantColorNotepadText",
+            "region": "notepad_text_area",
+            "condition": {
+                "type": "dominant_color_matches",
+                "expected_bgr": [255,255,255],
+                "tolerance": 10,
+                "check_top_n_dominant": 1,
+                "min_percentage": 50.0,
+                "comment": "Checks if the most dominant color is white (typical background)"
+            },
+            "action": {
+                "type": "log_message",
+                "message": "PROFILE TRIGGER: Notepad text area background is predominantly white.",
+                "level": "DEBUG"
             }
         }
     ]

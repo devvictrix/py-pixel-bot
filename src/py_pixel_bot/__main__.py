@@ -1,140 +1,144 @@
+import sys
+import os
+import logging # Used early for initial messages before full setup
 
-from py_pixel_bot.core.config_manager import load_environment_variables
-load_environment_variables() 
+# --- Path Setup ---
+# This block ensures that the 'src' directory (containing the 'py_pixel_bot' package)
+# is on sys.path, allowing Python to find the modules when the application is run
+# using `python -m py_pixel_bot` from the project root, or when `__main__.py` is
+# executed directly (e.g., `python src/py_pixel_bot/__main__.py`).
 
-from py_pixel_bot.core.logging_setup import setup_logging
-setup_logging() 
+# When run as `python -m py_pixel_bot`:
+#   - __package__ will be "py_pixel_bot".
+#   - The current working directory (project root) is typically on sys.path.
+# When run as `python src/py_pixel_bot/__main__.py`:
+#   - __package__ will be "py_pixel_bot" (due to relative imports within package).
+#   - The directory of __main__.py (`src/py_pixel_bot`) is on sys.path.
+#     We need its parent (`src`) or grandparent (project root) for `from py_pixel_bot...` imports
+#     if other modules try to import from the top `py_pixel_bot` package level.
+#     However, internal imports within the package (e.g., `from .core import ...`) work fine.
+# For robustness, especially if this script might be invoked in unusual ways,
+# explicitly adding the 'src' directory (parent of 'py_pixel_bot' package directory)
+# to sys.path if it's not already there is a good measure.
 
-import logging 
-import sys 
-import time
-import os 
-import json 
+# Path to the 'src' directory
+SRC_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # py-pixel-bot/src/
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+    # Initial log before full logging setup, primarily for path debugging if needed.
+    # This will go to stderr by default if no handlers are configured yet.
+    logging.info(f"__main__.py: Added '{SRC_DIR}' to sys.path for module resolution.")
 
-from py_pixel_bot.core.config_manager import ConfigManager
-from py_pixel_bot.ui.cli import parse_arguments, adjust_logging_for_cli_verbosity
-from py_pixel_bot.ui.gui.region_selector import launch_region_selector_interactive 
-import customtkinter as ctk 
 
-from py_pixel_bot.engines.capture_engine import CaptureEngine
-from py_pixel_bot.engines.analysis_engine import AnalysisEngine
-from py_pixel_bot.engines.rules_engine import RulesEngine
-from py_pixel_bot.engines.action_executor import ActionExecutor
-from py_pixel_bot.main_controller import MainController
+# Now, perform the actual imports after path setup
+from py_pixel_bot.core import config_manager as cm
+from py_pixel_bot.core import logging_setup
+from py_pixel_bot.ui import cli # Imports create_parser and handler functions
 
-logger = logging.getLogger("py_pixel_bot.app") 
+# This logger will be configured by logging_setup.setup_logging() later
+module_logger = logging.getLogger(__name__) # Use __name__ for module-level logger
 
-def handle_run_command(args):
-    logger.info(f"Executing 'run' command for profile: '{args.profile}'")
-    controller_instance = None
+
+def main():
+    """
+    Main entry point for the PyPixelBot application.
+    Orchestrates initialization, CLI argument parsing, and command dispatching.
+    """
+    # 1. Load environment variables (especially APP_ENV) from .env file.
+    # This must happen BEFORE logging setup if APP_ENV influences log config.
     try:
-        config_manager = ConfigManager(profile_name=args.profile)
-        config_data = config_manager.get_config()
-        logger.info(f"Successfully loaded profile: '{args.profile}'. Desc: '{config_data.get('profile_description', 'N/A')}'")
+        cm.load_environment_variables() 
+    except Exception as e_env:
+        # Critical failure if .env loading itself fails badly, though python-dotenv is usually robust.
+        # Log directly to stderr as full logging might not be up.
+        sys.stderr.write(f"CRITICAL: Failed to execute load_environment_variables(): {e_env}\n")
+        # Depending on how critical .env is, might exit. For APP_ENV, logging_setup has defaults.
+        # For now, we proceed, as logging_setup will use defaults if APP_ENV is missing.
 
-        capture_engine = CaptureEngine()
-        analysis_engine = AnalysisEngine()
-        action_executor = ActionExecutor()
-        rules_engine = RulesEngine(action_executor, config_manager, analysis_engine)
-        
-        controller_instance = MainController(config_data, capture_engine, analysis_engine, rules_engine)
-        controller_instance.start_monitoring()
-        
-        logger.info("Bot monitoring started. Press Ctrl+C to stop.")
-        while controller_instance.is_running():
-            time.sleep(0.5)
-            
-    except FileNotFoundError as e:
-        logger.critical(f"CRITICAL ERROR (run): Profile file issue for '{args.profile}' - {e}.")
-        sys.exit(1)
-    except json.JSONDecodeError as e: 
-        logger.critical(f"CRITICAL ERROR (run): Profile '{args.profile}' invalid JSON: {e.msg} (line {e.lineno}, col {e.colno}).")
-        sys.exit(1)
-    finally: 
-        if controller_instance and hasattr(controller_instance, 'is_running') and controller_instance.is_running():
-            logger.info("handle_run_command ensuring controller shutdown...")
-            controller_instance.stop_monitoring()
-
-def handle_add_region_command(args):
-    logger.info(f"Executing 'add-region' command for profile: '{args.profile}'. Initial name: '{args.name}'")
-    
+    # 2. Setup application-wide logging.
+    # This reads APP_ENV (set by load_environment_variables or OS) to configure handlers and levels.
     try:
-        ctk.set_appearance_mode(os.getenv("CTkAppearanceMode", "System")) 
-        ctk.set_default_color_theme(os.getenv("CTkColorTheme", "blue"))
-    except Exception as e_ctk:
-        logger.warning(f"Could not set CustomTkinter theme: {e_ctk}")
+        logging_setup.setup_logging() 
+    except Exception as e_log:
+        sys.stderr.write(f"CRITICAL: Failed to setup logging: {e_log}\n")
+        # If logging setup fails, further execution is risky/undiagnosable.
+        sys.exit(2) # Use a distinct exit code for logging failure
 
-    selected_region_data = launch_region_selector_interactive(initial_name=args.name)
+    # Now that logging is configured, we can use the module_logger.
+    module_logger.info("PyPixelBot application starting up...")
+    module_logger.debug(f"Python version: {sys.version}")
+    module_logger.debug(f"sys.path: {sys.path}")
+    module_logger.debug(f"Current working directory: {os.getcwd()}")
+    module_logger.debug(f"APP_ENV (after load & setup): '{os.getenv('APP_ENV', 'Not Set - Error?')}'")
 
-    if selected_region_data and selected_region_data.get("name") and selected_region_data.get("coords"):
-        region_name = selected_region_data["name"]
-        coords = selected_region_data["coords"]
-        logger.info(f"Region Selector GUI returned: Name='{region_name}', Coords={coords}")
-        
-        config_manager_instance = None
+
+    # 3. Create the CLI argument parser.
+    try:
+        parser = cli.create_parser()
+    except Exception as e_parser:
+        module_logger.critical(f"Failed to create CLI parser: {e_parser}", exc_info=True)
+        sys.exit(3)
+
+    # 4. Parse CLI arguments from sys.argv.
+    try:
+        args = parser.parse_args() # Exits on --help or error automatically
+        module_logger.debug(f"Parsed CLI arguments: {args}")
+    except SystemExit as e_argparse: # Handles -h or argparse errors
+        # Argparse already prints help/error, so just exit with its code.
+        # module_logger.info(f"Argparse exited with code {e_argparse.code}.") # Optional log
+        sys.exit(e_argparse.code)
+    except Exception as e_argparse_unexpected:
+        module_logger.critical(f"Unexpected error during CLI argument parsing: {e_argparse_unexpected}", exc_info=True)
+        sys.exit(4)
+
+
+    # 5. Adjust console logging level based on CLI verbosity flags.
+    # This must happen AFTER initial logging setup AND after parsing args.
+    try:
+        if hasattr(args, "verbose"): # Check if 'verbose' attr exists (it should if parser is set up)
+            if args.verbose == 1:
+                logging_setup.set_console_log_level(logging.INFO)
+                # module_logger.info("Console logging level overridden to INFO by -v flag.") # Already logged by set_console_log_level
+            elif args.verbose >= 2:
+                logging_setup.set_console_log_level(logging.DEBUG)
+                # module_logger.info("Console logging level overridden to DEBUG by -vv flag.")
+    except Exception as e_verbose:
+        module_logger.error(f"Error setting console verbosity: {e_verbose}", exc_info=True)
+
+
+    # 6. Execute the dispatched command function.
+    # Each subcommand in cli.py should have set_defaults(func=handler_function).
+    if hasattr(args, "func") and callable(args.func):
+        module_logger.info(f"Dispatching to command handler for: '{args.command}'")
         try:
-            config_manager_instance = ConfigManager(profile_name=args.profile)
-        except FileNotFoundError:
-            logger.info(f"Profile '{args.profile}' does not exist. Will create a new one.")
-            config_manager_instance = ConfigManager(profile_name=args.profile) 
-            config_manager_instance.config_data = { 
-                "profile_description": f"New profile: {args.profile}",
-                "settings": {"monitoring_interval_seconds": 1.0},
-                "regions": [], "rules": [], "templates": []
-            }
-            logger.info(f"Initialized new in-memory config for '{args.profile}'")
-        except json.JSONDecodeError as e:
-            logger.error(f"Profile '{args.profile}' is corrupted: {e}. Cannot add region. Please fix or delete profile.")
-            return 
-        except Exception as e_load:
-            logger.error(f"Unexpected error loading profile '{args.profile}' for add-region: {e_load}", exc_info=True)
-            return
-
-        try: 
-            if config_manager_instance.add_region_to_config(region_name, coords):
-                config_manager_instance.save_profile() 
-                logger.info(f"Region '{region_name}' added/updated in profile '{args.profile}' and saved.")
+            args.func(args) # Call the appropriate handler function (e.g., handle_run, handle_edit)
+            exit_code = 0 # Assume success if handler doesn't exit
+            module_logger.info(f"Command '{args.command}' completed successfully.")
+        except SystemExit as se: # If a handler calls sys.exit()
+            exit_code = se.code if se.code is not None else 1 # Default to 1 if no code in SystemExit
+            if exit_code == 0:
+                module_logger.info(f"Command '{args.command}' handler exited with code 0 (success).")
             else:
-                logger.error(f"Failed to add region '{region_name}' to in-memory config for profile '{args.profile}'. Profile not saved.")
-        except Exception as e_save:
-            logger.error(f"Error saving profile '{args.profile}' after attempting to add region: {e_save}", exc_info=True)
+                module_logger.error(f"Command '{args.command}' handler exited with code {exit_code}.")
+        except KeyboardInterrupt: # Handle Ctrl+C if not caught by the command handler (e.g., during GUI setup)
+            module_logger.info(f"KeyboardInterrupt received during command '{args.command}'. Application terminating.")
+            exit_code = 130 # Standard exit code for Ctrl+C
+        except Exception as e_cmd: 
+            module_logger.critical(f"A critical unhandled error occurred in command '{args.command}': {e_cmd}", exc_info=True)
+            exit_code = 1 # General error
     else:
-        logger.info("Region selection was cancelled or no valid data returned from GUI.")
+        # This case should ideally not be reached if subparsers are 'required=True'
+        # and all subparsers have a default function set.
+        module_logger.error("No command function was dispatched. This indicates a CLI setup issue.")
+        parser.print_help() # Show help to the user
+        exit_code = 1
 
-def main_entry_point():
-    logger.info(f"--- PyPixelBot Main Entry Point ---")
-    effective_app_env = os.getenv('APP_ENV', 'development').lower()
-    if effective_app_env not in ['development', 'uat', 'production']:
-        effective_app_env = 'development (defaulted by logging_setup)'
-    logger.info(f"Effective APP_ENV for this session: '{effective_app_env}'")
-    
-    try:
-        args = parse_arguments()
-        
-        if hasattr(args, 'verbose') and args.verbose > 0:
-            adjust_logging_for_cli_verbosity(args.verbose)
+    module_logger.info(f"PyPixelBot application shutting down with exit code {exit_code}.")
+    sys.exit(exit_code) # Explicitly exit with the determined code
 
-        if args.command == "run":
-            handle_run_command(args)
-        elif args.command == "add-region":
-            handle_add_region_command(args)
-        else:
-            logger.error(f"Unknown command: {args.command}. Use --help for options.")
-            # To print general help if command is unknown and subparsers.required = True
-            # This is a bit of a workaround as argparse might exit before this.
-            # A more robust way is to have a default subparser or handle it in parse_arguments.
-            # For now, this is a fallback.
-            if hasattr(args, 'parser_instance_for_help'): # If cli.py could pass the main parser
-                args.parser_instance_for_help.print_help()
-            sys.exit(1) 
-            
-    except KeyboardInterrupt: 
-        logger.info("Application shutdown requested via KeyboardInterrupt at main entry point.")
-    except Exception as e: 
-        logger.critical(f"A top-level unhandled exception occurred: {e}", exc_info=True)
-        sys.exit(1)
-    finally:
-        logger.info(f"--- PyPixelBot Main Execution Finished ---")
 
 if __name__ == "__main__":
-    main_entry_point()
+    # This makes the script executable.
+    # When run as `python -m py_pixel_bot`, Python executes this `if __name__ == "__main__":` block.
+    # When run as `python src/py_pixel_bot/__main__.py`, it also executes this.
+    main()
