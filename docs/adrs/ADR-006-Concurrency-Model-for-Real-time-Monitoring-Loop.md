@@ -1,4 +1,4 @@
-// File: adrs/ADR-006-Concurrency-Model-for-Real-time-Monitoring-Loop.md
+// File: docs/adrs/ADR-006-Concurrency-Model-for-Real-time-Monitoring-Loop.md
 # ADR-006: Concurrency Model for Real-time Monitoring Loop
 
 *   **Status:** Approved
@@ -7,7 +7,7 @@
 
 ## Context and Problem Statement
 
-The tool's core involves a continuous loop: Capture -> Analyze -> Evaluate Rules -> Act. This loop runs repeatedly (configurable rate/FPS). If it runs in the main thread, it blocks the UI (CLI/GUI), making the app unresponsive. We need a concurrency model allowing the loop to run in the background without freezing the main thread, enabling user interaction (e.g., to stop it).
+The tool's core involves a continuous loop: Capture -> Analyze -> Evaluate Rules -> Act. This loop runs repeatedly (configurable rate/FPS). If it runs in the main thread, it blocks the UI (CLI/GUI), making the app unresponsive. We need a concurrency model allowing the loop to run in the background without freezing the main thread, enabling user interaction (e.g., to stop it via CLI Ctrl+C or a GUI button).
 
 ## Considered Options
 
@@ -32,15 +32,15 @@ The tool's core involves a continuous loop: Capture -> Analyze -> Evaluate Rules
 *   **Suitability for I/O-Bound Nature:** The loop involves significant I/O-like operations (screen capture, image analysis via C-libs, action execution via PyAutoGUI) where `threading` performs well.
 *   **Standard Library:** No external dependencies for core concurrency.
 *   **Effective Stop Mechanism:** `threading.Event` can gracefully terminate the loop thread.
-*   **Sufficient for Initial Needs:** `asyncio`'s complexity for making components async-compatible outweighs benefits here. `multiprocessing` is unnecessary overhead.
+*   **Sufficient for Needs:** `asyncio`'s complexity for making components async-compatible outweighs benefits here. `multiprocessing` is unnecessary overhead for the main bot execution loop.
 
-If CPU-bound Python code in the analysis loop becomes a bottleneck later, `multiprocessing` for specific tasks could be a targeted optimization, but `threading` is best for the main loop.
+If CPU-bound Python code in the analysis loop becomes a significant bottleneck later, `multiprocessing` for specific, isolated tasks could be a targeted optimization, but `threading` is best for the main monitoring loop.
 
 ## Consequences
 
-*   The main monitoring loop will run in a separate daemon thread.
-*   The main thread handles user input (CLI/GUI) and controls the monitoring thread's lifecycle (start, stop via `threading.Event`).
-*   Care needed if data is shared between threads (use thread-safe mechanisms). Initially, communication might be mainly one-way signals.
+*   The main monitoring loop (in `MainController`) runs in a separate daemon thread.
+*   The main thread handles user input (CLI, and will handle GUI event loop) and controls the monitoring thread's lifecycle (start, stop via `threading.Event`).
+*   Care needed if data is shared between threads (use thread-safe mechanisms). Currently, communication is primarily one-way signals (start/stop) and data is passed into the loop per cycle.
 *   Developers need basic Python threading understanding.
 
 ---

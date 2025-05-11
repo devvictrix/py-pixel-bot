@@ -1,4 +1,4 @@
-// File: adrs/ADR-003-Configuration-Profile-Storage-Format.md
+// File: docs/adrs/ADR-003-Configuration-Profile-Storage-Format.md
 # ADR-003: Configuration Profile Storage Format
 
 *   **Status:** Approved
@@ -44,13 +44,13 @@ This collection of settings needs to be saved to a file and loaded back. The for
 *   **Wide Adoption:** De facto standard for configuration files.
 *   **Performance:** Adequate for anticipated profile sizes.
 
-The lack of comments is a minor drawback mitigated by clear key naming.
+The lack of comments is a minor drawback mitigated by clear key naming and the potential for a `"comment"` field within objects if needed. The primary interface for editing profiles will be the GUI.
 
 ## Consequences
 
-*   Bot profiles will be stored in `.json` files.
+*   Bot profiles will be stored in `.json` files, typically in a `profiles/` directory.
 *   The application will use Python's `json` module for loading and saving profiles.
-*   A clear schema for the JSON profiles will be defined and documented in `TECHNICAL_DESIGN.MD`.
+*   A clear schema for the JSON profiles will be defined and documented (e.g., in `TECHNICAL_DESIGN.MD` or a dedicated schema file).
 *   Manual editing by users, while possible, should be approached with caution. GUI tools will be the primary interface.
 
 ---

@@ -1,4 +1,4 @@
-// File: adrs/ADR-002-Input-Simulation-Library-Choice.md
+// File: docs/adrs/ADR-002-Input-Simulation-Library-Choice.md
 # ADR-002: Input Simulation Library Choice
 
 *   **Status:** Approved

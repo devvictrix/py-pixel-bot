@@ -1,4 +1,4 @@
-// File: adrs/ADR-004-Rules-Engine-Design-for-Conditional-Logic.md
+// File: docs/adrs/ADR-004-Rules-Engine-Design-for-Conditional-Logic.md
 # ADR-004: Rules Engine Design for Conditional Logic
 
 *   **Status:** Approved
@@ -39,27 +39,22 @@ The design should consider:
 
 ## Decision Outcome
 
-**Chosen Option:** Start with **Option 1 (Simple List of Single-Condition Rule Objects)** and plan to evolve towards **Option 2 (Structured Rule Objects with Compound Conditions)** as the project matures and requirements for more complex logic become clearer.
+**Chosen Option:** Start with **Option 1 (Simple List of Single-Condition Rule Objects)** and evolve towards **Option 2 (Structured Rule Objects with Compound Conditions)** as the project matures and requirements for more complex logic become clearer.
+*This evolution to Option 2 has been implemented as part of v2.0.0.*
 
-**Justification (for starting with Option 1):**
-*   **Simplicity and Rapid Initial Development:** Easiest to implement for core use cases.
-*   **Clear Path to Core Value:** Delivers fundamental "IF visual_event THEN action" quickly.
-*   **Manageable Configuration:** Straightforward JSON structure initially.
+**Justification (for starting with Option 1, then evolving to Option 2):**
+*   **Simplicity and Rapid Initial Development (Option 1):** Easiest to implement for core use cases. Delivers fundamental "IF visual_event THEN action" quickly. Manageable initial configuration.
+*   **Enhanced Expressiveness (Option 2):** Addresses the need for more complex logic by allowing `AND`/`OR` combinations of multiple sub-conditions within a single rule structure. The `condition` part of a rule object can accept a `logical_operator` and a list of `sub_conditions`.
 
-**Evolutionary Path to Option 2:**
-*   Once Option 1 basics are stable and feedback indicates need for more complex logic, the rule structure can be enhanced.
-*   The `condition` part of a rule object can be redesigned to accept a list of conditions with an associated logical operator (`AND`/`OR`).
-
-This phased approach balances delivering initial value quickly with future flexibility.
+This phased approach balanced delivering initial value quickly with achieving necessary flexibility.
 
 ## Consequences
 
-*   **Initial Implementation (Option 1):**
-    *   `rules_engine.py` iterates a list of rule objects, performs single condition check, executes action.
-    *   Complex multi-condition logic initially requires multiple simple rules or external state management.
-*   **Future Evolution (towards Option 2):**
-    *   `rules_engine.py` will need updates for more complex condition structures.
-    *   JSON schema for rules will change, requiring versioning or migration considerations for profiles (less concern for early versions).
-*   Rule object structure (fields for `name`, `region`, `condition` type/params, `action` type/params) needs clear definition in `TECHNICAL_DESIGN.MD`.
+*   **Initial Implementation (Option 1 - Completed for v0.x):**
+    *   `rules_engine.py` iterated a list of rule objects, performed single condition check, executed action.
+*   **Evolution (Option 2 - Implemented for v2.0.0):**
+    *   `rules_engine.py` was updated to parse and evaluate complex condition structures with `logical_operator` and `sub_conditions`.
+    *   JSON schema for rules was extended, while maintaining backwards compatibility for single-condition rules where `logical_operator` is absent.
+*   Rule object structure (fields for `name`, `region` (default), `condition` object, `action` object) is clearly defined in `TECHNICAL_DESIGN.MD`.
 
 ---

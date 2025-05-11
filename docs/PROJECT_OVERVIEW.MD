@@ -1,50 +1,52 @@
-// File: PROJECT_OVERVIEW.MD
+// File: docs/PROJECT_OVERVIEW.MD
 # Project Overview
 
 ## 1. Purpose
 
-This project is a Python-based desktop automation tool designed to **capture and analyze specific regions of the screen in real-time**. It aims to extract information (e.g., text, colors, simple patterns) from these defined areas and then perform actions (mouse clicks, keyboard inputs) based on the analysis, often within or related to that specific region.
+This project is a Python-based desktop automation tool designed to **capture and analyze specific regions of the screen in real-time**. It aims to extract information (e.g., text, colors, patterns, dominant colors) from these defined areas and then perform actions (mouse clicks, keyboard inputs) based on the analysis, often within or related to that specific region. It also provides a **Graphical User Interface (GUI) for comprehensive profile creation and management.**
 
 ## 2. Vision
 
-To create a precise and efficient visual automation tool that empowers users to automate tasks requiring interaction with dynamic or non-standard UI elements by focusing on visual cues within defined screen areas. This tool will enable automation where traditional element selectors might fail or be unavailable.
+To create a precise, efficient, and user-friendly visual automation tool that empowers users to automate tasks requiring interaction with dynamic or non-standard UI elements. This tool will enable automation where traditional element selectors might fail or be unavailable, by focusing on visual cues within defined screen areas, and will be easily configurable through an intuitive GUI.
 
 ## 3. Core Goals
 
-*   **Targeted Screen Capture:** Reliably capture image data from a user-defined rectangular area of the screen.
-*   **Visual Information Extraction:** Implement capabilities to "read" or analyze the content of the captured area (e.g., basic OCR, color detection, pixel pattern matching).
-*   **Conditional Action Execution:** Trigger programmatic actions (mouse, keyboard) based on the results of the visual analysis.
-*   **User-Defined Focus:** Allow users to easily specify and manage the target screen regions.
-*   **Performance for Real-time Use:** Optimize for responsiveness suitable for monitoring and reacting to on-screen changes.
-*   **Robustness & Diagnosability:** Ensure stable operation with comprehensive logging for easy troubleshooting across different environments (`development`, `uat`, `production`).
+*   **Targeted Screen Capture:** Reliably capture image data from user-defined screen areas.
+*   **Advanced Visual Information Extraction:** Implement capabilities to "read" or analyze captured areas (OCR with confidence, color detection, average color, dominant colors, template matching).
+*   **Flexible Conditional Action Execution:** Trigger programmatic actions based on complex rule evaluations (single or compound conditions, variable usage).
+*   **User-Friendly Configuration (GUI):** Provide a comprehensive GUI for creating, editing, and managing all aspects of bot profiles (regions, templates, rules, settings) without needing to directly edit JSON files.
+*   **Performance for Real-time Use (Bot Runtime):** Optimize for responsiveness suitable for monitoring and reacting to on-screen changes, including selective analysis.
+*   **Robustness & Diagnosability:** Ensure stable operation with comprehensive logging for easy troubleshooting across different environments (`development`, `uat`, `production`) for both the bot runtime and the GUI editor.
 
-## 4. Non-Goals (Out of Scope for Initial Major Deliverable - AI-Accelerated v1.0.0)
+## 4. Non-Goals (Out of Scope for v3.0.0)
 
-*   Full-scale general computer vision understanding (e.g., complex object recognition beyond simple patterns or OCR).
-*   General-purpose screen recording for playback (this tool focuses on live analysis and reaction).
-*   Natural Language Understanding of on-screen content beyond basic keyword matching from OCR.
-*   Automated discovery of "interesting" screen regions; the user must define the regions.
+*   Full-scale general computer vision understanding (e.g., complex object recognition beyond templates or basic shapes).
+*   General-purpose screen recording for playback.
+*   Natural Language Understanding of on-screen content beyond keyword matching from OCR.
+*   Automated discovery of "interesting" screen regions; the user must define the regions (though the GUI aids this).
 *   Highly advanced UI element inspection using OS accessibility APIs (focus is on visual analysis).
+*   Advanced GUI features like live visual feedback overlays during rule creation (marked as v3.0.0 "Real-time Visual Feedback in GUI" but might be deferred if initial GUI is extensive).
+*   Drag-and-drop reordering in GUI lists (a "nice-to-have" that might be deferred from initial v3.0.0 GUI).
 
 ## 5. Target Users
 
-*   Gamers automating in-game tasks based on visual cues (e.g., health bars, specific icons, cooldown timers).
-*   Users interacting with applications that lack APIs or standard UI element accessibility.
-*   Testers performing visual validation or interacting with custom UI elements.
-*   Individuals needing to automate interactions with legacy systems or virtualized environments where element inspection is difficult.
-*   Developers and power users needing a scriptable tool to react to visual on-screen events.
+*   Gamers automating in-game tasks.
+*   Users interacting with applications lacking APIs or standard UI accessibility.
+*   Testers performing visual validation.
+*   Individuals needing to automate interactions with legacy systems or virtualized environments.
+*   Developers and power users needing a scriptable (via JSON profiles) and GUI-configurable tool to react to visual on-screen events.
 
-## 6. Core Technology Stack (Initial & Envisioned for AI-Accelerated v1.0.0)
+## 6. Core Technology Stack (Envisioned for v3.0.0)
 
 *   **Language:** Python
 *   **Environment Management:** `python-dotenv` for `.env` files (`APP_ENV`).
 *   **Logging:** Python `logging` module.
-*   **Screen Capture:** `OpenCV-Python` (cv2), potentially `mss` for performance exploration.
+*   **Screen Capture:** `Pillow` (`ImageGrab`), `OpenCV-Python`.
 *   **Image Processing/Analysis:** `OpenCV-Python`, `NumPy`, `Pillow`.
-*   **OCR (Optical Character Recognition):** `pytesseract` (Tesseract OCR wrapper).
+*   **OCR:** `pytesseract` (Tesseract OCR wrapper).
 *   **Input Simulation:** `pyautogui`.
 *   **Configuration/Data Format:** JSON for profiles.
 *   **CLI:** `argparse`.
-*   **GUI (for Region Definition in AI-Accelerated v1.0.0):** `CustomTkinter`.
+*   **GUI:** `CustomTkinter`.
 
 ---

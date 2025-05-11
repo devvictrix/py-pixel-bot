@@ -1,4 +1,4 @@
-// File: adrs/ADR-007-Logging-Strategy-and-Environment-Configuration.md
+// File: docs/adrs/ADR-007-Logging-Strategy-and-Environment-Configuration.md
 # ADR-007: Logging Strategy and Environment Configuration
 
 *   **Status:** Approved
@@ -43,28 +43,30 @@ The tool needs robust logging for development, debugging, UAT, and production mo
 
 ## Logging Strategy Details
 
-*   **Logger Naming:** `logging.getLogger(__name__)` for hierarchical loggers.
+*   **Logger Naming:** `logging.getLogger(__name__)` for hierarchical loggers within modules. The root logger for the application is configured in `logging_setup.py`.
 *   **Log Levels:** Standard: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
-*   **Log Format (Standard):** `%(asctime)s - %(name)s - %(levelname)s - %(message)s`. Development may include `%(module)s:%(lineno)d`.
+*   **Log Format (Standard):** `%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s`. Development may include more, production might be slightly less verbose on console.
 *   **Log Handlers and Configuration based on `APP_ENV`:**
     *   **`APP_ENV=development`:**
-        *   Console Handler: `DEBUG` level, verbose format.
-        *   File Handler (e.g., `app_dev.log`): `DEBUG` level, detailed format.
+        *   Console Handler: `DEBUG` level, detailed format.
+        *   File Handler (e.g., `logs/YYYY-MM-DD.log`): `DEBUG` level, detailed format, date-stamped filename, with rotation.
     *   **`APP_ENV=uat`:**
         *   Console Handler: `INFO` level, standard format.
-        *   File Handler (e.g., `app_uat.log`): `INFO` level, standard format. Basic rotation.
+        *   File Handler (e.g., `logs/YYYY-MM-DD.log`): `INFO` level, standard format. Robust rotation.
     *   **`APP_ENV=production`:**
-        *   Console Handler: `WARNING` (or `INFO`), concise format.
-        *   File Handler (e.g., `app_prod.log`): `INFO` level, standard format. Robust log rotation (`logging.handlers.RotatingFileHandler` or `TimedRotatingFileHandler`).
-*   **Initialization:** Logging configured once at app startup via a dedicated setup function, reading `APP_ENV`.
-*   **Persistence:** Logs are persistent, managed by rotation, not "removed."
+        *   Console Handler: `INFO` (or `WARNING`), concise format.
+        *   File Handler (e.g., `logs/YYYY-MM-DD.log`): `INFO` level, standard format. Robust log rotation (`logging.handlers.TimedRotatingFileHandler` based on date).
+*   **Initialization:** Logging configured once at app startup by `core.logging_setup.setup_logging()`, which reads `APP_ENV`. CLI verbosity flags (`-v`, `-vv`) can override the console handler's level.
+*   **Persistence:** Logs are persistent in files within a `logs/` directory at the project root, managed by date-based rotation.
+*   **Log Directory:** A `logs/` directory will be created in the project root if it doesn't exist. This directory should be added to `.gitignore`.
 
 ## Consequences
 
 *   A `.env` file (e.g., with `APP_ENV=development`) needed in project root (added to `.gitignore`).
 *   `python-dotenv` added as a dependency.
-*   A dedicated module/function (e.g., `config.py` or `logging_setup.py`) for initializing logging.
+*   A dedicated module (`core/logging_setup.py`) for initializing logging.
 *   All important steps, decisions, errors, state changes MUST include appropriate logging statements.
 *   Clear documentation on setting `APP_ENV` for deployment.
+*   The `logs/` directory must be added to `.gitignore`.
 
 ---
