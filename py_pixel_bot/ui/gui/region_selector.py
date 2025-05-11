@@ -49,6 +49,7 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         self.rect_id: Optional[int] = None 
         self.current_rect_coords_abs: Optional[tuple[int,int,int,int]] = None # (x1,y1,x2,y2) absolute screen
         self.saved_region_info: Optional[Dict[str, Any]] = None 
+        self.changes_made: bool = False # Added to track if save occurred
 
         try:
             # Grab all screens to handle multi-monitor setups correctly.
@@ -277,15 +278,19 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         try:
             self.config_manager.save_current_profile() # Saves the modified profile_data
             self.saved_region_info = new_region_data 
+            self.changes_made = True # Signal that changes were made
             logger.info(f"Region '{name}' saved successfully to profile '{self.profile_path_for_log}'.")
         except Exception as e:
             logger.error(f"Failed to save profile after updating region '{name}': {e}", exc_info=True)
             messagebox.showerror("Save Error", f"Could not save region '{name}'.\nError: {e}", parent=self)
             self.saved_region_info = None
+            self.changes_made = False
+
 
     def cancel_selection(self, event=None):
         logger.info("Region selection cancelled.")
         self.saved_region_info = None 
+        self.changes_made = False
         self.destroy_selector()
 
     def destroy_selector(self):
@@ -296,12 +301,21 @@ class RegionSelectorWindow(ctk.CTkToplevel):
 
 
 if __name__ == '__main__': # (Same test setup as before)
+    import os # Added for os.path.exists and os.remove
     # ... (Test code as in previous version, ensuring logging and ConfigManager can init) ...
     if not logging.getLogger("py_pixel_bot").hasHandlers(): logging.basicConfig(level=logging.DEBUG,format='%(asctime)s-%(name)s-%(levelname)s-%(message)s'); logger.info("RegionSelector standalone:Min logging.")
     try:
         root=ctk.CTk();root.title("Master Test");root.geometry("300x200"); test_profile_name="test_region_sel_profile"; dummy_cm=ConfigManager(test_profile_name,create_if_missing=True)
-        def open_sel():logger.info("Opening RegionSelector...");sel=RegionSelectorWindow(master=root,config_manager=dummy_cm);root.wait_window(sel);
-        if hasattr(sel,'saved_region_info')and sel.saved_region_info:logger.info(f"Test:Selector closed.Saved:{sel.saved_region_info}\nProfile data:{dummy_cm.get_profile_data()}");else:logger.info("Test:Selector closed,no save.")
+        def open_sel():
+            logger.info("Opening RegionSelector...")
+            sel=RegionSelectorWindow(master=root,config_manager=dummy_cm)
+            root.wait_window(sel)
+            # Check if sel.saved_region_info exists and has content
+            if hasattr(sel, 'saved_region_info') and sel.saved_region_info: # Line 304 - Corrected
+                logger.info(f"Test:Selector closed.Saved:{sel.saved_region_info}\nProfile data:{dummy_cm.get_profile_data()}")
+            else:
+                logger.info("Test:Selector closed,no save.")
+
         ctk.CTkButton(root,text="Open Region Selector",command=open_sel).pack(pady=20);ctk.CTkLabel(root,text="Close after test.").pack(pady=10);root.mainloop()
         if dummy_cm.get_profile_path() and os.path.exists(dummy_cm.get_profile_path()):logger.info(f"Cleaning up:{dummy_cm.get_profile_path()}");os.remove(dummy_cm.get_profile_path())
     except Exception as e:logger.exception(f"Error in RegionSelector standalone test:{e}")

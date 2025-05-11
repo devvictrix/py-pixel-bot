@@ -1,207 +1,138 @@
 import logging
-import logging.handlers
 import os
 import sys
-from datetime import datetime
-from typing import Optional
+from logging.handlers import TimedRotatingFileHandler
 
-# Determine project root to ensure logs directory is created there
-# Assuming this file is src/py_pixel_bot/core/logging_setup.py
-PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
-LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
-
-# Store the root logger for the application package
-# This allows modules to use logging.getLogger(__name__) and inherit configuration.
-APP_ROOT_LOGGER_NAME = "py_pixel_bot"
-
-# Keep track of handlers to allow dynamic level changes (e.g., by CLI verbosity)
-console_handler: Optional[logging.StreamHandler] = None
-file_handler: Optional[logging.handlers.TimedRotatingFileHandler] = None
+# Add a print statement at the top of the module to confirm it's being loaded
+print("DEBUG: py_pixel_bot.core.logging_setup module IS BEING LOADED AND EXECUTED.")
 
 
-def setup_logging():
+def setup_logging(
+    console_log_level=logging.INFO, log_file_path=None, enable_file_logging=True
+):
     """
-    Configures logging for the application based on APP_ENV.
-    Creates console and rotating file handlers.
-    Should be called once at application startup.
+    Configures logging for the application.
+    Now correctly accepts console_log_level, log_file_path, and enable_file_logging.
     """
-    global console_handler, file_handler  # Allow modification of global handler vars
+    # Add a print statement inside the function to confirm it's being called
+    print(
+        f"DEBUG: setup_logging CALLED with console_log_level={console_log_level}, log_file_path={log_file_path}, enable_file_logging={enable_file_logging}"
+    )
 
-    app_env = os.getenv(
-        "APP_ENV", "production"
-    ).lower()  # Default to production if not set
+    app_env = os.getenv("APP_ENV", "production").lower()
+    project_root = os.getcwd()
+    logs_dir = os.path.join(project_root, "logs")
 
-    # Determine log levels based on environment
-    console_log_level = logging.INFO
-    file_log_level = logging.INFO
-    log_format_string = "%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
+    if not os.path.exists(logs_dir) and enable_file_logging:
+        try:
+            os.makedirs(logs_dir)
+            print(f"DEBUG: Created logs directory: {logs_dir}")
+        except OSError as e:
+            sys.stderr.write(
+                f"Warning: Could not create logs directory: {logs_dir}. Error: {e}\n"
+            )
+            enable_file_logging = False  # Fallback to console-only
 
-    # Customize formatter for console in production to be less verbose if desired
-    console_log_format_string = log_format_string
+    base_file_level = logging.INFO  # Default for production or uat
+    console_formatter_str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    file_formatter_str = "%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
 
     if app_env == "development":
-        console_log_level = logging.DEBUG
-        file_log_level = logging.DEBUG
-        # log_format_string = "%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - (%(threadName)s) - %(message)s" # Example with thread
-    elif app_env == "uat":  # Or "testing"
-        console_log_level = logging.INFO
-        file_log_level = logging.DEBUG  # Keep file logs detailed for UAT
-    elif app_env == "production":
-        console_log_level = logging.INFO  # Production console might be less verbose
-        file_log_level = logging.INFO
-        # console_log_format_string = "%(asctime)s - %(levelname)s - %(message)s" # Simpler console format for prod
+        base_file_level = logging.DEBUG
+        # console_formatter_str is more detailed for dev in __main__.py's initial setup
+        # but this setup_logging can also refine it if desired.
+        # For now, let's keep it simple and assume __main__.py sets the detailed dev console format initially
+        # or we can enforce it here. Let's enforce for clarity.
+        console_formatter_str = "%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
 
-    # Get the application's root logger
-    # Configuring this logger will affect all loggers obtained via logging.getLogger('py_pixel_bot.module_name')
-    app_logger = logging.getLogger(APP_ROOT_LOGGER_NAME)
-    app_logger.setLevel(
-        logging.DEBUG
-    )  # Set root logger to lowest level; handlers control effective level
+    # Configure the root logger
+    # It's often better to get a specific application root logger than the absolute root logger
+    # e.g., app_logger = logging.getLogger('py_pixel_bot')
+    # For simplicity, we'll stick to the root logger for now as per previous structure.
+    # However, this can lead to issues if other libraries also use the root logger.
+    # A dedicated app logger is a good refinement later.
 
-    # Prevent multiple handlers if setup_logging is called again (e.g., in tests or by mistake)
-    if app_logger.hasHandlers():
-        # Check if our specific handlers were already added to avoid duplication if only levels change.
-        # This is a bit simplistic; a more robust check might involve handler names or types.
-        # For now, if any handlers exist, assume it's configured.
-        # If dynamic level changes are needed often, store and reuse handlers.
-        logging.getLogger(__name__).debug(
-            "Logging already configured. Skipping full setup, will only adjust levels if possible."
+    log = logging.getLogger()  # Get root logger
+    log.setLevel(logging.DEBUG)  # Set root logger to lowest level; handlers will filter
+
+    # Clear existing handlers from the root logger to avoid duplicates if re-running setup
+    # This is important if setup_logging can be called multiple times (e.g. by __main__ then a module)
+    if log.hasHandlers():
+        print(
+            f"DEBUG: Clearing {len(log.handlers)} existing handlers from root logger."
         )
-        # If handlers are stored globally, their levels can be adjusted here.
-        # For now, this simplified check just skips re-adding.
-        return
+        log.handlers.clear()
 
-    # --- Console Handler ---
-    # (Store globally to allow level changes by CLI)
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(console_log_level)
-    console_formatter = logging.Formatter(console_log_format_string)
-    console_handler.setFormatter(console_formatter)
-    app_logger.addHandler(console_handler)
-
-    # --- File Handler ---
-    try:
-        os.makedirs(LOGS_DIR, exist_ok=True)
-        # Use current date for the log filename
-        log_filename = f"{datetime.now().strftime('%Y-%m-%d')}.log"
-        log_filepath = os.path.join(LOGS_DIR, log_filename)
-
-        # Rotating file handler - rotates daily, keeps 7 backups
-        # (Store globally to allow level changes by CLI if desired for file too, though less common)
-        file_handler = logging.handlers.TimedRotatingFileHandler(
-            log_filepath, when="midnight", interval=1, backupCount=7, encoding="utf-8"
-        )
-        file_handler.setLevel(file_log_level)
-        # Include APP_ENV in file log messages for better context
-        file_log_formatter = logging.Formatter(
-            f"APP_ENV:{app_env} - {log_format_string}"
-        )
-        file_handler.setFormatter(file_log_formatter)
-        app_logger.addHandler(file_handler)
-
-        logging.getLogger(__name__).info(
-            f"File logging configured. Level: {logging.getLevelName(file_log_level)}. Path: {log_filepath}"
-        )
-
-    except Exception as e:
-        # If file logging setup fails, log to console and continue without file logging
-        logging.getLogger(__name__).error(
-            f"Failed to configure file logging to '{LOGS_DIR}': {e}", exc_info=True
-        )
-        file_handler = None  # Ensure it's None if setup failed
-
-    logging.getLogger(__name__).info(
-        f"Logging setup complete for APP_ENV='{app_env}'. Console Level: {logging.getLevelName(console_log_level)}."
+    # Console Handler
+    console_formatter = logging.Formatter(console_formatter_str)
+    ch = logging.StreamHandler(sys.stdout)  # Use sys.stdout for console output
+    ch.setLevel(console_log_level)
+    ch.setFormatter(console_formatter)
+    log.addHandler(ch)
+    print(
+        f"DEBUG: ConsoleHandler added with level {logging.getLevelName(console_log_level)}."
     )
 
+    # File Handler (Timed Rotating)
+    if enable_file_logging:
+        final_log_file_path = ""
+        if log_file_path:  # If a specific path is provided via CLI arg
+            final_log_file_path = log_file_path
+            # Ensure directory for custom log file path exists
+            custom_log_dir = os.path.dirname(final_log_file_path)
+            if custom_log_dir and not os.path.exists(custom_log_dir):
+                try:
+                    os.makedirs(custom_log_dir)
+                    print(f"DEBUG: Created custom log directory: {custom_log_dir}")
+                except OSError as e:
+                    sys.stderr.write(
+                        f"Warning: Could not create custom log directory: {custom_log_dir}. Error: {e}. File logging to this path disabled.\n"
+                    )
+                    # Potentially fall back to default logs_dir or disable file logging
+                    final_log_file_path = os.path.join(
+                        logs_dir, "app_fallback.log"
+                    )  # Fallback example
+                    if not os.path.exists(logs_dir):
+                        os.makedirs(logs_dir)  # Ensure fallback dir exists
 
-def set_console_log_level(level: int):
-    """
-    Allows dynamic adjustment of the console log level after initial setup.
-    Useful for CLI verbosity flags.
-    """
-    global console_handler
-    logger = logging.getLogger(
-        __name__
-    )  # Use this module's logger for messages about logging
-    if console_handler:
-        current_level_name = logging.getLevelName(console_handler.level)
-        new_level_name = logging.getLevelName(level)
-        if console_handler.level != level:
-            console_handler.setLevel(level)
-            logger.info(
-                f"Console log level dynamically changed from {current_level_name} to {new_level_name}."
+        else:  # Default log file path in 'logs/' directory
+            default_log_filename = "py_pixel_bot.log"  # Base name for rotating log
+            final_log_file_path = os.path.join(logs_dir, default_log_filename)
+
+        print(f"DEBUG: Attempting to set up FileHandler for: {final_log_file_path}")
+        file_formatter = logging.Formatter(file_formatter_str)
+
+        try:
+            # Rotate daily ('midnight'), keep 7 backup files
+            fh = TimedRotatingFileHandler(
+                final_log_file_path,
+                when="midnight",
+                interval=1,
+                backupCount=7,
+                encoding="utf-8",
             )
-        else:
-            logger.debug(
-                f"Console log level already set to {new_level_name}. No change."
+            fh.setLevel(base_file_level)  # Use base_file_level determined by APP_ENV
+            fh.setFormatter(file_formatter)
+            log.addHandler(fh)
+            log.info(
+                f"File logging enabled. Log level: {logging.getLevelName(base_file_level)}. Log file: {final_log_file_path}"
             )
+            print(
+                f"DEBUG: FileHandler added for {final_log_file_path} with level {logging.getLevelName(base_file_level)}."
+            )
+        except Exception as e:
+            sys.stderr.write(
+                f"Error setting up file handler for {final_log_file_path}: {e}\n"
+            )
+            log.warning(
+                f"Could not set up file logging for {final_log_file_path} due to: {e}"
+            )
+
     else:
-        logger.warning("Cannot set console log level: Console handler not initialized.")
+        log.info("File logging explicitly disabled.")
+        print("DEBUG: File logging explicitly disabled.")
 
-
-# Example of how to use the logger in other modules:
-# import logging
-# logger = logging.getLogger(__name__) # or logging.getLogger('py_pixel_bot.module.submodule')
-# logger.debug("This is a debug message.")
-# logger.info("This is an info message.")
-
-if __name__ == "__main__":
-    # Test logging setup
-    print(f"Project root determined as: {PROJECT_ROOT}")
-    print(f"Logs directory target: {LOGS_DIR}")
-
-    # Simulate different environments
-    print("\n--- Testing with APP_ENV=development ---")
-    os.environ["APP_ENV"] = "development"
-    # If logging was already set up by a previous import in a test runner,
-    # we might need a way to reset it for this standalone test.
-    # For now, assume it's a fresh run or setup_logging handles it.
-    # To ensure fresh setup for test, clear handlers from root logger if any
-    root_app_logger_for_test = logging.getLogger(APP_ROOT_LOGGER_NAME)
-    if root_app_logger_for_test.hasHandlers():
-        print("Clearing existing handlers for test...")
-        for handler_to_remove in list(
-            root_app_logger_for_test.handlers
-        ):  # Iterate copy
-            root_app_logger_for_test.removeHandler(handler_to_remove)
-            handler_to_remove.close()
-        console_handler = None
-        file_handler = None  # Reset global refs
-
-    setup_logging()
-    test_logger_dev = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.test_dev")
-    test_logger_dev.debug(
-        "This is a DEV debug message (should appear on console and file)."
+    log.info(
+        f"Logging setup complete. APP_ENV: '{app_env}'. Console level effective: {logging.getLevelName(ch.level)}."
     )
-    test_logger_dev.info("This is a DEV info message.")
-    set_console_log_level(logging.INFO)  # Test dynamic change
-    test_logger_dev.debug(
-        "This DEV debug message should NOT appear on console now, but in file."
-    )
-
-    print("\n--- Testing with APP_ENV=production ---")
-    os.environ["APP_ENV"] = "production"
-    # Clear handlers again for a clean test
-    root_app_logger_for_test = logging.getLogger(APP_ROOT_LOGGER_NAME)
-    if root_app_logger_for_test.hasHandlers():
-        print("Clearing existing handlers for test...")
-        for handler_to_remove in list(root_app_logger_for_test.handlers):
-            root_app_logger_for_test.removeHandler(handler_to_remove)
-            handler_to_remove.close()
-        console_handler = None
-        file_handler = None
-
-    setup_logging()
-    test_logger_prod = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.test_prod")
-    test_logger_prod.debug(
-        "This is a PROD debug message (should NOT appear on console, maybe file if file_level is DEBUG)."
-    )
-    test_logger_prod.info(
-        "This is a PROD info message (should appear on console and file)."
-    )
-    test_logger_prod.warning("This is a PROD warning message.")
-
-    print(f"\nCheck logs in: {LOGS_DIR}")
+    print("DEBUG: setup_logging function finished.")

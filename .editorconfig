@@ -1,0 +1,19 @@
+# .editorconfig
+
+# EditorConfig ensures consistent coding styles for multiple developers
+# across various editors and IDEs. Learn more at:
+# https://EditorConfig.org
+
+# Declare this as the root configuration to prevent EditorConfig from
+# searching parent directories for other `.editorconfig` files.
+root = true
+
+# ----------------------------------------------------------------------
+# 2. Include Documentation and Configuration Files
+# ----------------------------------------------------------------------
+# Applies to the following file types:
+# .md, .sh, .yml, .yaml
+# Adjusts formatting for documentation and configuration needs.
+[*.{md,sh,yml,yaml,py}]
+indent_style = space               # Indent with spaces
+indent_size = 2                    # Set indentation to 2 spaces
