@@ -1,7 +1,7 @@
 // File: docs/FEATURE_ROADMAP.MD
 # Feature Roadmap & Status
 
-This document tracks planned features and their status for this visual automation tool. The primary goal is to achieve the "AI-Accelerated v1.0.0" as the first major deliverable, followed by further enhancements up to v3.0.0.
+This document tracks planned features and their status for this visual automation tool. The project has progressed through initial versions, including a significant "AI-Accelerated v1.0.0" release and "v2.0.0" which added advanced analysis and rule capabilities. The current focus is "v3.0.0" for enhanced GUI and usability.
 
 **Key Supporting Documents:**
 *   `PROJECT_OVERVIEW.MD`
@@ -12,24 +12,7 @@ This document tracks planned features and their status for this visual automatio
 
 ---
 
-## AI-Accelerated v1.0.0: Target Feature Set <!-- Completed -->
-| AI-Accelerated v1.0.0 Component        | Corresponding Granular Features (Illustrative)                                       | Status             | Priority |
-| :------------------------------------- | :----------------------------------------------------------------------------------- | :----------------- | :------- |
-| **Core Engine & Configuration**        | v0.0.1 (Project Setup, Docs, Logging), v0.0.3 (Config PoC), v0.1.0 (CLI Ctrl, Profile Mgmt, `__main__`) | Done               | Critical |
-| **Region Definition & Capture**        | v0.0.1 (Define Region via file, Capture Impl), v0.1.0 (Multi-Region from file)       | Done               | Critical |
-| **Basic Visual Analysis**              | v0.0.2 (Pixel Color Impl), v0.1.0 (Avg Color Impl)                                   | Done               | Critical |
-| **Template Matching Analysis**         | v0.2.0 (Basic Template Matching Impl, incl. template loading by RulesEngine)          | Done               | Critical |
-| **OCR Text Analysis**                  | v0.3.0 (OCR Text Extraction Impl)                                                    | Done               | Critical |
-| **Rules Engine & Conditional Actions** | v0.0.3 (Basic Action), v0.1.0 (Click), v0.2.0 (Rules Impl), v0.3.0 (Text Cond Impl)   | Done               | Critical |
-| **Continuous Monitoring Loop**         | v0.1.0 (Core Loop Impl in MainController), v0.2.0 (Configurable FPS)                 | Done               | Critical |
-| **Initial GUI (Region Selection)**     | v0.4.0 (GUI Tool for Region Selection, Naming, Confirming, CLI Integration Save)     | Done               | High     |
-| **Logging & Error Handling**           | ADR-007 Impl., Error Handling Review & Initial Pass                                  | Done               | Critical |
-| **User Documentation (Basic)**         | `README.md` first draft complete (incl. setup, usage, examples)                      | Done               | High     |
-| **AI-Accelerated v1.0.0 STABILIZATION & DOCUMENTATION** | Integration Testing, README Finalization, Error Handling Review | Done               | Critical |
-
----
-
-## Granular Feature Breakdown (Logical Steps & Future Enhancements)
+## Granular Feature Breakdown (Historical & Planned)
 
 | Version | Status      | Priority | Epic                       | Feature Name                                         | Description                                                                                                                                | Notes / Key Libraries                                                                     |
 | :------ | :---------- | :------- | :------------------------- | :--------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------- |
@@ -94,14 +77,14 @@ This document tracks planned features and their status for this visual automatio
 *   **Current Development Focus: `v3.0.0 (Enhanced GUI & Usability)`**
     *   **"Full GUI for Profile & Rule Configuration"** is the primary epic.
     *   Core GUI layout, file operations, and detailed editing for profiles, regions, templates, and rules (including conditions, actions, parameters, sub-conditions, structure conversion, and input validation) are substantially implemented.
-    *   **Phase 1.8.1 (Input Validation & Refinements)** is the current active phase, having just delivered significant validation enhancements.
-*   **Immediate Next Step (within Phase 1.8 of Full GUI):** Continue with GUI Refinements and UX Improvements. Based on the previous plan for Phase 1.8, this involves:
-    1.  **GUI State Consistency:** Thoroughly test and improve list selection behavior after edits, button states, and overall UI responsiveness. Ensure detail panels always reflect the true state of a selected item.
+    *   **Phase 1.8.1 (Input Validation & Refinements)** has just been completed, significantly improving GUI robustness.
+*   **Immediate Next Step (within Phase 1.8 of Full GUI):** Continue with GUI Refinements and UX Improvements. Specifically:
+    1.  **GUI State Consistency:** DevLead to manually test list selection behavior after edits, button states, and overall UI responsiveness. Focus on ensuring detail panels always reflect the true state of a selected item, especially after complex operations like "Convert Condition Structure" or add/remove.
     2.  **Usability Enhancements (Small Wins):**
-        *   Implement tooltips for key UI elements (e.g., `CTkToolTip` or basic mouse-over text).
-        *   Add a simple Status Bar at the bottom of `MainAppWindow` for persistent messages like "Profile Saved", "Unsaved changes*", or brief error summaries.
-    3.  **Code Refinements:** Review `MainAppWindow` for any parts that can be further broken down into smaller, more focused helper methods to improve readability and maintainability, especially within the `_update_details_panel` and "Apply" methods.
-    4.  **Comprehensive Logging Review:** A final pass over all GUI interaction logs to ensure clarity, consistency, and completeness.
-*   After these refinements, we will assess if "Sub-condition/Rule Reordering (Simple)" is feasible for the initial v3.0.0 GUI or if it should be deferred. Then, we can consider the "Full GUI for Profile & Rule Configuration" feature complete and move to other v3.0.0 items like "Real-time Visual Feedback" or "Chained Actions".
+        *   **Implement Tooltips:** Add `CTkToolTip` (or basic mouse-over text if a direct CTkToolTip class isn't readily available/simple) for key buttons (e.g., "Convert Condition Structure", "Add Sub-Condition") and potentially for some complex parameter fields in the rule editor.
+        *   **Implement Status Bar:** Add a simple `CTkLabel` at the bottom of `MainAppWindow` to display persistent messages like "Profile Saved: profile.json", "Unsaved changes*", "Error: Invalid input for X."
+    3.  **Code Refinements:** DevLead to review `MainAppWindow.py` for opportunities to break down very large methods (like `_update_details_panel` or `_apply_rule_changes`) into smaller, more focused helper methods to improve readability and maintainability.
+    4.  **Logging Review (Ongoing):** A final pass over all GUI interaction logs (especially those added in Phase 1.8.1 for validation) to ensure clarity, consistency, and completeness.
+*   After these refinements, the "Full GUI for Profile & Rule Configuration" will be very close to its initial v3.0.0 scope. We will then assess the "Sub-condition/Rule Reordering (Simple)" feature before moving to other major v3.0.0 items like "Real-time Visual Feedback in GUI" or "Chained Actions".
 
 ---
