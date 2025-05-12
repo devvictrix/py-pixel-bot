@@ -56,11 +56,13 @@ This document tracks planned features and their status for this visual automatio
 | N/A                                                                                     | Done        | High     | Developer Experience     | Flake8 & Black Configuration                          | Configure Flake8 and Black for consistent linting and formatting (line length 99). `logging_setup.py` updated.                                                                                                                     | `.flake8`, `pyproject.toml`.                                                                                                  |
 | N/A                                                                                     | Done        | Critical | Core System              | Fix CLI `run` Command Issues (Path & Imports)         | Corrected project root detection in `ConfigManager` and missing `os`/`Callable`/`APP_ROOT_LOGGER_NAME` usage/imports in `MainController`, `AnalysisEngine`, `RulesEngine`, `ActionExecutor` to enable `run` command functionality. | `config_manager.py`, `main_controller.py`, `analysis_engine.py`, `rules_engine.py`, `action_executor.py`, `logging_setup.py`. |
 | **v3.0.0 (Enhanced GUI & Usability)**                                                   |
-| v3.0.0                                                                                  | In Progress | High     | Usability                | Full GUI for Profile & Rule Configuration             | A comprehensive GUI (`MainAppWindow`) to visually create/edit profiles: regions, templates, rules (conditions, actions, parameters, structure conversion), settings. Includes robust input validation and refinements.             | `CustomTkinter`. Phase 1.8.1 (Input Validation & Refinements) current. RegionSelector visual refinement (fill, fullscreen) applied. Rule selection bug fixed. |
+| v3.0.0                                                                                  | Pending Review | High     | Usability                | Full GUI for Profile & Rule Configuration             | A comprehensive GUI (`MainAppWindow`) to visually create/edit profiles: regions, templates, rules (conditions, actions, parameters, structure conversion), settings. Includes robust input validation and refinements.             | `CustomTkinter`. Phase 1.8.1 (Input Validation & Refinements) current. RegionSelector fullscreen & rule selection bug fixed.  |
 | v3.0.0                                                                                  | Not Started | Low      | Usability                | GUI - Sub-condition/Rule Reordering (Simple)          | Add simple "Move Up/Down" buttons for sub-conditions and rules in the GUI editor lists.                                                                                                                                            | `CustomTkinter`.                                                                                                              |
 | v3.0.0                                                                                  | Not Started | Medium   | Usability                | Real-time Visual Feedback in GUI                      | GUI shows live view of monitored region(s), overlays detected elements (templates, text boxes) for easier debugging/setup of rules.                                                                                                | `OpenCV-Python` with GUI library.                                                                                             |
 | v3.0.0                                                                                  | Not Started | Medium   | Action Execution         | Chained Actions / Simple Macros                       | Allow defining a sequence of multiple actions to be performed if a single condition is met.                                                                                                                                        | Data structure for action sequences in profile, `action_executor.py`.                                                         |
 | v3.0.0                                                                                  | Not Started | Medium   | Usability                | Profile Importer/Exporter                             | Simple way to share bot profiles.                                                                                                                                                                                                  | `ConfigManager` enhancements.                                                                                                 |
+| **v3.0.x (Post-Core GUI Stability - Internal Refactoring)**                             |
+| v3.0.x                                                                                  | Planning    | Medium   | DX/Maintainability       | GUI Component Refactoring                             | Refactor `MainAppWindow` and `DetailsPanel` into smaller, more specialized components (e.g., `RegionDetailView`, `RuleDetailView` with `ConditionEditorView`, `ActionEditorView`) for improved modularity. Strategy in `TECHNICAL_DESIGN.MD` Section 9.8. | `CustomTkinter`.                                                                                                              |
 | **vFuture (Advanced Enhancements & Integrations - Post v3.0.0)**                        |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis        | Fuzzy Template Matching & Tolerance                   | Allow template matching with varying degrees of tolerance for slight changes in color, rotation, or scale.                                                                                                                         | Advanced `OpenCV-Python` techniques.                                                                                          |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis        | Motion/Change Detection within Region                 | Detect if any significant visual change or motion occurs within a monitored region, not just static states.                                                                                                                        | Frame differencing, background subtraction.                                                                                   |
@@ -77,21 +79,29 @@ This document tracks planned features and their status for this visual automatio
 
 - **AI-Accelerated v1.0.0 Complete.**
 - **v2.0.0 (Advanced Visual Analysis & Rules) Complete.**
-- **Core System Fixes:**
+- **Core System Fixes & GUI Refinements (v3.0.0 Phase 1.8.1):**
   - Resolved `FileNotFoundError` for `run` command.
-  - Resolved multiple `NameError` instances (missing `os` and `Callable` imports, and `APP_ROOT_LOGGER_NAME` usage) across several engine modules.
-- **Tooling Update:**
-  - Flake8 & Black configured for consistent linting/formatting.
-- **Current Development Focus: `v3.0.0 (Enhanced GUI & Usability)`**
-  - **"Full GUI for Profile & Rule Configuration"** is the primary epic.
-    - Phase 1.8.1 (Input Validation & Refinements) was current.
-    - UX Refinement: `RegionSelectorWindow` improved to better cover the full virtual desktop and rectangle fill is now solid.
-    - Bug Fix: Corrected `AttributeError` in `MainAppWindow` related to rule selection and sub-condition highlight clearing. Rule selection should now function correctly.
-- **Immediate Next Step:** DevLead to test:
-    1. The `RegionSelectorWindow` for full virtual screen coverage and selection usability.
-    2. Rule selection and editing functionality in `MainAppWindow` to confirm the `AttributeError` is resolved and rule details are displayed.
-    3. The `run profiles/example_profile.json` command again.
-- **Following Successful Tests:** Continue with GUI Refinements and UX Improvements for v3.0.0 as previously outlined (State Consistency Testing, Tooltips, Status Bar, Code Refinements, Logging Review for `MainAppWindow`).
-- After these refinements, the "Full GUI for Profile & Rule Configuration" will be very close to its initial v3.0.0 scope. We will then assess the "Sub-condition/Rule Reordering (Simple)" feature before moving to other major v3.0.0 items.
+  - Resolved multiple `NameError` instances across engine modules.
+  - Flake8 & Black configured.
+  - `RegionSelectorWindow`: Improved to better cover full virtual desktop; rectangle fill is now solid.
+  - `MainAppWindow`: Corrected `AttributeError` for rule selection; rule selection and detail display should now be functional. The logic for saving sub-condition edits when switching between them has been improved.
+- **Current Status:** The core features of "Full GUI for Profile & Rule Configuration" (v3.0.0) are implemented and have undergone recent bug fixes and UX refinements. The status is now **"Pending Review"** by DevLead for comprehensive testing.
+- **Future Internal Improvement Planning:**
+    - A "GUI Component Refactoring" task (v3.0.x, Status: Planning) has been added to the roadmap and detailed in `TECHNICAL_DESIGN.MD` (Section 9.8). This aims to improve GUI code modularity and maintainability after core v3.0.0 features are stable.
+- **Immediate Next Step:** DevLead to perform thorough testing of the GUI:
+    1.  **Region Selector:** Test functionality on various display setups (single/multi-monitor if possible) to verify fullscreen coverage. Test adding new regions and editing existing region coordinates.
+    2.  **Rule Editor:**
+        *   Verify that rules can be selected and their details (name, default region, condition, action) are correctly displayed in the `DetailsPanel`.
+        *   Test editing all parts of a rule: name, default region.
+        *   Test editing single conditions: change type, edit all parameters for each type, save.
+        *   Test converting between single and compound conditions.
+        *   Test editing compound conditions: change logical operator, add/remove sub-conditions.
+        *   Test editing individual sub-conditions: change type, edit all parameters for each type, ensure changes to one sub-condition are preserved when selecting another sub-condition to edit *before* clicking "Apply Rule Changes".
+        *   Test editing actions: change type, edit all parameters for each type, save.
+        *   Verify input validation for all fields.
+    3.  **General GUI operations:** Test file operations (New, Open, Save, Save As), region management (Add, Remove), template management (Add, Remove, including image file handling and preview).
+    4.  Confirm the `run profiles/example_profile.json` command still executes correctly after GUI edits and saves.
+- **Following Successful Testing:** Update the "Full GUI for Profile & Rule Configuration" feature to "Testing" or "Done" based on findings. Then, proceed with previously outlined next steps: State Consistency Testing, Tooltips, Status Bar, general Code Refinements, and Logging Review for `MainAppWindow`.
+- After these, assess "Sub-condition/Rule Reordering (Simple)" feature before considering the planned "GUI Component Refactoring".
 
 ---
