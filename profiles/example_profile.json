@@ -22,6 +22,13 @@
             "width": 400,
             "height": 300,
             "comment": "A zone roughly in the center of a 1920x1080 screen."
+        },
+        {
+            "name": "test",
+            "x": 169,
+            "y": 100,
+            "width": 1584,
+            "height": 1058
         }
     ],
     "templates": [],
@@ -43,7 +50,11 @@
             "region": "top_left_small_area",
             "condition": {
                 "type": "average_color_is",
-                "expected_bgr": [10, 10, 10],
+                "expected_bgr": [
+                    10,
+                    10,
+                    10
+                ],
                 "tolerance": 25
             },
             "action": {
@@ -60,7 +71,11 @@
                 "sub_conditions": [
                     {
                         "type": "average_color_is",
-                        "expected_bgr": [200, 100, 50], 
+                        "expected_bgr": [
+                            200,
+                            100,
+                            50
+                        ],
                         "tolerance": 50,
                         "comment": "Checks for a generally bluish average color"
                     },

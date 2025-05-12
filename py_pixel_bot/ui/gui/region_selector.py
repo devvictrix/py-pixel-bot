@@ -1,12 +1,12 @@
 import logging
-import tkinter as tk # For basic Toplevel and event bindings if needed beyond CTk
-from tkinter import messagebox # For showing errors if screenshot fails, etc.
+import tkinter as tk
+from tkinter import messagebox
 from typing import Optional, Dict, Any
 
 import customtkinter as ctk
-from PIL import ImageGrab # For taking a screenshot of the entire screen for the overlay
+from PIL import ImageGrab
 
-from py_pixel_bot.core.config_manager import ConfigManager # To save the region
+from py_pixel_bot.core.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -19,18 +19,7 @@ class RegionSelectorWindow(ctk.CTkToplevel):
 
     def __init__(self, master: Any, config_manager: ConfigManager, 
                  existing_region_data: Optional[Dict[str, Any]] = None):
-        """
-        Initializes the RegionSelectorWindow.
-
-        Args:
-            master: The master window (can be a CTk root or another Toplevel).
-            config_manager: The ConfigManager instance for the profile to update.
-            existing_region_data: Optional. If provided, pre-fills fields for editing a region.
-                                   Expected keys: "name", "x", "y", "width", "height".
-        """
         super().__init__(master)
-        # If master is None (e.g. when called from CLI with no existing GUI root),
-        # CTkToplevel will create its own hidden root.
         
         self.config_manager = config_manager
         self.existing_region_data = existing_region_data 
@@ -41,43 +30,49 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         self.title("Region Selector - Draw a rectangle, then press 'Enter' or 'Esc'")
         self.attributes("-fullscreen", True)
         self.attributes("-alpha", 0.3) 
-        # self.attributes("-topmost", True) # Usually not needed if grab_set is used.
         self.configure(fg_color="black")
 
-        self.start_x_abs: Optional[int] = None # Absolute screen coordinates for start
+        self.start_x_abs: Optional[int] = None
         self.start_y_abs: Optional[int] = None
         self.rect_id: Optional[int] = None 
-        self.current_rect_coords_abs: Optional[tuple[int,int,int,int]] = None # (x1,y1,x2,y2) absolute screen
+        self.current_rect_coords_abs: Optional[tuple[int,int,int,int]] = None
         self.saved_region_info: Optional[Dict[str, Any]] = None 
-        self.changes_made: bool = False # Added to track if save occurred
+        self.changes_made: bool = False
+
+        self.screenshot_pil: Optional[ImageGrab.Image.Image] = None # Store PIL image
+        self.bg_image_tk: Optional[tk.PhotoImage] = None # Store the PhotoImage reference
 
         try:
-            # Grab all screens to handle multi-monitor setups correctly.
-            # The canvas will be sized to the combined virtual screen.
-            self.screenshot = ImageGrab.grab(all_screens=True) 
-            self.bg_image = ctk.CTkImage(light_image=self.screenshot, dark_image=self.screenshot, 
-                                         size=(self.screenshot.width, self.screenshot.height))
-            logger.debug(f"Screenshot captured for RegionSelector background. Virtual screen size: {self.screenshot.width}x{self.screenshot.height}")
-            canvas_width, canvas_height = self.screenshot.width, self.screenshot.height
+            self.screenshot_pil = ImageGrab.grab(all_screens=True) 
+            # Create CTkImage temporarily just to leverage its PhotoImage creation
+            ctk_temp_image = ctk.CTkImage(light_image=self.screenshot_pil, 
+                                          dark_image=self.screenshot_pil, # Using same PIL image for both
+                                          size=(self.screenshot_pil.width, self.screenshot_pil.height))
+            # Store the PhotoImage that CTkImage creates and manages.
+            # This PhotoImage is what tkinter.Canvas expects.
+            self.bg_image_tk = ctk_temp_image._light_image_object # or _dark_image_object
+            
+            logger.debug(f"Screenshot captured for RegionSelector background. Virtual screen size: {self.screenshot_pil.width}x{self.screenshot_pil.height}")
+            canvas_width, canvas_height = self.screenshot_pil.width, self.screenshot_pil.height
         except Exception as e:
             logger.error(f"Failed to capture screenshot for RegionSelector background: {e}", exc_info=True)
-            self.screenshot = None
-            self.bg_image = None
-            # Fallback to primary screen dimensions if full grab fails
+            self.screenshot_pil = None
+            self.bg_image_tk = None
             canvas_width = self.winfo_screenwidth()
             canvas_height = self.winfo_screenheight()
             messagebox.showwarning("Screenshot Failed", 
                                    "Could not capture full screen for background overlay.\n"
                                    "Selection will still work on a transparent layer based on primary screen.", 
-                                   parent=self) # Ensure parent is self for modality
+                                   parent=self)
 
         self.canvas = ctk.CTkCanvas(self, width=canvas_width, height=canvas_height,
-                                    highlightthickness=0, bg="black") # Match window bg for transparency effect
+                                    highlightthickness=0, bg="black") 
         
-        if self.bg_image:
-            # The canvas origin (0,0) corresponds to the top-left of the virtual screen if all_screens=True worked.
-            self.canvas.create_image(0, 0, anchor="nw", image=self.bg_image)
-            logger.debug("Screenshot set as canvas background.")
+        if self.bg_image_tk:
+            self.canvas.create_image(0, 0, anchor="nw", image=self.bg_image_tk) 
+            logger.debug("Screenshot set as canvas background using internal PhotoImage.")
+        else:
+            logger.warning("No background image (self.bg_image_tk is None) for RegionSelector canvas.")
         
         self.canvas.pack(fill="both", expand=True)
 
@@ -94,10 +89,6 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(size=16, weight="bold"),
             fg_color=("gray10", "gray90"), text_color=("white", "black"), corner_radius=5, padx=10, pady=5
         )
-        # Place instructions on the primary screen, near top-center.
-        # For multi-monitor, this is relative to the virtual screen's (0,0).
-        # A more robust placement might consider the primary monitor's geometry.
-        # For now, simple placement on the canvas assuming (0,0) is top-left of primary or virtual screen.
         self.label_instructions.place(x=canvas_width/2, y=30, anchor="n")
 
         self.bind("<Escape>", self.cancel_selection)
@@ -107,28 +98,25 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             self._draw_existing_rectangle()
 
         logger.info("RegionSelectorWindow fully initialized and displayed fullscreen.")
-        self.lift() # Bring to front
-        self.focus_force() # Grab keyboard focus
-        self.grab_set() # Make this window modal over its master
+        self.lift() 
+        self.focus_force() 
+        self.grab_set()
 
     def _draw_existing_rectangle(self):
         if self.existing_region_data:
-            # These are absolute screen coordinates from the profile
             x_abs = self.existing_region_data.get("x", 0)
             y_abs = self.existing_region_data.get("y", 0)
             w = self.existing_region_data.get("width", 0)
             h = self.existing_region_data.get("height", 0)
 
             if w > 0 and h > 0:
-                # Store these as the initial selection
-                self.start_x_abs, self.start_y_abs = x_abs, y_abs # For potential redraw start
+                self.start_x_abs, self.start_y_abs = x_abs, y_abs
                 self.current_rect_coords_abs = (x_abs, y_abs, x_abs + w, y_abs + h)
                 
                 if self.rect_id: self.canvas.delete(self.rect_id)
-                # Canvas coordinates are the same as screen coordinates if canvas covers the whole virtual screen
                 self.rect_id = self.canvas.create_rectangle(
                     self.current_rect_coords_abs, 
-                    outline="lime green", width=3, fill="green", stipple="gray50" # Different color for existing
+                    outline="lime green", width=3, fill="green", stipple="gray50"
                 )
                 logger.info(f"Drew existing rectangle for region '{self.existing_region_data.get('name')}' at screen coords {self.current_rect_coords_abs}")
                 self.label_instructions.configure(text=f"Editing '{self.existing_region_data.get('name')}'. Redraw or press 'Enter', then confirm name.")
@@ -137,17 +125,14 @@ class RegionSelectorWindow(ctk.CTkToplevel):
 
 
     def on_mouse_press(self, event):
-        # event.x_root, event.y_root are absolute screen coordinates
         self.start_x_abs = event.x_root
         self.start_y_abs = event.y_root
         
         if self.rect_id:
             self.canvas.delete(self.rect_id)
         
-        # Create rectangle using canvas coordinates, which should map 1:1 to screen if canvas is fullscreen
-        # and screenshot is correctly placed at (0,0) of canvas.
         self.rect_id = self.canvas.create_rectangle(
-            self.start_x_abs, self.start_y_abs, self.start_x_abs, self.start_y_abs, # Start as a point
+            self.start_x_abs, self.start_y_abs, self.start_x_abs, self.start_y_abs,
             outline="red", width=2, fill="red", stipple="gray25" 
         )
         logger.debug(f"Mouse pressed at screen ({self.start_x_abs}, {self.start_y_abs}). New rect ID: {self.rect_id}")
@@ -161,7 +146,6 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         cur_y_abs = event.y_root
         
         self.canvas.coords(self.rect_id, self.start_x_abs, self.start_y_abs, cur_x_abs, cur_y_abs)
-        # logger.debug(f"Mouse dragged to screen ({cur_x_abs}, {cur_y_abs}).") # Too verbose
 
     def on_mouse_release(self, event):
         if self.start_x_abs is None or self.start_y_abs is None or self.rect_id is None:
@@ -206,14 +190,12 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         if width <= 0 or height <= 0: 
             logger.error(f"Invalid rect dimensions before confirm: W={width}, H={height}"); messagebox.showerror("Error", "Invalid rectangle dimensions. Please redraw.", parent=self); return
 
-        initial_alpha = self.attributes("-alpha"); self.attributes("-alpha", 0.01) # Make very faint
+        initial_alpha = self.attributes("-alpha"); self.attributes("-alpha", 0.01)
         self.grab_release() 
 
         default_name_prompt = self.existing_region_data.get("name", "NewRegion") if self.existing_region_data else "MyRegion"
         dialog_title = "Confirm Region" if not self.existing_region_data else f"Confirm Edit: {default_name_prompt}"
         
-        # CTkInputDialog does not allow setting an initial value in the entry easily.
-        # We'll have to ask the user to type it. A custom dialog would be better for editing.
         dialog = ctk.CTkInputDialog(
             text=f"Enter/Confirm name for this region:\nCoords: (x={x1}, y={y1}, w={width}, h={height})\nDefault was: '{default_name_prompt}'",
             title=dialog_title
@@ -236,31 +218,18 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         new_region_data = {"name": name, "x": x, "y": y, "width": width, "height": height}
         logger.info(f"Preparing to save region: {new_region_data} to profile: '{self.profile_path_for_log}'")
         
-        # This method assumes ConfigManager handles the logic of updating or adding.
-        # For a robust "edit" mode, ConfigManager would need a way to identify and update
-        # an existing region if `self.existing_region_data` was provided and its name didn't change,
-        # or handle name changes carefully (e.g. remove old, add new).
-        # For simplicity now, it relies on name matching or appending.
-        
-        # Let MainAppWindow handle the actual update to its self.profile_data
-        # and then saving. This dialog should just return the data.
-        # For CLI's add-region, it saves directly.
-        # This is a divergence. For now, let it save directly as it's also called by CLI.
-        
-        profile_data = self.config_manager.get_profile_data() # Get current data
+        profile_data = self.config_manager.get_profile_data()
         regions = profile_data.get("regions", [])
         
         found_existing_and_updated = False
-        if self.existing_region_data and self.existing_region_data.get("name") == name: # Editing existing, name unchanged
+        if self.existing_region_data and self.existing_region_data.get("name") == name:
             for i, r_spec in enumerate(regions):
                 if r_spec.get("name") == name:
                     logger.info(f"Updating existing region '{name}' at index {i}.")
                     regions[i] = new_region_data
                     found_existing_and_updated = True
                     break
-        if not found_existing_and_updated: # New region, or name changed (treat as new, old one might still exist if name changed)
-             # If it's an edit and name changed, should we remove the old one?
-             # For now, if name is new, it's an add. If name exists, it's an update.
+        if not found_existing_and_updated:
             existing_idx_for_new_name = -1
             for i, r_spec in enumerate(regions):
                  if r_spec.get("name") == name:
@@ -276,9 +245,9 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         profile_data["regions"] = regions
         
         try:
-            self.config_manager.save_current_profile() # Saves the modified profile_data
+            self.config_manager.save_current_profile()
             self.saved_region_info = new_region_data 
-            self.changes_made = True # Signal that changes were made
+            self.changes_made = True
             logger.info(f"Region '{name}' saved successfully to profile '{self.profile_path_for_log}'.")
         except Exception as e:
             logger.error(f"Failed to save profile after updating region '{name}': {e}", exc_info=True)
@@ -294,28 +263,69 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         self.destroy_selector()
 
     def destroy_selector(self):
-        """Safely destroys the window."""
         logger.debug("RegionSelectorWindow destroy called.")
-        self.grab_release() # Important to release grab before destroying
+        self.grab_release()
         super().destroy()
 
 
-if __name__ == '__main__': # (Same test setup as before)
-    import os # Added for os.path.exists and os.remove
-    # ... (Test code as in previous version, ensuring logging and ConfigManager can init) ...
-    if not logging.getLogger("py_pixel_bot").hasHandlers(): logging.basicConfig(level=logging.DEBUG,format='%(asctime)s-%(name)s-%(levelname)s-%(message)s'); logger.info("RegionSelector standalone:Min logging.")
+if __name__ == '__main__':
+    import os 
+    # Ensure basic logging if run standalone
+    if not logging.getLogger("py_pixel_bot").hasHandlers() and not logging.getLogger().hasHandlers(): 
+        logging.basicConfig(level=logging.DEBUG,format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        logger.info("RegionSelector standalone: Minimal logging configured.")
+    
     try:
-        root=ctk.CTk();root.title("Master Test");root.geometry("300x200"); test_profile_name="test_region_sel_profile"; dummy_cm=ConfigManager(test_profile_name,create_if_missing=True)
-        def open_sel():
-            logger.info("Opening RegionSelector...")
-            sel=RegionSelectorWindow(master=root,config_manager=dummy_cm)
-            root.wait_window(sel)
-            # Check if sel.saved_region_info exists and has content
-            if hasattr(sel, 'saved_region_info') and sel.saved_region_info: # Line 304 - Corrected
-                logger.info(f"Test:Selector closed.Saved:{sel.saved_region_info}\nProfile data:{dummy_cm.get_profile_data()}")
+        # Create a dummy root window for the Toplevel dialog
+        root = ctk.CTk()
+        root.title("Master Test Window")
+        root.geometry("300x200")
+        
+        # Create a dummy ConfigManager instance
+        test_profile_name="test_region_selector_profile"
+        # Ensure the profiles directory exists for ConfigManager
+        profiles_dir = os.path.join(os.getcwd(), "profiles")
+        os.makedirs(profiles_dir, exist_ok=True)
+        dummy_profile_path = os.path.join(profiles_dir, f"{test_profile_name}.json")
+        
+        # Create a minimal dummy profile if it doesn't exist, so ConfigManager can load it
+        if not os.path.exists(dummy_profile_path):
+            with open(dummy_profile_path, "w") as f:
+                import json
+                json.dump({"profile_description": "Dummy for region selector test", "regions": []}, f)
+            logger.info(f"Created dummy profile at: {dummy_profile_path}")
+            
+        dummy_cm = ConfigManager(dummy_profile_path, create_if_missing=False) # Don't create, expect it
+        
+        def open_selector():
+            logger.info("Opening RegionSelector from standalone test...")
+            # Example of editing an existing region:
+            # existing_data_example = {"name": "InitialRegion", "x": 50, "y": 50, "width": 200, "height": 100}
+            # selector_window = RegionSelectorWindow(master=root, config_manager=dummy_cm, existing_region_data=existing_data_example)
+            
+            # Example of adding a new region:
+            selector_window = RegionSelectorWindow(master=root, config_manager=dummy_cm)
+            
+            root.wait_window(selector_window) # Wait for the selector to close
+            
+            if hasattr(selector_window, 'saved_region_info') and selector_window.saved_region_info:
+                logger.info(f"Test: Selector closed. Saved region info: {selector_window.saved_region_info}")
+                logger.info(f"Test: Current profile data after save: {dummy_cm.get_profile_data()}")
             else:
-                logger.info("Test:Selector closed,no save.")
+                logger.info("Test: Selector closed, no region saved or selection cancelled.")
 
-        ctk.CTkButton(root,text="Open Region Selector",command=open_sel).pack(pady=20);ctk.CTkLabel(root,text="Close after test.").pack(pady=10);root.mainloop()
-        if dummy_cm.get_profile_path() and os.path.exists(dummy_cm.get_profile_path()):logger.info(f"Cleaning up:{dummy_cm.get_profile_path()}");os.remove(dummy_cm.get_profile_path())
-    except Exception as e:logger.exception(f"Error in RegionSelector standalone test:{e}")
+        ctk.CTkButton(root, text="Open Region Selector", command=open_selector).pack(pady=20)
+        ctk.CTkLabel(root, text="Close this window after testing the Region Selector.").pack(pady=10)
+        
+        root.mainloop()
+        
+        # Clean up the dummy profile
+        if dummy_cm.get_profile_path() and os.path.exists(dummy_cm.get_profile_path()):
+            logger.info(f"Cleaning up dummy profile: {dummy_cm.get_profile_path()}")
+            os.remove(dummy_cm.get_profile_path())
+            # Clean up profiles dir if empty
+            if not os.listdir(profiles_dir):
+                os.rmdir(profiles_dir)
+
+    except Exception as e:
+        logger.exception(f"Error in RegionSelector standalone test: {e}")

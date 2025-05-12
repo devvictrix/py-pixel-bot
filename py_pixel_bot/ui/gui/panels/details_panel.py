@@ -2,26 +2,31 @@ import logging
 import tkinter as tk
 from tkinter import messagebox
 import os
-import json
+
+# import json # No longer needed here
 import copy
 from typing import Optional, Dict, Any, List, Union
 
 import customtkinter as ctk
 from PIL import Image
 
-from ..gui_config import UI_PARAM_CONFIG, OPTIONS_CONST_MAP, MAX_PREVIEW_WIDTH, MAX_PREVIEW_HEIGHT, CONDITION_TYPES, LOGICAL_OPERATORS, ACTION_TYPES
-from ..gui_utils import validate_and_get_widget_value, parse_bgr_string  # Assuming these are in gui_utils
+# Standardized Absolute Imports from the gui subpackage
+from py_pixel_bot.ui.gui.gui_config import UI_PARAM_CONFIG, OPTIONS_CONST_MAP, MAX_PREVIEW_WIDTH, MAX_PREVIEW_HEIGHT, CONDITION_TYPES, LOGICAL_OPERATORS, ACTION_TYPES
+from py_pixel_bot.ui.gui.gui_utils import validate_and_get_widget_value, parse_bgr_string, create_clickable_list_item
+
 
 logger = logging.getLogger(__name__)
 
 
 class DetailsPanel(ctk.CTkScrollableFrame):
-    def __init__(self, master: Any, parent_app: Any, **kwargs):
+    def __init__(self, master: Any, parent_app: Any, **kwargs):  # parent_app is MainAppWindow
         super().__init__(master, label_text="Selected Item Details", **kwargs)
-        self.parent_app = parent_app  # Reference to the MainAppWindow instance
+        self.parent_app = parent_app
 
         self.detail_widgets: Dict[str, Union[ctk.CTkEntry, ctk.CTkOptionMenu, ctk.CTkCheckBox, ctk.CTkTextbox]] = {}
         self.detail_optionmenu_vars: Dict[str, Union[tk.StringVar, tk.BooleanVar]] = {}
+
+        self.selected_sub_condition_item_widget: Optional[ctk.CTkFrame] = None
 
         self.content_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.content_frame.pack(fill="both", expand=True)
@@ -29,7 +34,6 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         self.label_placeholder = ctk.CTkLabel(self.content_frame, text="Select an item to see/edit details.", wraplength=380, justify="center")
         self.label_placeholder.pack(padx=10, pady=20, anchor="center", expand=True)
 
-        # Specific frames for complex items like rules will be built dynamically
         self.template_preview_image_label: Optional[ctk.CTkLabel] = None
         self.sub_conditions_list_frame: Optional[ctk.CTkScrollableFrame] = None
         self.condition_params_frame: Optional[ctk.CTkFrame] = None
@@ -46,7 +50,6 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         self.detail_widgets.clear()
         self.detail_optionmenu_vars.clear()
 
-        # Reset dynamic frames and widgets if they were previously created
         self.template_preview_image_label = None
         self.sub_conditions_list_frame = None
         self.condition_params_frame = None
@@ -58,7 +61,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
     def update_display(self, item_data: Optional[Dict[str, Any]], item_type: str):
         self.clear_content()
-        self.content_frame.grid_columnconfigure(1, weight=1)  # Default for two-column param layouts
+        self.content_frame.grid_columnconfigure(1, weight=1)
 
         if item_data is None or item_type == "none":
             self.label_placeholder = ctk.CTkLabel(self.content_frame, text="Select an item to see/edit details.", wraplength=380, justify="center")
@@ -108,7 +111,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         name_entry.insert(0, str(template_data.get("name", "")))
         name_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         name_entry.bind("<KeyRelease>", lambda e: self.parent_app._set_dirty_status(True))
-        self.detail_widgets["template_name"] = name_entry  # Use the unique key
+        self.detail_widgets["template_name"] = name_entry
 
         ctk.CTkLabel(self.content_frame, text="Filename:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
         ctk.CTkLabel(self.content_frame, text=str(template_data.get("filename", "N/A")), anchor="w").grid(row=1, column=1, padx=5, pady=5, sticky="ew")
@@ -142,7 +145,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
     def _display_rule_details(self, rule_data: Dict):
         logger.debug(f"Displaying rule details: {rule_data.get('name')}")
-        self.parent_app.selected_sub_condition_index = None  # Reset when new rule is displayed
+        self.parent_app.selected_sub_condition_index = None
 
         row_idx = 0
         ctk.CTkLabel(self.content_frame, text="Rule Name:").grid(row=row_idx, column=0, sticky="w", padx=5, pady=2)
@@ -158,14 +161,13 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         var_rule_region = ctk.StringVar(value=rule_data.get("region", ""))
         region_menu = ctk.CTkOptionMenu(self.content_frame, variable=var_rule_region, values=region_names, command=lambda c: self.parent_app._set_dirty_status(True))
         region_menu.grid(row=row_idx, column=1, sticky="ew", padx=5, pady=2)
-        self.detail_optionmenu_vars["rule_region_var"] = var_rule_region  # Store var with unique key
-        self.detail_widgets["rule_region"] = region_menu  # Store widget if needed
+        self.detail_optionmenu_vars["rule_region_var"] = var_rule_region
+        self.detail_widgets["rule_region"] = region_menu
         row_idx += 1
 
         condition_data = copy.deepcopy(rule_data.get("condition", {}))
         action_data = copy.deepcopy(rule_data.get("action", {}))
 
-        # Condition Section
         cond_outer_frame = ctk.CTkFrame(self.content_frame)
         cond_outer_frame.grid(row=row_idx, column=0, columnspan=2, sticky="new", pady=(10, 0))
         cond_outer_frame.grid_columnconfigure(0, weight=1)
@@ -184,7 +186,6 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         self.condition_params_frame.pack(fill="x", expand=True, padx=5, pady=(0, 5))
         self._render_rule_condition_editor_internal(condition_data)
 
-        # Action Section
         act_outer_frame = ctk.CTkFrame(self.content_frame)
         act_outer_frame.grid(row=row_idx, column=0, columnspan=2, sticky="new", pady=(10, 0))
         act_outer_frame.grid_columnconfigure(0, weight=1)
@@ -265,8 +266,6 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         for widget in self.sub_conditions_list_frame.winfo_children():
             widget.destroy()
 
-        # self.parent_app.selected_sub_condition_index = None # Do not reset here, might be called during refresh
-        # self.parent_app.selected_sub_condition_item_widget = None
         if self.btn_remove_sub_condition:
             self.btn_remove_sub_condition.configure(state="disabled" if self.parent_app.selected_sub_condition_index is None else "normal")
 
@@ -278,11 +277,11 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 summary += f", C: {sub_cond.get('capture_as')}"
 
             item_frame_container = {}
-            item_frame = create_clickable_list_item(  # Use imported utility
+            item_frame = create_clickable_list_item(
                 self.sub_conditions_list_frame, summary, lambda e=None, scd=sub_cond, idx=i, ifc=item_frame_container: self._on_sub_condition_selected_internal(scd, idx, ifc.get("frame"))
             )
             item_frame_container["frame"] = item_frame
-            if i == self.parent_app.selected_sub_condition_index:  # Re-highlight if it was selected
+            if i == self.parent_app.selected_sub_condition_index:
                 self.parent_app._highlight_selected_list_item("condition", item_frame, is_sub_list=True)
 
         if self.parent_app.selected_sub_condition_index is None and self.sub_condition_params_frame:
@@ -316,9 +315,8 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         self._render_dynamic_parameters("conditions", current_type, sub_cond_data, self.sub_condition_params_frame, start_row=1, widget_prefix="subcond_")
 
     def _render_dynamic_parameters(self, param_group_key: str, item_subtype: str, data_source: Dict[str, Any], parent_frame: ctk.CTkFrame, start_row: int, widget_prefix: str):
-        # Clear previous parameters
-        for widget_key_to_clear in list(self.detail_widgets.keys()):  # Iterate over a copy
-            if widget_key_to_clear.startswith(widget_prefix) and widget_key_to_clear != f"{widget_prefix}type":  # Don't clear the type dropdown itself
+        for widget_key_to_clear in list(self.detail_widgets.keys()):
+            if widget_key_to_clear.startswith(widget_prefix) and widget_key_to_clear != f"{widget_prefix}type":
                 widget_to_remove = self.detail_widgets.pop(widget_key_to_clear, None)
                 if widget_to_remove and widget_to_remove.winfo_exists():
                     widget_to_remove.destroy()
@@ -383,10 +381,59 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 var = tk.BooleanVar(value=bool(current_val))
                 widget = ctk.CTkCheckBox(parent_frame, text=label_text, variable=var, command=lambda wk=widget_full_key: self.parent_app._set_dirty_status(True))
                 self.detail_optionmenu_vars[f"{widget_full_key}_var"] = var
-                # Label is part of checkbox, so don't grid label separately
                 widget.grid(row=current_row, column=0, columnspan=2, padx=5, pady=2, sticky="w")
             else:
-                continue  # Skip unknown widget types
+                continue
 
             self.detail_widgets[widget_full_key] = widget
             current_row += 1
+
+    def _get_parameters_from_ui(self, param_group_key: str, item_subtype: str, widget_prefix: str) -> Optional[Dict[str, Any]]:
+        params: Dict[str, Any] = {"type": item_subtype}
+        all_params_valid = True
+        param_definitions = UI_PARAM_CONFIG.get(param_group_key, {}).get(item_subtype, [])
+
+        if not param_definitions and item_subtype != "always_true":
+            return params
+
+        for param_def in param_definitions:
+            param_id = param_def["id"]
+            widget_key = f"{widget_prefix}{param_id}"
+            field_name = param_def["label"].rstrip(":")
+            target_type_def = param_def["type"]
+            default_val = param_def["default"]
+
+            widget_instance = self.detail_widgets.get(widget_key)
+            tk_var_instance = self.detail_optionmenu_vars.get(f"{widget_key}_var")
+
+            validation_args = {
+                "required": param_def.get("required", False),
+                "allow_empty_string": param_def.get("allow_empty_string", target_type_def == str),
+                "min_val": param_def.get("min_val"),
+                "max_val": param_def.get("max_val"),
+            }
+
+            val, is_valid = validate_and_get_widget_value(widget_instance, tk_var_instance, field_name, target_type_def, default_val, **validation_args)
+
+            if not is_valid and param_def.get("required", False):
+                all_params_valid = False
+
+            if param_id == "template_name" and param_group_key == "conditions":
+                sel_tpl_name = val
+                if not sel_tpl_name and param_def.get("required"):
+                    messagebox.showerror("Input Error", f"'{field_name}' must be selected.")
+                    all_params_valid = False
+                    params["template_filename"] = ""
+                elif sel_tpl_name:
+                    actual_fn = next((t.get("filename", "") for t in self.parent_app.profile_data.get("templates", []) if t.get("name") == sel_tpl_name), "")
+                    if not actual_fn:
+                        messagebox.showerror("Input Error", f"Could not find filename for template '{sel_tpl_name}'.")
+                        all_params_valid = False
+                    params["template_filename"] = actual_fn
+                else:
+                    params["template_filename"] = ""
+                params["template_name"] = sel_tpl_name
+            else:
+                params[param_id] = val
+
+        return params if all_params_valid else None
