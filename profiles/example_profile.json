@@ -25,10 +25,17 @@
         },
         {
             "name": "test",
-            "x": 169,
-            "y": 100,
-            "width": 1584,
-            "height": 1058
+            "x": 306,
+            "y": 234,
+            "width": 1205,
+            "height": 696
+        },
+        {
+            "name": "test2",
+            "x": 399,
+            "y": 170,
+            "width": 1342,
+            "height": 997
         }
     ],
     "templates": [],
@@ -91,6 +98,30 @@
             "action": {
                 "type": "log_message",
                 "message": "PROFILE TRIGGER: Center zone is bright blue AND contains 'Status'. Full text captured: {status_text_block}",
+                "level": "INFO"
+            }
+        },
+        {
+            "name": "test",
+            "region": "",
+            "condition": {
+                "type": "always_true"
+            },
+            "action": {
+                "type": "log_message",
+                "message": "Rule 'test' triggered.",
+                "level": "INFO"
+            }
+        },
+        {
+            "name": "w",
+            "region": "",
+            "condition": {
+                "type": "always_true"
+            },
+            "action": {
+                "type": "log_message",
+                "message": "Rule 'w' triggered.",
                 "level": "INFO"
             }
         }
