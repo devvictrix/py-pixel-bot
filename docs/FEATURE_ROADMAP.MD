@@ -78,13 +78,12 @@ This document tracks planned features and their status for this visual automatio
     *   **"Full GUI for Profile & Rule Configuration"** is the primary epic.
     *   Core GUI layout, file operations, and detailed editing for profiles, regions, templates, and rules (including conditions, actions, parameters, sub-conditions, structure conversion, and input validation) are substantially implemented.
     *   **Phase 1.8.1 (Input Validation & Refinements)** has just been completed, significantly improving GUI robustness.
-*   **Immediate Next Step (within Phase 1.8 of Full GUI):** Continue with GUI Refinements and UX Improvements. Specifically:
-    1.  **GUI State Consistency:** DevLead to manually test list selection behavior after edits, button states, and overall UI responsiveness. Focus on ensuring detail panels always reflect the true state of a selected item, especially after complex operations like "Convert Condition Structure" or add/remove.
-    2.  **Usability Enhancements (Small Wins):**
-        *   **Implement Tooltips:** Add `CTkToolTip` (or basic mouse-over text if a direct CTkToolTip class isn't readily available/simple) for key buttons (e.g., "Convert Condition Structure", "Add Sub-Condition") and potentially for some complex parameter fields in the rule editor.
-        *   **Implement Status Bar:** Add a simple `CTkLabel` at the bottom of `MainAppWindow` to display persistent messages like "Profile Saved: profile.json", "Unsaved changes*", "Error: Invalid input for X."
-    3.  **Code Refinements:** DevLead to review `MainAppWindow.py` for opportunities to break down very large methods (like `_update_details_panel` or `_apply_rule_changes`) into smaller, more focused helper methods to improve readability and maintainability.
-    4.  **Logging Review (Ongoing):** A final pass over all GUI interaction logs (especially those added in Phase 1.8.1 for validation) to ensure clarity, consistency, and completeness.
+    *   **Tooling Update:**
+        *   Flake8 linter configured (`.flake8`, max line length 99) and made compatible with Black.
+        *   Black formatter configured (`pyproject.toml`, line length 99).
+        *   `py_pixel_bot/core/logging_setup.py` updated to comply with these settings.
+        *   `DEV_CONFIG.MD` updated to reflect new tooling status.
+*   **Immediate Next Step (within Phase 1.8 of Full GUI):** Continue with GUI Refinements and UX Improvements as previously outlined (State Consistency Testing, Tooltips, Status Bar, Code Refinements, Logging Review). The new linting/formatting setup will help maintain code quality moving forward.
 *   After these refinements, the "Full GUI for Profile & Rule Configuration" will be very close to its initial v3.0.0 scope. We will then assess the "Sub-condition/Rule Reordering (Simple)" feature before moving to other major v3.0.0 items like "Real-time Visual Feedback in GUI" or "Chained Actions".
 
 ---

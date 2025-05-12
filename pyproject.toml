@@ -1,0 +1,4 @@
+// File: pyproject.toml
+[tool.black]
+line-length = 99
+# target-version = ['py39'] # Optional: if you want Black to specifically target Python 3.9 syntax

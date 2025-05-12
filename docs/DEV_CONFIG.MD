@@ -30,14 +30,19 @@ This document outlines key development choices, current phase settings, and envi
     *   **Unit Tests:** Deferred until core components (especially complex GUI interactions or critical backend logic not yet covered) are more stable, or upon explicit DevLead enablement.
         *   **Status:** `Pending DevLead Enablement`
     *   **Integration Tests:** Manual, focused on end-to-end scenarios for the target version features. Log outputs are crucial for validation. GUI interactions (creating/editing profiles, all fields, all buttons) will be tested manually by DevLead.
-*   **Linting/Formatting Setup:** Basic manual adherence to PEP 8. Formal automated linting/formatting (e.g., Flake8, Black) to be integrated later as per Tooling Choices, upon DevLead enablement.
+*   **Linting/Formatting Setup:**
+    *   **Flake8 (Linter):** Configured via `.flake8` file in project root (max-line-length: 99, ignores for Black compatibility).
+        *   **Status:** `Enabled (Configured for Black compatibility)`
+    *   **Black (Formatter):** Configured via `pyproject.toml` (line-length: 99).
+        *   **Status:** `Enabled (Initial Config via pyproject.toml)`
+    *   Manual adherence to PEP 8 is still encouraged for aspects not covered by Black.
 
 ## 3. Architectural & Design Approach
 *   **Overall Architectural Style:** Modular (Capture, Analysis, Action, Rules engines, UI components). Approved ADRs are foundational.
     *   *Details in `TECHNICAL_DESIGN.MD`.*
 *   **Logging Strategy:** Comprehensive and persistent logging using Python's `logging` module, configured by `APP_ENV` and CLI flags. All significant operations in both backend and GUI must be logged.
     *   *Refer to `adrs/ADR-007-Logging-Strategy-and-Environment-Configuration.md` for full details.*
-*   **Code Design Principles:** Readability, Simplicity (YAGNI - You Ain't Gonna Need It), Modularity, Testability (even if tests are manual for now), Diagnosability (heavily reliant on thorough logging).
+*   **Code Design Principles:** Readability, Simplicity (YAGNI - You Ain't Gonna Need It), Modularity, Testability (even if tests are manual for now), Diagnosability (heavily reliant on thorough logging). Adherence to Black formatting and configured Flake8 rules.
 
 ## 4. Tooling Choices (Key Tools - per ADRs)
 *   **Environment Management:** `python-dotenv`
@@ -50,8 +55,10 @@ This document outlines key development choices, current phase settings, and envi
 *   **CLI:** `argparse` (built-in).
 *   **GUI:** `CustomTkinter` (and its dependency `Pillow`).
 *   **Unit Testing Framework (Future):** `pytest` (Status: `Pending DevLead Enablement`)
-*   **Linter (Future):** `Flake8` (Status: `Pending DevLead Enablement` for active enforcement)
-*   **Formatter (Future):** `Black` (Status: `Pending DevLead Enablement` for active enforcement)
+*   **Linter:** `Flake8` (Status: `Enabled (Configured for Black compatibility)`)
+    *   Configuration: `.flake8` file in project root.
+*   **Formatter:** `Black` (Status: `Enabled (Initial Config via pyproject.toml)`)
+    *   Configuration: `pyproject.toml` file in project root.
 *   **Import Sorter (Future):** `isort` (Status: `Pending DevLead Enablement` for active enforcement)
 
 ## 5. Version Control
@@ -77,7 +84,5 @@ This document outlines key development choices, current phase settings, and envi
 *   **Key Dependencies Installation (Windows Focus):**
     *   Ensure Python 3.9+ is installed and in PATH.
     *   Create virtual environment: `python -m venv .venv` & activate.
-    *   Install packages: `pip install -r requirements.txt` (once `requirements.txt` is finalized and contains all dependencies like `opencv-python`, `numpy`, `Pillow`, `pytesseract`, `pyautogui`, `python-dotenv`, `CustomTkinter`).
+    *   Install packages: `pip install -r requirements.txt` (once `requirements.txt` is finalized and contains all dependencies like `opencv-python`, `numpy`, `Pillow`, `pytesseract`, `pyautogui`, `python-dotenv`, `CustomTkinter`, `flake8`, `black`).
     *   **Tesseract OCR Engine:** Must be installed system-wide (e.g., from UB Mannheim installer for Windows) AND its installation directory must be added to the system `PATH` environment variable for `pytesseract` to find it. Language data packs (e.g., for English: `eng`) should also be installed with Tesseract.
-
----

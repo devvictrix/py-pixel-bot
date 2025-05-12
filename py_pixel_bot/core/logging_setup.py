@@ -1,13 +1,13 @@
 import logging
 import os
 import sys
-from datetime import date # For daily filename
+from datetime import date  # For daily filename
 
 # (Keep print statements for debugging)
 print("DEBUG: py_pixel_bot.core.logging_setup module IS BEING LOADED AND EXECUTED.")
 
 
-def setup_logging( # Parameter name changed back to log_file_path
+def setup_logging(  # Parameter name changed back to log_file_path
     console_log_level=logging.INFO, log_file_path=None, enable_file_logging=True
 ):
     """
@@ -16,7 +16,8 @@ def setup_logging( # Parameter name changed back to log_file_path
     This version uses a basic FileHandler, so no automatic rotation or backupCount.
     """
     print(
-        f"DEBUG: setup_logging CALLED with console_log_level={console_log_level}, log_file_path={log_file_path}, enable_file_logging={enable_file_logging}"
+        f"DEBUG: setup_logging CALLED with console_log_level={console_log_level}, "
+        f"log_file_path={log_file_path}, enable_file_logging={enable_file_logging}"
     )
 
     app_env = os.getenv("APP_ENV", "production").lower()
@@ -25,7 +26,7 @@ def setup_logging( # Parameter name changed back to log_file_path
         project_root = os.path.dirname(os.path.dirname(module_dir))
     except NameError:
         project_root = os.getcwd()
-        
+
     logs_dir = os.path.join(project_root, "logs")
 
     if not os.path.exists(logs_dir) and enable_file_logging:
@@ -33,24 +34,31 @@ def setup_logging( # Parameter name changed back to log_file_path
             os.makedirs(logs_dir)
             print(f"DEBUG: Created logs directory: {logs_dir}")
         except OSError as e:
-            sys.stderr.write(f"Warning: Could not create logs directory: {logs_dir}. Error: {e}\n")
+            sys.stderr.write(
+                f"Warning: Could not create logs directory: {logs_dir}. Error: {e}\n"
+            )
             enable_file_logging = False
 
     base_file_level = logging.INFO
     console_formatter_str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    file_formatter_str = "%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
+    file_formatter_str = (
+        "%(asctime)s - %(name)s - %(levelname)s - "
+        "[%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
+    )
 
     if app_env == "development":
         base_file_level = logging.DEBUG
-        console_formatter_str = "%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
+        console_formatter_str = (
+            "%(asctime)s - %(name)s - %(levelname)s - "
+            "[%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
+        )
 
     log = logging.getLogger()
+    # Set root logger to DEBUG, handlers control effective level
     log.setLevel(logging.DEBUG)
 
     if log.hasHandlers():
-        print(
-            f"DEBUG: Clearing {len(log.handlers)} existing handlers from root logger."
-        )
+        print(f"DEBUG: Clearing {len(log.handlers)} existing handlers from root logger.")
         log.handlers.clear()
 
     console_formatter = logging.Formatter(console_formatter_str)
@@ -58,15 +66,13 @@ def setup_logging( # Parameter name changed back to log_file_path
     ch.setLevel(console_log_level)
     ch.setFormatter(console_formatter)
     log.addHandler(ch)
-    print(
-        f"DEBUG: ConsoleHandler added with level {logging.getLevelName(console_log_level)}."
-    )
+    print(f"DEBUG: ConsoleHandler added with level {logging.getLevelName(console_log_level)}.")
 
     if enable_file_logging:
-        final_log_file_path_for_handler = "" # Renamed to avoid confusion with parameter
+        final_log_file_path_for_handler = ""  # Renamed to avoid confusion with parameter
         today_date_str = date.today().strftime("%Y-%m-%d")
 
-        if log_file_path: # This is the override from CLI
+        if log_file_path:  # This is the override from CLI
             # If a specific path is given, we use it directly.
             # This overrides the daily naming convention for this session.
             final_log_file_path_for_handler = log_file_path
@@ -77,38 +83,55 @@ def setup_logging( # Parameter name changed back to log_file_path
                     print(f"DEBUG: Created custom log directory for override: {custom_log_dir}")
                 except OSError as e:
                     sys.stderr.write(
-                        f"Warning: Could not create custom log directory '{custom_log_dir}' for override path. Error: {e}.\n"
+                        f"Warning: Could not create custom log directory "
+                        f"'{custom_log_dir}' for override path. Error: {e}.\n"
                     )
                     # Fallback if custom dir creation fails
-                    final_log_file_path_for_handler = os.path.join(logs_dir, f"{today_date_str}.log")
-                    if not os.path.exists(logs_dir): os.makedirs(logs_dir) # Ensure default logs_dir
+                    final_log_file_path_for_handler = os.path.join(
+                        logs_dir, f"{today_date_str}.log"
+                    )
+                    if not os.path.exists(logs_dir):
+                        os.makedirs(logs_dir)  # Ensure default logs_dir
         else:
             # Default behavior: YYYY-MM-DD.log in the logs/ directory
             final_log_file_path_for_handler = os.path.join(logs_dir, f"{today_date_str}.log")
 
-        print(f"DEBUG: Attempting to set up FileHandler for active log: {final_log_file_path_for_handler}")
+        print(
+            "DEBUG: Attempting to set up FileHandler for active log: "
+            f"{final_log_file_path_for_handler}"
+        )
         file_formatter = logging.Formatter(file_formatter_str)
 
         try:
-            # Use basic FileHandler, mode 'a' to append if file exists (e.g., app restart on same day)
-            fh = logging.FileHandler(final_log_file_path_for_handler, mode='a', encoding='utf-8')
+            # Use basic FileHandler, mode 'a' to append if file exists
+            fh = logging.FileHandler(
+                final_log_file_path_for_handler, mode="a", encoding="utf-8"
+            )
             fh.setLevel(base_file_level)
             fh.setFormatter(file_formatter)
             log.addHandler(fh)
             log.info(
-                f"File logging enabled. Log level: {logging.getLevelName(base_file_level)}. Active log file: {final_log_file_path_for_handler}"
+                f"File logging enabled. Log level: {logging.getLevelName(base_file_level)}. "
+                f"Active log file: {final_log_file_path_for_handler}"
             )
             print(
-                f"DEBUG: FileHandler added for {final_log_file_path_for_handler} with level {logging.getLevelName(base_file_level)}."
+                f"DEBUG: FileHandler added for {final_log_file_path_for_handler} "
+                f"with level {logging.getLevelName(base_file_level)}."
             )
         except Exception as e:
-            sys.stderr.write(f"Error setting up file handler for {final_log_file_path_for_handler}: {e}\n")
-            log.warning(f"Could not set up file logging for {final_log_file_path_for_handler} due to: {e}")
+            sys.stderr.write(
+                f"Error setting up file handler for {final_log_file_path_for_handler}: {e}\n"
+            )
+            log.warning(
+                f"Could not set up file logging for {final_log_file_path_for_handler} "
+                f"due to: {e}"
+            )
     else:
         log.info("File logging explicitly disabled.")
         print("DEBUG: File logging explicitly disabled.")
 
     log.info(
-        f"Logging setup complete. APP_ENV: '{app_env}'. Console level effective: {logging.getLevelName(ch.level)}."
+        f"Logging setup complete. APP_ENV: '{app_env}'. "
+        f"Console level effective: {logging.getLevelName(ch.level)}."
     )
     print("DEBUG: setup_logging function finished.")

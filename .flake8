@@ -1,0 +1,6 @@
+[flake8]
+max-line-length = 99
+# Ignore rules that Black handles or that conflict with Black's style
+# E203: whitespace before ':' (Black doesn't add it for slices like Flake8 expects)
+# W503: line break before binary operator (Black prefers line break after binary operator, opposite of PEP 8 original recommendation which Flake8 W503 enforces)
+extend-ignore = E203, W503
