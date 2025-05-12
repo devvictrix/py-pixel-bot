@@ -12,10 +12,10 @@ from PIL import Image
 
 # Standardized Absolute Imports
 from py_pixel_bot.core.config_manager import ConfigManager
-from py_pixel_bot.ui.gui.region_selector import RegionSelectorWindow  # Changed from relative
-from py_pixel_bot.ui.gui.gui_config import DEFAULT_PROFILE_STRUCTURE, CONDITION_TYPES, ACTION_TYPES, UI_PARAM_CONFIG, OPTIONS_CONST_MAP  # Changed from relative
-from py_pixel_bot.ui.gui.gui_utils import validate_and_get_widget_value, parse_bgr_string, create_clickable_list_item  # Changed from relative
-from py_pixel_bot.ui.gui.panels.details_panel import DetailsPanel  # Changed from relative
+from py_pixel_bot.ui.gui.region_selector import RegionSelectorWindow
+from py_pixel_bot.ui.gui.gui_config import DEFAULT_PROFILE_STRUCTURE, CONDITION_TYPES, ACTION_TYPES, UI_PARAM_CONFIG, OPTIONS_CONST_MAP
+from py_pixel_bot.ui.gui.gui_utils import validate_and_get_widget_value, parse_bgr_string, create_clickable_list_item
+from py_pixel_bot.ui.gui.panels.details_panel import DetailsPanel
 
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class MainAppWindow(ctk.CTk):
         self.selected_region_index: Optional[int] = None
         self.selected_template_index: Optional[int] = None
         self.selected_rule_index: Optional[int] = None
-        self.selected_sub_condition_index: Optional[int] = None  # This is for MainAppWindow's perspective
+        self.selected_sub_condition_index: Optional[int] = None
 
         self.selected_region_item_widget: Optional[ctk.CTkFrame] = None
         self.selected_template_item_widget: Optional[ctk.CTkFrame] = None
@@ -347,17 +347,12 @@ class MainAppWindow(ctk.CTk):
             self.destroy()
 
     def _on_item_selected(self, list_name: str, item_data: Dict, item_index: int, item_widget_frame: Optional[ctk.CTkFrame]):
-        # list_name: "region", "template", or "rule"
-        # item_data: The dictionary for the selected item from self.profile_data
-        # item_index: The index in the list
-        # item_widget_frame: The CTkFrame representing the item in the list UI
         if not item_widget_frame:
             logger.warning(f"Item selection called for {list_name} but item_widget_frame is None. Aborting selection update.")
             return
 
         logger.info(f"Item selected: {list_name}, index {item_index}, name '{item_data.get('name')}'")
 
-        # Clear selection highlights and disable remove buttons for OTHER lists
         lists_to_clear_state = {
             "region": (self.btn_remove_region, "selected_region_index", "selected_region_item_widget"),
             "template": (self.btn_remove_template, "selected_template_index", "selected_template_item_widget"),
@@ -365,54 +360,43 @@ class MainAppWindow(ctk.CTk):
         }
 
         for ln, (btn, idx_attr, widget_attr) in lists_to_clear_state.items():
-            if ln != list_name:  # If it's not the currently selected list type
-                self._highlight_selected_list_item(ln, None)  # Clear its highlight
-                setattr(self, idx_attr, None)  # Reset its index
+            if ln != list_name:
+                self._highlight_selected_list_item(ln, None)
+                setattr(self, idx_attr, None)
                 if btn:
                     btn.configure(state="disabled")
 
-        # If a rule is selected, also clear sub-condition selection in DetailsPanel
         if list_name == "rule" and self.details_panel_instance:
-            self.selected_sub_condition_index = None  # Reset MainAppWindow's tracking
-            # Call MainAppWindow's _highlight_selected_list_item, specifying it's for a sub-list
-            # This will correctly target attributes on self.details_panel_instance
-            self._highlight_selected_list_item("condition", None, is_sub_list=True)  # CORRECTED CALL
+            self.selected_sub_condition_index = None
+            # Call self (MainAppWindow) method, it will handle targeting DetailsPanel attributes
+            self._highlight_selected_list_item("condition", None, is_sub_list=True) # Ensure this is self, not self.details_panel_instance
             if self.details_panel_instance.btn_remove_sub_condition:
                 self.details_panel_instance.btn_remove_sub_condition.configure(state="disabled")
 
-        # Set current selection for THIS list type
-        setattr(self, lists_to_clear_state[list_name][1], item_index)  # Update index attribute
-        self._highlight_selected_list_item(list_name, item_widget_frame)  # Highlight current item
+        setattr(self, lists_to_clear_state[list_name][1], item_index)
+        self._highlight_selected_list_item(list_name, item_widget_frame)
 
         current_btn = lists_to_clear_state[list_name][0]
         if current_btn:
-            current_btn.configure(state="normal")  # Enable its remove button
+            current_btn.configure(state="normal")
 
-        # Update the details panel
         if self.details_panel_instance:
             self.details_panel_instance.update_display(copy.deepcopy(item_data), list_name)
 
     def _highlight_selected_list_item(self, list_name_for_attr: str, new_selected_widget: Optional[ctk.CTkFrame], is_sub_list: bool = False):
-        # list_name_for_attr: "region", "template", "rule", or "condition" (for sub-conditions)
-        # is_sub_list: True if this is for a sub-list like sub-conditions (managed by DetailsPanel)
-
         attr_name_prefix = "selected_sub_" if is_sub_list else "selected_"
-        # For sub-conditions, list_name_for_attr will be "condition"
-        # leading to "selected_sub_condition_item_widget"
         attr_name_widget = f"{attr_name_prefix}{list_name_for_attr}_item_widget"
-
-        # Determine where the attribute (e.g., self.selected_rule_item_widget or self.details_panel_instance.selected_sub_condition_item_widget) is stored
         attr_target_object = self.details_panel_instance if is_sub_list and self.details_panel_instance else self
 
         old_selected_widget = getattr(attr_target_object, attr_name_widget, None)
         if old_selected_widget and old_selected_widget.winfo_exists():
-            old_selected_widget.configure(fg_color="transparent")  # Revert old selection
+            old_selected_widget.configure(fg_color="transparent")
 
         if new_selected_widget and new_selected_widget.winfo_exists():
-            highlight_color = ctk.ThemeManager.theme.get("CTkSegmentedButton", {}).get("selected_color", ("#3a7ebf", "#1f538d"))  # Default CustomTkinter selection color
+            highlight_color = ctk.ThemeManager.theme.get("CTkSegmentedButton", {}).get("selected_color", ("#3a7ebf", "#1f538d"))
             new_selected_widget.configure(fg_color=highlight_color)
-            setattr(attr_target_object, attr_name_widget, new_selected_widget)  # Store new selection
-        else:  # Clearing selection
+            setattr(attr_target_object, attr_name_widget, new_selected_widget)
+        else:
             setattr(attr_target_object, attr_name_widget, None)
 
     def _apply_region_changes(self):
@@ -435,7 +419,7 @@ class MainAppWindow(ctk.CTk):
 
         for p in ["x", "y", "width", "height"]:
             coord_widget = self.details_panel_instance.detail_widgets.get(p)
-            min_v = 1 if p in ["width", "height"] else None  # Width/Height must be positive
+            min_v = 1 if p in ["width", "height"] else None
             default_coord_val = current_region_data.get(p, 0 if p in ["x", "y"] else 1)
             val, valid = validate_and_get_widget_value(coord_widget, None, p.capitalize(), int, default_coord_val, required=True, min_val=min_v)
             if not valid:
@@ -447,21 +431,18 @@ class MainAppWindow(ctk.CTk):
             logger.error(f"Apply changes for region '{original_name}' aborted due to validation errors.")
             return
 
-        # Check for name collision if name changed
         if new_values["name"] != original_name and any(r.get("name") == new_values["name"] for i, r in enumerate(self.profile_data["regions"]) if i != self.selected_region_index):
             messagebox.showerror("Name Error", f"Region name '{new_values['name']}' already exists.")
             return
 
-        # Update the profile data
         current_region_data.update(new_values)
         self._set_dirty_status(True)
         self._populate_specific_list_frame(
             "region", self.regions_list_scroll_frame, self.profile_data["regions"], lambda item_data, idx: item_data.get("name", f"R{idx+1}"), self.btn_remove_region, "region"
         )
-        # Re-display the (potentially updated) details and re-highlight
-        if self.selected_region_index < len(self.profile_data["regions"]):  # Check index still valid
+        if self.selected_region_index < len(self.profile_data["regions"]):
             new_item_widget = self.regions_list_scroll_frame.winfo_children()[self.selected_region_index] if self.regions_list_scroll_frame.winfo_children() else None
-            self._highlight_selected_list_item("region", new_item_widget)  # Re-highlight, as frames are recreated
+            self._highlight_selected_list_item("region", new_item_widget)
             self.details_panel_instance.update_display(copy.deepcopy(current_region_data), "region")
 
         messagebox.showinfo("Region Updated", f"Region '{new_values['name']}' updated successfully.")
@@ -480,7 +461,6 @@ class MainAppWindow(ctk.CTk):
         if not name_valid:
             return
 
-        # Check for name collision if name changed
         if name_val != original_name and any(t.get("name") == name_val for i, t in enumerate(self.profile_data["templates"]) if i != self.selected_template_index):
             messagebox.showerror("Name Error", f"Template name '{name_val}' already exists.")
             return
@@ -510,10 +490,8 @@ class MainAppWindow(ctk.CTk):
         old_name = current_rule_data_orig.get("name")
         logger.info(f"Attempting to apply changes for rule: '{old_name}' (index {self.selected_rule_index})")
 
-        # Create a temporary copy to gather changes without modifying original until all valid
         temp_rule_data_for_validation = copy.deepcopy(current_rule_data_orig)
 
-        # 1. Validate and get Rule Name
         name_widget = self.details_panel_instance.detail_widgets.get("rule_name")
         new_name, name_valid = validate_and_get_widget_value(name_widget, None, "Rule Name", str, old_name, required=True)
         if not name_valid:
@@ -523,76 +501,65 @@ class MainAppWindow(ctk.CTk):
             return
         temp_rule_data_for_validation["name"] = new_name
 
-        # 2. Get Default Rule Region
         rule_region_var = self.details_panel_instance.detail_optionmenu_vars.get("rule_region_var")
         temp_rule_data_for_validation["region"] = rule_region_var.get() if rule_region_var else ""
 
-        # 3. Validate and get Condition block
-        condition_block_ui = {}  # This will hold the condition data read from UI
+        condition_block_ui = {}
         is_compound_in_ui = "logical_operator_var" in self.details_panel_instance.detail_optionmenu_vars
 
         if is_compound_in_ui:
             log_op_var = self.details_panel_instance.detail_optionmenu_vars.get("logical_operator_var")
             condition_block_ui["logical_operator"] = log_op_var.get() if log_op_var else "AND"
-
             new_sub_conds_from_ui = []
             existing_sub_conds_in_profile = temp_rule_data_for_validation.get("condition", {}).get("sub_conditions", [])
-
             all_subs_valid = True
-            for idx, _ in enumerate(existing_sub_conds_in_profile):  # Iterate based on current number of sub-conditions in profile
-                if self.selected_sub_condition_index == idx:  # If this sub-condition is currently active in editor
+            for idx, _ in enumerate(existing_sub_conds_in_profile):
+                if self.selected_sub_condition_index == idx:
                     sub_c_type_var = self.details_panel_instance.detail_optionmenu_vars.get("subcond_condition_type_var")
                     if sub_c_type_var:
                         sub_c_type = sub_c_type_var.get()
                         sub_params = self.details_panel_instance._get_parameters_from_ui("conditions", sub_c_type, "subcond_")
-                        if sub_params is None:  # Validation failed within _get_parameters_from_ui
+                        if sub_params is None:
                             all_subs_valid = False
                             break
                         new_sub_conds_from_ui.append(sub_params)
-                    else:  # Should not happen if UI is consistent
-                        logger.error(f"Missing type var for active sub-condition index {idx}. Aborting apply.")
+                    else:
                         all_subs_valid = False
                         break
-                else:  # For sub-conditions not actively being edited, take their data directly from profile
+                else:
                     new_sub_conds_from_ui.append(copy.deepcopy(existing_sub_conds_in_profile[idx]))
-
             if not all_subs_valid:
                 logger.error("Rule apply aborted: Sub-condition validation failed.")
                 return
             condition_block_ui["sub_conditions"] = new_sub_conds_from_ui
-        else:  # Single condition
+        else:
             cond_type_var = self.details_panel_instance.detail_optionmenu_vars.get("condition_type_var")
             single_cond_type = cond_type_var.get() if cond_type_var else "always_true"
             single_cond_params = self.details_panel_instance._get_parameters_from_ui("conditions", single_cond_type, "cond_")
-            if single_cond_params is None:  # Validation failed
+            if single_cond_params is None:
                 logger.error("Rule apply aborted: Single condition validation failed.")
                 return
-            condition_block_ui = single_cond_params  # This will be the whole condition block
-
+            condition_block_ui = single_cond_params
         temp_rule_data_for_validation["condition"] = condition_block_ui
 
-        # 4. Validate and get Action block
         action_type_var = self.details_panel_instance.detail_optionmenu_vars.get("action_type_var")
         action_type = action_type_var.get() if action_type_var else "log_message"
         action_params = self.details_panel_instance._get_parameters_from_ui("actions", action_type, "act_")
-        if action_params is None:  # Validation failed
+        if action_params is None:
             logger.error("Rule apply aborted: Action validation failed.")
             return
         temp_rule_data_for_validation["action"] = action_params
 
-        # All validations passed, now commit to self.profile_data
         self.profile_data["rules"][self.selected_rule_index] = temp_rule_data_for_validation
         self._set_dirty_status(True)
 
-        # Repopulate list and re-display details
         self._populate_specific_list_frame(
             "rule", self.rules_list_scroll_frame, self.profile_data["rules"], lambda item_data, idx: item_data.get("name", f"Rule{idx+1}"), self.btn_remove_rule, "rule"
         )
-        if self.selected_rule_index < len(self.profile_data["rules"]):  # Check index still valid
+        if self.selected_rule_index < len(self.profile_data["rules"]):
             new_item_widget = self.rules_list_scroll_frame.winfo_children()[self.selected_rule_index] if self.rules_list_scroll_frame.winfo_children() else None
             self._highlight_selected_list_item("rule", new_item_widget)
             self.details_panel_instance.update_display(copy.deepcopy(temp_rule_data_for_validation), "rule")
-
         messagebox.showinfo("Rule Updated", f"Rule '{new_name}' updated successfully.")
 
     def _edit_region_coordinates_with_selector(self):
@@ -602,8 +569,8 @@ class MainAppWindow(ctk.CTk):
 
         if self._is_dirty:
             if not messagebox.askyesno("Save Changes?", "Current profile has unsaved changes. Save before launching Region Selector?"):
-                return  # User cancelled
-            if not self._save_profile():  # Attempt to save failed
+                return
+            if not self._save_profile():
                 logger.warning("Save failed. Aborting region coordinate editing.")
                 return
 
@@ -612,26 +579,19 @@ class MainAppWindow(ctk.CTk):
             return
 
         try:
-            # Use a fresh ConfigManager for the selector to ensure it reads the saved state
             cm_for_selector = ConfigManager(self.current_profile_path, create_if_missing=False)
-            if not cm_for_selector.profile_data:  # Should not happen if save was successful
+            if not cm_for_selector.profile_data:
                 messagebox.showerror("Error", "Failed to re-load profile for Region Selector.")
                 return
-
-            # Pass a copy of the region data to be edited
             region_to_edit_data = copy.deepcopy(self.profile_data["regions"][self.selected_region_index])
-
             selector_dialog = RegionSelectorWindow(master=self, config_manager=cm_for_selector, existing_region_data=region_to_edit_data)
-            self.wait_window(selector_dialog)  # Modal behavior
-
+            self.wait_window(selector_dialog)
             if selector_dialog.changes_made:
                 logger.info("RegionSelector made changes. Reloading profile into MainAppWindow.")
-                # Reload the entire profile as RegionSelector modifies it directly
                 self._load_profile_from_path(self.current_profile_path)
-                self._set_dirty_status(True)  # Mark as dirty as it was reloaded
+                self._set_dirty_status(True)
             else:
                 logger.info("RegionSelector closed without making changes.")
-
         except Exception as e:
             logger.error(f"Error during Edit Region Coordinates: {e}", exc_info=True)
             messagebox.showerror("Region Selector Error", f"Error launching or using Region Selector:\n{e}")
@@ -640,13 +600,13 @@ class MainAppWindow(ctk.CTk):
         if not self.current_profile_path:
             if not messagebox.askokcancel("Save Required", "The profile must be saved to a file before adding regions. Save now?"):
                 return
-            if not self._save_profile_as():  # Prompts for path and saves
-                return  # Save As was cancelled or failed
+            if not self._save_profile_as():
+                return
 
         if self._is_dirty:
             if not messagebox.askyesno("Save Changes?", "Current profile has unsaved changes. Save before launching Region Selector?"):
                 return
-            if not self._save_profile():  # Save to current path
+            if not self._save_profile():
                 return
 
         try:
@@ -654,10 +614,8 @@ class MainAppWindow(ctk.CTk):
             if not cm_for_selector.profile_data:
                 messagebox.showerror("Error", "Failed to re-load profile for Region Selector.")
                 return
-
             selector_dialog = RegionSelectorWindow(master=self, config_manager=cm_for_selector)
-            self.wait_window(selector_dialog)  # Modal
-
+            self.wait_window(selector_dialog)
             if selector_dialog.changes_made:
                 logger.info("RegionSelector added a region. Reloading profile into MainAppWindow.")
                 self._load_profile_from_path(self.current_profile_path)
@@ -679,7 +637,6 @@ class MainAppWindow(ctk.CTk):
             removed_item_data = item_list.pop(selected_index)
             logger.info(f"Removed {list_name_key} '{removed_item_data.get('name', 'N/A')}' at index {selected_index}.")
 
-            # Determine display callback for repopulating the list
             list_scroll_frame = getattr(self, f"{list_name_key}s_list_scroll_frame", None)
             display_cb_map = {
                 "region": lambda item, idx: item.get("name", f"R{idx+1}"),
@@ -692,13 +649,12 @@ class MainAppWindow(ctk.CTk):
                 self._populate_specific_list_frame(list_name_key, list_scroll_frame, item_list, display_cb, remove_button_widget, list_name_key)
 
             self._set_dirty_status(True)
-            setattr(self, selected_index_attr, None)  # Clear selection index
+            setattr(self, selected_index_attr, None)
             if remove_button_widget:
                 remove_button_widget.configure(state="disabled")
             if self.details_panel_instance:
-                self.details_panel_instance.update_display(None, "none")  # Clear details
+                self.details_panel_instance.update_display(None, "none")
 
-            # Special handling for template file deletion
             if list_name_key == "template" and self.current_profile_path:
                 filename_to_delete = removed_item_data.get("filename")
                 if filename_to_delete:
@@ -757,16 +713,14 @@ class MainAppWindow(ctk.CTk):
         try:
             os.makedirs(templates_dir, exist_ok=True)
             base_filename, ext = os.path.splitext(os.path.basename(img_path))
-            # Sanitize tpl_name for use as part of filename
             sane_base_for_filename = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in tpl_name).rstrip().replace(" ", "_")
             if not sane_base_for_filename:
-                sane_base_for_filename = "template"  # Fallback
+                sane_base_for_filename = "template"
 
             target_filename = f"{sane_base_for_filename}{ext}"
             target_path = os.path.join(templates_dir, target_filename)
-
             counter = 1
-            while os.path.exists(target_path):  # Ensure unique filename
+            while os.path.exists(target_path):
                 target_filename = f"{sane_base_for_filename}_{counter}{ext}"
                 target_path = os.path.join(templates_dir, target_filename)
                 counter += 1
@@ -791,8 +745,8 @@ class MainAppWindow(ctk.CTk):
             messagebox.showerror("Add Template Error", f"Could not add template '{tpl_name}':\n{e}")
 
     def _add_new_rule(self):
-        if not self.profile_data:  # Should not happen if UI is functional
-            self._new_profile(prompt_save=False)  # Initialize with default structure
+        if not self.profile_data:
+            self._new_profile(prompt_save=False)
 
         name_dialog = ctk.CTkInputDialog(text="Enter a unique name for the new rule:", title="New Rule Name")
         rule_name_input = name_dialog.get_input()
@@ -807,9 +761,9 @@ class MainAppWindow(ctk.CTk):
 
         new_rule_data = {
             "name": rule_name,
-            "region": "",  # Default to no specific region, user can set
-            "condition": {"type": "always_true"},  # Sensible default condition
-            "action": {"type": "log_message", "message": f"Rule '{rule_name}' triggered.", "level": "INFO"},  # Sensible default action
+            "region": "",
+            "condition": {"type": "always_true"},
+            "action": {"type": "log_message", "message": f"Rule '{rule_name}' triggered.", "level": "INFO"},
         }
         self.profile_data.setdefault("rules", []).append(new_rule_data)
         self._populate_specific_list_frame(
@@ -819,10 +773,6 @@ class MainAppWindow(ctk.CTk):
         messagebox.showinfo("Rule Added", f"Rule '{rule_name}' added successfully.")
 
     def _on_rule_part_type_change(self, part_changed: str, new_type_selected: str):
-        # part_changed: "condition" or "action"
-        # This method is called when a type dropdown (condition or action) changes.
-        # It should update the internal data model for the *currently selected rule*
-        # and then re-render the dynamic parameters in the DetailsPanel.
         self._set_dirty_status(True)
         if self.selected_rule_index is None or self.details_panel_instance is None:
             logger.warning(f"Cannot handle rule part type change: No rule selected or details panel missing.")
@@ -833,13 +783,11 @@ class MainAppWindow(ctk.CTk):
 
         if part_changed == "condition":
             target_frame_for_params: Optional[ctk.CTkFrame] = None
-            condition_data_source_in_profile: Optional[Dict] = None  # This is the dict in self.profile_data
+            condition_data_source_in_profile: Optional[Dict] = None
             widget_prefix = ""
-
             is_compound = "logical_operator" in current_rule_data.get("condition", {})
 
             if self.selected_sub_condition_index is not None and is_compound:
-                # Editing an existing sub-condition's type
                 sub_cond_list = current_rule_data.get("condition", {}).get("sub_conditions", [])
                 if 0 <= self.selected_sub_condition_index < len(sub_cond_list):
                     condition_data_source_in_profile = sub_cond_list[self.selected_sub_condition_index]
@@ -848,29 +796,24 @@ class MainAppWindow(ctk.CTk):
                 else:
                     logger.error("Selected sub-condition index out of bounds. Cannot change type.")
                     return
-            elif not is_compound:  # Editing the main single condition's type
+            elif not is_compound:
                 condition_data_source_in_profile = current_rule_data.get("condition", {})
                 target_frame_for_params = self.details_panel_instance.condition_params_frame
                 widget_prefix = "cond_"
             else:
                 logger.error("Cannot determine which condition part to change type for (compound rule but no sub-condition selected).")
-                return  # Should not happen if UI logic is correct
+                return
 
             if target_frame_for_params and condition_data_source_in_profile is not None:
                 if condition_data_source_in_profile.get("type") != new_type_selected:
-                    # Preserve common fields if they exist in the old structure, otherwise clear them
                     preserved_data = {"type": new_type_selected}
-                    # Common fields for conditions that might be worth preserving:
                     if "region" in condition_data_source_in_profile:
                         preserved_data["region"] = condition_data_source_in_profile["region"]
                     if "capture_as" in condition_data_source_in_profile:
                         preserved_data["capture_as"] = condition_data_source_in_profile["capture_as"]
-
-                    condition_data_source_in_profile.clear()  # Clear old params
-                    condition_data_source_in_profile.update(preserved_data)  # Set new type and preserved fields
+                    condition_data_source_in_profile.clear()
+                    condition_data_source_in_profile.update(preserved_data)
                     logger.debug(f"Condition part data (in profile_data) reset for new type '{new_type_selected}': {condition_data_source_in_profile}")
-
-                # Re-render parameters for this condition part using the (now updated) data_source
                 self.details_panel_instance._render_dynamic_parameters(
                     "conditions", new_type_selected, condition_data_source_in_profile, target_frame_for_params, start_row=1, widget_prefix=widget_prefix
                 )
@@ -880,17 +823,15 @@ class MainAppWindow(ctk.CTk):
         elif part_changed == "action":
             action_to_update_in_profile = current_rule_data.get("action", {})
             if action_to_update_in_profile.get("type") != new_type_selected:
-                action_to_update_in_profile.clear()  # Clear old params
-            action_to_update_in_profile["type"] = new_type_selected  # Set new type
+                action_to_update_in_profile.clear()
+            action_to_update_in_profile["type"] = new_type_selected
             logger.debug(f"Action part data (in profile_data) reset for new type '{new_type_selected}': {action_to_update_in_profile}")
-
             if self.details_panel_instance and self.details_panel_instance.action_params_frame:
                 self.details_panel_instance._render_dynamic_parameters(
-                    "actions", new_type_selected, action_to_update_in_profile, self.details_panel_instance.action_params_frame, start_row=1, widget_prefix="act_"  # Use updated data from profile
+                    "actions", new_type_selected, action_to_update_in_profile, self.details_panel_instance.action_params_frame, start_row=1, widget_prefix="act_"
                 )
             else:
                 logger.error("Could not find action_params_frame for action type change.")
-
         logger.info(f"Rule part '{part_changed}' type in profile_data model updated to '{new_type_selected}'. DetailsPanel should refresh based on this.")
 
     def _add_sub_condition_to_rule(self):
@@ -901,22 +842,15 @@ class MainAppWindow(ctk.CTk):
         rule = self.profile_data["rules"][self.selected_rule_index]
         cond_block = rule.get("condition", {})
 
-        if "logical_operator" not in cond_block:  # If it was a single condition
+        if "logical_operator" not in cond_block:
             current_single_cond_data = copy.deepcopy(cond_block)
-            cond_block.clear()  # Clear the single condition structure
-            cond_block["logical_operator"] = "AND"  # Default to AND
+            cond_block.clear()
+            cond_block["logical_operator"] = "AND"
             cond_block["sub_conditions"] = [current_single_cond_data if current_single_cond_data.get("type") else {"type": "always_true"}]
-
-        # Ensure sub_conditions list exists
         cond_block.setdefault("sub_conditions", [])
-
-        # Add a new default sub-condition
         cond_block["sub_conditions"].append({"type": "always_true"})
-
-        rule["condition"] = cond_block  # Update the rule's condition block
+        rule["condition"] = cond_block
         self._set_dirty_status(True)
-
-        # Update the display; this will re-render the condition editor for the rule
         self.details_panel_instance.update_display(copy.deepcopy(rule), "rule")
         logger.info(f"Added new sub-condition to rule '{rule.get('name')}'.")
 
@@ -932,11 +866,8 @@ class MainAppWindow(ctk.CTk):
         if sub_list and 0 <= self.selected_sub_condition_index < len(sub_list):
             removed_sub_cond = sub_list.pop(self.selected_sub_condition_index)
             logger.info(f"Removed sub-condition at index {self.selected_sub_condition_index} (type: {removed_sub_cond.get('type')}) from rule '{rule.get('name')}'.")
-
-            self.selected_sub_condition_index = None  # Clear selection
+            self.selected_sub_condition_index = None
             self._set_dirty_status(True)
-
-            # Update the display; this will re-render the condition editor
             self.details_panel_instance.update_display(copy.deepcopy(rule), "rule")
         else:
             logger.warning(f"Cannot remove sub-condition: Invalid index {self.selected_sub_condition_index} or sub_conditions list not found/empty.")
@@ -950,40 +881,21 @@ class MainAppWindow(ctk.CTk):
         cond = rule.get("condition", {})
         is_currently_compound = "logical_operator" in cond
 
-        if is_currently_compound:  # Convert to Single
+        if is_currently_compound:
             sub_conditions_list = cond.get("sub_conditions", [])
             if len(sub_conditions_list) > 1:
                 if not messagebox.askyesno("Confirm Conversion", "Convert to a single condition? Only the first sub-condition will be kept. Others will be lost. Continue?"):
                     return
-
-            # Take the first sub-condition as the new single condition, or a default if none
             new_single_condition = copy.deepcopy(sub_conditions_list[0]) if sub_conditions_list else {"type": "always_true"}
             rule["condition"] = new_single_condition
             logger.info(f"Rule '{rule.get('name')}' condition converted from compound to single: {new_single_condition}")
-
-        else:  # Convert to Compound
+        else:
             current_single_condition_data = copy.deepcopy(cond)
-            if not current_single_condition_data.get("type"):  # Ensure it has a type if it was empty
+            if not current_single_condition_data.get("type"):
                 current_single_condition_data = {"type": "always_true"}
-
-            rule["condition"] = {"logical_operator": "AND", "sub_conditions": [current_single_condition_data]}  # Default to AND
+            rule["condition"] = {"logical_operator": "AND", "sub_conditions": [current_single_condition_data]}
             logger.info(f"Rule '{rule.get('name')}' condition converted from single to compound. Original single: {current_single_condition_data}")
 
         self._set_dirty_status(True)
-        self.selected_sub_condition_index = None  # Reset sub-condition selection
-
-        # Re-render the details for the rule
+        self.selected_sub_condition_index = None
         self.details_panel_instance.update_display(copy.deepcopy(rule), "rule")
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    # Ensure APP_ENV is set for logging_setup if it's called implicitly by other modules
-    if "APP_ENV" not in os.environ:
-        os.environ["APP_ENV"] = "development"
-
-    ctk.set_appearance_mode("System")  # or "Light", "Dark"
-    ctk.set_default_color_theme("blue")  # or "green", "dark-blue"
-
-    app = MainAppWindow()
-    app.mainloop()
