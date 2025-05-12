@@ -1,13 +1,14 @@
 import logging
 import os
 import re
-from typing import Dict, List, Any, Optional, Tuple, Set, Callable  # <--- IMPORT Callable HERE
+from typing import Dict, List, Any, Optional, Tuple, Set, Callable
 from collections import defaultdict
 
 import cv2
 import numpy as np
 
 from py_pixel_bot.core.config_manager import ConfigManager
+from py_pixel_bot.core.logging_setup import APP_ROOT_LOGGER_NAME  # <--- IMPORT HERE
 from py_pixel_bot.engines.analysis_engine import AnalysisEngine
 from py_pixel_bot.engines.action_executor import ActionExecutor
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Regex to find placeholders like {var_name} or {var_name.key} or {var_name.key.subkey}
 PLACEHOLDER_REGEX = re.compile(r"\{([\w_]+)((\.[\w_]+)*)\}")
-APP_ROOT_LOGGER_NAME = "py_pixel_bot"  # Consistent with logging_setup
+# APP_ROOT_LOGGER_NAME = "py_pixel_bot" # Removed local definition
 
 
 class RulesEngine:
@@ -37,7 +38,7 @@ class RulesEngine:
         self.analysis_engine = analysis_engine
         self.action_executor = action_executor
         self.profile_data = self.config_manager.get_profile_data()
-        self.rules: List[Dict[str, Any]] = self.profile_data.get("rules", [])  # Ensure type hint
+        self.rules: List[Dict[str, Any]] = self.profile_data.get("rules", [])
         self._loaded_templates: Dict[Tuple[str, str], Optional[np.ndarray]] = {}
         self._last_template_match_info: Dict[str, Any] = {}
 
@@ -48,14 +49,9 @@ class RulesEngine:
             logger.warning("No rules found in the loaded profile.")
         else:
             logger.info(f"RulesEngine initialized with {len(self.rules)} rules.")
-            # Ensure dict() is used if defaultdict is logged for cleaner output.
             logger.debug(f"Determined analysis requirements: {dict(self._analysis_requirements_per_region)}")
 
     def _parse_rule_analysis_dependencies(self):
-        """
-        Parses all rules to determine which general analyses are required for each region.
-        Populates self._analysis_requirements_per_region.
-        """
         logger.debug("RulesEngine: Parsing rule analysis dependencies...")
         if not self.rules:
             logger.debug("RulesEngine: No rules to parse for analysis dependencies.")
@@ -63,7 +59,7 @@ class RulesEngine:
 
         for i, rule in enumerate(self.rules):
             rule_name = rule.get("name", f"UnnamedRule_idx{i}")
-            default_rule_region = rule.get("region")  # This is the rule's top-level region
+            default_rule_region = rule.get("region")
             condition_spec = rule.get("condition")
 
             if not condition_spec or not isinstance(condition_spec, dict):
@@ -72,25 +68,20 @@ class RulesEngine:
 
             conditions_to_evaluate_for_deps: List[Tuple[Dict[str, Any], Optional[str], str]] = []
 
-            # Check for compound condition structure first
             if "logical_operator" in condition_spec and "sub_conditions" in condition_spec and isinstance(condition_spec["sub_conditions"], list):
                 logger.debug(f"Rule '{rule_name}': Is compound. Parsing sub-conditions for dependencies.")
                 for sub_idx, sub_cond_spec in enumerate(condition_spec["sub_conditions"]):
                     if not isinstance(sub_cond_spec, dict):
                         logger.warning(f"Rule '{rule_name}/Sub#{sub_idx+1}': Invalid sub-condition spec (not a dict). Skipping.")
                         continue
-                    # A sub-condition uses its own "region" key if present, otherwise rule's default region
                     sub_cond_region = sub_cond_spec.get("region", default_rule_region)
-                    if sub_cond_region:  # Region must be defined for dependency to be meaningful
+                    if sub_cond_region:
                         conditions_to_evaluate_for_deps.append((sub_cond_spec, sub_cond_region, f"{rule_name}/Sub#{sub_idx+1}"))
                     else:
-                        # If a sub-condition has no region and the rule has no default region, it's problematic.
-                        # However, some conditions like 'always_true' might not need a region.
-                        # For dependency parsing, we only care if a specific analysis *on a region* is needed.
                         logger.debug(f"Rule '{rule_name}/Sub#{sub_idx+1}': No explicit or default region. Type: '{sub_cond_spec.get('type')}'. No region-specific dependency added.")
-            else:  # Single condition structure
+            else:
                 logger.debug(f"Rule '{rule_name}': Is single condition. Parsing for dependencies.")
-                if default_rule_region:  # Single condition needs a region for most analysis types
+                if default_rule_region:
                     conditions_to_evaluate_for_deps.append((condition_spec, default_rule_region, rule_name))
                 else:
                     logger.debug(f"Rule '{rule_name}' (single): No default region specified. Type: '{condition_spec.get('type')}'. No region-specific dependency added.")
@@ -98,36 +89,29 @@ class RulesEngine:
             for cond_spec_item, region_name_item, cond_ctx_name_item in conditions_to_evaluate_for_deps:
                 cond_type = cond_spec_item.get("type")
                 required_analysis: Optional[str] = None
-
                 if cond_type == "ocr_contains_text":
                     required_analysis = "ocr"
                 elif cond_type == "dominant_color_matches":
                     required_analysis = "dominant_color"
                 elif cond_type == "average_color_is":
                     required_analysis = "average_color"
-                # "pixel_color" & "template_match_found" are on-demand by RulesEngine, not pre-emptive by MainController.
-                # "always_true" requires no pre-emptive analysis.
 
-                if required_analysis and region_name_item:  # Must have a region to associate with
+                if required_analysis and region_name_item:
                     self._analysis_requirements_per_region[region_name_item].add(required_analysis)
                     logger.debug(f"Dependency parser: Condition '{cond_ctx_name_item}' (type: {cond_type}) in region '{region_name_item}' " f"requires pre-emptive analysis: '{required_analysis}'.")
         logger.info(f"RulesEngine: Analysis dependency parsing complete. Requirements determined: {dict(self._analysis_requirements_per_region)}")
 
     def get_analysis_requirements_for_region(self, region_name: str) -> Set[str]:
-        """
-        Returns the set of required general analysis types (e.g., "ocr", "dominant_color")
-        for the given region_name based on pre-parsed rule dependencies.
-        """
         reqs = self._analysis_requirements_per_region.get(region_name, set())
         logger.debug(f"Queried analysis requirements for region '{region_name}': {reqs}")
         return reqs
 
     def _load_template_image_for_rule(self, template_filename: str, rule_name_for_context: str) -> Optional[np.ndarray]:
         profile_base_path = self.config_manager.get_profile_base_path()
-        if not profile_base_path:  # Should not happen if profile is loaded/saved
+        if not profile_base_path:
             logger.error(f"Rule '{rule_name_for_context}': Cannot load template '{template_filename}', profile base path is unknown (profile likely unsaved).")
             return None
-        cache_key = (profile_base_path, template_filename)  # Unique key using base path
+        cache_key = (profile_base_path, template_filename)
         if cache_key in self._loaded_templates:
             logger.debug(f"Rule '{rule_name_for_context}': Using cached template '{template_filename}' from profile '{os.path.basename(profile_base_path)}'.")
             return self._loaded_templates[cache_key]
@@ -139,7 +123,7 @@ class RulesEngine:
                 logger.error(f"Rule '{rule_name_for_context}': Template image file not found at '{template_full_path}'.")
                 self._loaded_templates[cache_key] = None
                 return None
-            template_image = cv2.imread(template_full_path, cv2.IMREAD_COLOR)  # Load as BGR
+            template_image = cv2.imread(template_full_path, cv2.IMREAD_COLOR)
             if template_image is None:
                 logger.error(f"Rule '{rule_name_for_context}': Failed to load template (cv2.imread returned None) from '{template_full_path}'. File might be corrupted or unsupported format.")
                 self._loaded_templates[cache_key] = None
@@ -155,21 +139,21 @@ class RulesEngine:
     def _substitute_variables(self, input_value: Any, variable_context: Dict[str, Any], rule_name_for_context: str) -> Any:
         if isinstance(input_value, str):
 
-            def replace_match(match_obj: re.Match) -> str:  # Explicit type for match_obj
+            def replace_match(match_obj: re.Match) -> str:
                 full_placeholder = match_obj.group(0)
                 var_name = match_obj.group(1)
-                dot_path_str = match_obj.group(2)  # e.g., ".key.subkey" or empty if no path
+                dot_path_str = match_obj.group(2)
                 logger.debug(f"Rule '{rule_name_for_context}', Substitution: Found placeholder '{full_placeholder}'. Var: '{var_name}', Path: '{dot_path_str}'")
                 if var_name in variable_context:
                     current_value = variable_context[var_name]
-                    if dot_path_str:  # Accessing keys in a dictionary
+                    if dot_path_str:
                         keys = dot_path_str.strip(".").split(".")
                         try:
                             for key_part in keys:
                                 if isinstance(current_value, dict):
                                     current_value = current_value[key_part]
                                 elif isinstance(current_value, list) and key_part.isdigit():
-                                    current_value = current_value[int(key_part)]  # Basic list index access
+                                    current_value = current_value[int(key_part)]
                                 else:
                                     logger.warning(
                                         f"R '{rule_name_for_context}', Subst: Cannot access key '{key_part}' in non-dict/list or invalid index for var '{var_name}'. Placeholder '{full_placeholder}' left."
@@ -210,11 +194,10 @@ class RulesEngine:
             return False
         logger.debug(f"R '{rule_name_for_context}', Rgn '{region_name}': Eval single cond type '{condition_type}'. Spec: {single_condition_spec}")
 
-        captured_image = region_data.get("image")  # This is always present if region was processed by MainController
+        captured_image = region_data.get("image")
         condition_met = False
         captured_value_for_var = None
 
-        # Fallback helper
         def get_analysis_data_with_fallback(data_key: str, analysis_func: Callable, *args_for_analysis_func) -> Any:
             data = region_data.get(data_key)
             if data is None and captured_image is not None:
@@ -233,7 +216,6 @@ class RulesEngine:
                 if captured_image is None:
                     logger.warning(f"R '{rule_name_for_context}', T 'pixel_color': Image is None.")
                     return False
-                # ... (validation of params, then call self.analysis_engine.analyze_pixel_color - same as before) ...
                 rx = single_condition_spec.get("relative_x")
                 ry = single_condition_spec.get("relative_y")
                 ebgr = single_condition_spec.get("expected_bgr")
@@ -247,7 +229,6 @@ class RulesEngine:
                 avg_color_data = get_analysis_data_with_fallback("average_color", self.analysis_engine.analyze_average_color, captured_image)
                 if avg_color_data is None:
                     return False
-                # ... (rest of average_color_is logic - same as before) ...
                 ebgr = single_condition_spec.get("expected_bgr")
                 tol = single_condition_spec.get("tolerance", 10)
                 if not (isinstance(ebgr, list) and len(ebgr) == 3 and all(isinstance(c, int) for c in ebgr)):
@@ -261,7 +242,6 @@ class RulesEngine:
                 if captured_image is None:
                     logger.warning(f"R '{rule_name_for_context}', T 'template': Image is None.")
                     return False
-                # ... (rest of template_match_found, including capture - same as before) ...
                 tpl_fn = single_condition_spec.get("template_filename")
                 min_conf = single_condition_spec.get("min_confidence", 0.8)
                 if not tpl_fn:
@@ -291,8 +271,7 @@ class RulesEngine:
             elif condition_type == "ocr_contains_text":
                 ocr_res = get_analysis_data_with_fallback("ocr_analysis_result", self.analysis_engine.ocr_extract_text, captured_image, region_name)
                 if not ocr_res or "text" not in ocr_res:
-                    return False  # If no text after fallback, condition fails
-                # ... (rest of ocr_contains_text, including capture - same as before) ...
+                    return False
                 actual_txt = ocr_res.get("text", "")
                 actual_conf = ocr_res.get("average_confidence", 0.0)
                 txt_find = single_condition_spec.get("text_to_find")
@@ -319,22 +298,17 @@ class RulesEngine:
                     condition_met = True
                     logger.info(f"R '{rule_name_for_context}',OCR:MET. Text '{txt_find}' found (Conf:{actual_conf:.1f}%).")
                 if capture_as_var_name and condition_met:
-                    captured_value_for_var = actual_txt  # Capture full text if all criteria met
+                    captured_value_for_var = actual_txt
                 else:
                     condition_met = False
                     logger.info(f"R '{rule_name_for_context}',OCR:NOT MET. Text found, but conf {actual_conf:.1f}% < {min_ocr_conf}%.")
 
             elif condition_type == "dominant_color_matches":
                 dom_color_res = get_analysis_data_with_fallback(
-                    "dominant_colors_result",
-                    self.analysis_engine.analyze_dominant_colors,
-                    captured_image,
-                    self.config_manager.get_setting("analysis_dominant_colors_k", 3),
-                    region_name,  # Get K from settings
+                    "dominant_colors_result", self.analysis_engine.analyze_dominant_colors, captured_image, self.config_manager.get_setting("analysis_dominant_colors_k", 3), region_name
                 )
                 if not dom_color_res:
-                    return False  # If no dominant colors after fallback
-                # ... (rest of dominant_color_matches - same as before) ...
+                    return False
                 ebgr = single_condition_spec.get("expected_bgr")
                 tol = single_condition_spec.get("tolerance", 10)
                 top_n = single_condition_spec.get("check_top_n_dominant", 1)
@@ -343,7 +317,6 @@ class RulesEngine:
                     logger.error(f"R '{rule_name_for_context}',T DomColor:Missing expected_bgr.")
                     return False
                 n_check = min(top_n, len(dom_color_res))
-
                 if n_check == 0 and top_n > 0:
                     logger.debug(f"R '{rule_name_for_context}',T DomColor:No dom colors to check.")
                     return False
@@ -378,13 +351,12 @@ class RulesEngine:
             logger.exception(f"R '{rule_name_for_context}', Rgn '{region_name}', T '{condition_type}': Exception: {e}")
             return False
 
-        # Final log for this single condition's outcome
         logger.info(f"R '{rule_name_for_context}', Rgn '{region_name}', SingleCond '{condition_type}': Result = {condition_met}")
         return condition_met
 
     def _check_condition(
         self, rule_name: str, condition_spec: Dict[str, Any], default_rule_region: Optional[str], all_region_data: Dict[str, Dict[str, Any]], variable_context: Dict[str, Any]
-    ) -> bool:  # (Logic for handling compound/single and substitution remains same)
+    ) -> bool:
         logger.debug(f"R '{rule_name}': Start cond eval. Orig Spec: {condition_spec}")
         logical_operator_str = condition_spec.get("logical_operator")
         sub_conditions_original = condition_spec.get("sub_conditions")
@@ -413,7 +385,6 @@ class RulesEngine:
                 else:
                     target_region_data = all_region_data[sub_cond_region_name]
                     sub_result = self._evaluate_single_condition_logic(sub_cond_spec_subst, sub_cond_region_name, target_region_data, ctx_name, variable_context)
-                # Result of sub_result is logged by _evaluate_single_condition_logic itself now.
                 all_sub_results.append(sub_result)
                 if operator == "AND" and not sub_result:
                     logger.info(f"R '{rule_name}': AND short-circuited False by Sub#{i+1}.")
@@ -426,10 +397,10 @@ class RulesEngine:
             elif operator == "OR":
                 final_res = any(all_sub_results)
             else:
-                final_res = False  # Should not happen
+                final_res = False
             logger.info(f"R '{rule_name}': Compound cond final result = {final_res}.")
             return final_res
-        else:  # Single condition
+        else:
             condition_spec_subst = self._substitute_variables(condition_spec, variable_context, rule_name)
             logger.debug(f"R '{rule_name}': Subst single cond spec: {condition_spec_subst}")
             if not default_rule_region:
@@ -440,7 +411,6 @@ class RulesEngine:
                 return False
             target_region_data = all_region_data[default_rule_region]
             result = self._evaluate_single_condition_logic(condition_spec_subst, default_rule_region, target_region_data, rule_name, variable_context)
-            # Result already logged by _evaluate_single_condition_logic
             return result
 
     def evaluate_rules(self, all_region_data: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -462,7 +432,7 @@ class RulesEngine:
             logger.debug(f"Evaluating rule: '{rule_name}' with default region '{default_rule_region}'")
             try:
                 condition_is_met = self._check_condition(rule_name, original_condition_spec, default_rule_region, all_region_data, rule_variable_context)
-                if condition_is_met:  # Overall condition result already logged by _check_condition or its delegates
+                if condition_is_met:
                     logger.info(f"R '{rule_name}': Overall Condition MET. Preparing action: {original_action_spec.get('type')}")
                     logger.debug(f"R '{rule_name}', Action Prep: Orig action spec: {original_action_spec}. Variables: {rule_variable_context}")
                     action_spec_subst = self._substitute_variables(original_action_spec, rule_variable_context, f"{rule_name}/Action")
@@ -473,7 +443,7 @@ class RulesEngine:
                         "last_match_info": self._last_template_match_info.copy(),
                         "variables": rule_variable_context.copy(),
                     }
-                    action_target_region_name = action_spec_subst.get("target_region", default_rule_region)  # Use substituted spec
+                    action_target_region_name = action_spec_subst.get("target_region", default_rule_region)
                     if action_target_region_name:
                         action_context["target_region_config"] = self.config_manager.get_region_config(action_target_region_name)
                         if not action_context["target_region_config"]:
@@ -482,7 +452,6 @@ class RulesEngine:
                     full_action_to_execute = {**action_spec_subst, "context": action_context}
                     triggered_actions_specs.append(full_action_to_execute)
                     self.action_executor.execute_action(full_action_to_execute)
-                # else: Overall condition NOT MET already logged by _check_condition or its delegates.
             except Exception as e:
                 logger.exception(f"R '{rule_name}': Unexpected error during rule eval/action prep: {e}")
         logger.info(f"Finished rule evaluation. {len(triggered_actions_specs)} actions were triggered in this cycle.")
