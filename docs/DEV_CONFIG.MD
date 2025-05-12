@@ -2,7 +2,7 @@
 
 # Development Configuration & Choices
 
-This document outlines key development choices, current phase settings, and environment setup for the project.
+This document outlines key development choices, current phase settings, and environment setup for the project. **It reflects the shift towards v4.0.0 (Gemini-Powered Visual Intelligence).**
 
 ## 1. Core Project Setup
 *   **Language:** Python
@@ -38,7 +38,7 @@ This document outlines key development choices, current phase settings, and envi
     *   Add basic GUI support in `MainAppWindow`/`DetailsPanel` for configuring `gemini_vision_query` conditions.
     *   Update all relevant documentation (ADRs, Technical Design, Requirements, NFRs, Roadmap).
 *   **Testing Strategy for Active Version (and towards v4.0.0):**
-    *   **Unit Tests:** Deferred until core components are more stable, or upon explicit DevLead enablement. **Testing `GeminiAnalyzer` will likely require mocking the external API.**
+    *   **Unit Tests:** Deferred until core components are more stable, or upon explicit DevLead enablement. **Testing `GeminiAnalyzer` will likely require mocking the external `google-generativeai` API.**
         *   **Status:** `Pending DevLead Enablement`
     *   **Integration Tests:** Manual, focused on end-to-end scenarios for the target version features. Log outputs are crucial. GUI interactions (creating/editing profiles with Gemini conditions) will be tested manually by DevLead. **Requires a valid `GEMINI_API_KEY` in `.env` for testing Gemini features.**
 *   **Linting/Formatting Setup:**
@@ -49,7 +49,7 @@ This document outlines key development choices, current phase settings, and envi
 ## 3. Architectural & Design Approach
 *   **Overall Architectural Style:** Modular (Capture, Analysis, Action, Rules, Gemini engines, UI). Approved ADRs are foundational.
     *   *Details in `TECHNICAL_DESIGN.MD`.*
-*   **Logging Strategy:** Comprehensive and persistent logging using Python's `logging` module (per ADR-007).
+*   **Logging Strategy:** Comprehensive and persistent logging using Python's `logging` module (per ADR-007). **v4.0.0: Logging must include details of Gemini API interactions.**
 *   **Code Design Principles:** Readability, Simplicity, Modularity, Testability, Diagnosability (via logs). Adherence to Black/Flake8.
 
 ## 4. Tooling Choices (Key Tools - per ADRs)
@@ -82,7 +82,7 @@ This document outlines key development choices, current phase settings, and envi
         *   **Status:** `Pending DevLead Update for v3.0.0 content`
     *   **`CONTRIBUTING.MD`:** Deferred.
         *   **Status:** `Pending DevLead Enablement`
-    *   **Core Docs:** Established, updated iteratively. `ADR-008` added for v4.0.0. `AI_INSTRUCTIONS.MD` is primary AI guide.
+    *   **Core Docs:** Established, updated iteratively. `ADR-008` added for v4.0.0. `AI_INSTRUCTIONS.MD` updated for v4.0.0. `TECHNICAL_DESIGN.MD`, Requirements, NFRs updated for v4.0.0.
 *   **README.md (Project Root):** Needs updates for v3.0.0 (GUI) and **v4.0.0 (Gemini)** features once stable.
 
 ## 7. Development Environment
