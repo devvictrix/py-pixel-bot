@@ -1,302 +1,398 @@
+// File: docs/TECHNICAL_DESIGN.MD
+
 # Technical Design Document
 
-This document outlines the technical design and architectural considerations for the visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status. As of the last update, AI-Accelerated v1.0.0 and v2.0.0 (Advanced Visual Analysis & Rules) are complete. Development for v3.0.0 (Enhanced GUI & Usability) is now underway, with Phase 1.8.1 (GUI Input Validation & Refinements) of the Full GUI being the current focus.
+This document outlines the technical design and architectural considerations for the visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status. As of the last update, v1.0.0 and v2.0.0 are complete. Development for v3.0.0 (Enhanced GUI & Usability) is concluded. The current focus is **v4.0.0 (Gemini-Powered Visual Intelligence)**, as detailed in ADR-008.
 
 ## 1. Core Architecture
 
 The tool is modular, comprising several key Python components, all residing within the main `py_pixel_bot` package located at the project root:
 
-*   **`core.config_manager` Module:**
-    *   `load_environment_variables()` function: Called at application startup to load `.env` (containing `APP_ENV`) using `python-dotenv` (per ADR-007).
-    *   `ConfigManager` class: Responsible for loading, validating (basic structure), providing access to, and saving bot profiles (JSON files from the `profiles/` directory, per ADR-003). It also provides the base path for profile-related assets like templates.
-    *   **Utilized by the `MainAppWindow` (GUI) for loading, saving, and path resolution for profiles and associated template images.**
-*   **`core.logging_setup` Module:**
-    *   `setup_logging()` function: Called after environment variables are loaded. Initializes Python's `logging` system based on `APP_ENV`, configuring handlers (console, date-stamped rotating file), formatters, and log levels (per ADR-007). CLI flags can override console log level.
-*   **`engines.capture_engine.CaptureEngine` Class:**
-    *   Responsible for capturing image data from specified screen regions using `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` for Windows capture (per ADR-001).
-    *   Converts captured Pillow Image objects to OpenCV BGR NumPy arrays for consistent use by the `AnalysisEngine`.
-*   **`engines.analysis_engine.AnalysisEngine` Class:**
-    *   Performs various analyses on captured image regions (NumPy BGR arrays).
-    *   Provides methods for:
-        *   Pixel color analysis (`analyze_pixel_color`).
-        *   Average color calculation (`analyze_average_color`).
-        *   Template matching (`match_template`) using OpenCV (per ADR-001).
-        *   OCR text extraction (`ocr_extract_text`) using `pytesseract`, returning a dictionary with extracted `text` and an `average_confidence` score.
-        *   Dominant color analysis (`analyze_dominant_colors`) using k-means clustering, returning a list of dominant BGR colors and their pixel percentages.
-*   **`engines.rules_engine.RulesEngine` Class:**
-    *   Evaluates rules based on analysis results.
-    *   Supports single conditions, compound conditions (AND/OR logic per ADR-004), and rule-scoped variable capture and substitution.
-    *   Upon initialization (`__init__`): Pre-parses all rules in the loaded profile to determine the specific types of general analyses (e.g., "ocr", "dominant_color", "average_color") required for each region. This information is stored in `_analysis_requirements_per_region`.
-    *   Provides `get_analysis_requirements_for_region()` for `MainController` to enable selective analysis.
-    *   Retrieves rules from `ConfigManager` (via profile data).
-    *   Uses analysis results (which may be selectively populated by `MainController`) from the `all_region_data` packet. Includes fallbacks to attempt on-demand calculation for certain analysis types if pre-analyzed data is unexpectedly missing but the raw image is available.
-    *   Triggers actions via `ActionExecutor`.
-*   **`engines.action_executor.ActionExecutor` Class:**
-    *   Simulates mouse and keyboard actions using `pyautogui` (per ADR-002).
-    *   Calculates target coordinates for actions based on various `target_relation` types.
-    *   Handles type conversion (e.g., string to int/float) for action parameters that may have been substituted from string variables, with appropriate validation and logging.
-*   **`main_controller.MainController` Class:** (Located in `py_pixel_bot/main_controller.py`)
-    *   Orchestrates the main bot operation loop for runtime execution.
-    *   Runs the monitoring loop in a separate thread (per ADR-006) using `threading.Event` for graceful shutdown.
-    *   For each monitored region in a profile:
-        *   Instructs `CaptureEngine` to capture the image (always performed).
-        *   Queries the `RulesEngine` instance (via `get_analysis_requirements_for_region`) to get the set of required general analyses for the current region.
-        *   Conditionally instructs `AnalysisEngine` to perform *only* those required general analyses.
-        *   Collects available analysis results (and the captured image) into a data packet for that region.
-    *   Passes the dictionary of all region data packets to `RulesEngine.evaluate_rules()`.
-*   **`ui.cli` Module:**
-    *   Provides the Command-Line Interface using `argparse` (per ADR-005).
-    *   Handles subcommands: `run <profile>`, `add-region <profile>`, and `edit [profile]`.
-*   **`ui.gui.region_selector.RegionSelectorWindow` Class:**
-    *   A `CustomTkinter.CTkToplevel` window for graphically selecting screen regions. Used by the `add-region` CLI command and integrated into the `MainAppWindow` for adding/editing region coordinates.
-*   **`ui.gui.main_app_window.MainAppWindow` Class (v3.0.0):**
-    *   The main application window (`CustomTkinter.CTk`) for the full GUI profile editor.
-    *   Responsible for the overall layout, menu operations (File: New, Open, Save, etc.), and managing the lifecycle of profile data (loading from/saving to JSON via `ConfigManager`).
-    *   Contains UI panels for editing profile settings, regions, templates (including file management and image previews), and rules.
-    *   Rule editing UI supports: editing name/default region; converting condition structure (single/compound); selecting condition/action types; dynamically rendering and editing parameters for selected types (including for sub-conditions); adding/removing sub-conditions.
-    *   Implements input validation for all editable fields with user feedback via message boxes.
-    *   Manages an "unsaved changes" (dirty) state.
-*   **`py_pixel_bot/__main__.py`:**
-    *   The main application entry point when running as a module (`python -m py_pixel_bot`). The `py_pixel_bot` directory (at the project root) must be discoverable by Python (e.g., by running the command from the project root).
-    *   Loads environment variables via `py_pixel_bot.core.config_manager.load_environment_variables()` (or equivalent relative import like `from .core.config_manager import ...`).
-    *   Sets up logging via `py_pixel_bot.core.logging_setup.setup_logging()`.
-    *   Parses CLI arguments using `py_pixel_bot.ui.cli.create_parser()`.
-    *   Adjusts console logging verbosity based on CLI flags.
-    *   Dispatches to the appropriate command handler function in `py_pixel_bot.ui.cli` (e.g., `handle_run` starts `MainController`, `handle_edit` starts `MainAppWindow`).
+- **`core.config_manager` Module:**
+  - `load_environment_variables()` function: Called at application startup to load `.env` (containing `APP_ENV` and **`GEMINI_API_KEY` for v4.0.0+**) using `python-dotenv` (per ADR-007, ADR-008).
+  - `ConfigManager` class: Responsible for loading, validating (basic structure), providing access to, and saving bot profiles (JSON files from the `profiles/` directory, per ADR-003). It also provides the base path for profile-related assets like templates.
+  - **Utilized by the `MainAppWindow` (GUI) for loading, saving, and path resolution for profiles and associated template images.**
+- **`core.logging_setup` Module:**
+  - `setup_logging()` function: Called after environment variables are loaded. Initializes Python's `logging` system based on `APP_ENV`, configuring handlers (console, date-stamped rotating file), formatters, and log levels (per ADR-007). CLI flags can override console log level.
+- **`engines.capture_engine.CaptureEngine` Class:**
+  - Responsible for capturing image data from specified screen regions using `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` for Windows capture (per ADR-001).
+  - Converts captured Pillow Image objects to OpenCV BGR NumPy arrays for consistent use by the `AnalysisEngine` and `GeminiAnalyzer`.
+- **`engines.analysis_engine.AnalysisEngine` Class:**
+  - Performs various **local** visual analyses on captured image regions (NumPy BGR arrays).
+  - Provides methods for:
+    - Pixel color analysis (`analyze_pixel_color`).
+    - Average color calculation (`analyze_average_color`).
+    - Template matching (`match_template`) using OpenCV (per ADR-001).
+    - OCR text extraction (`ocr_extract_text`) using `pytesseract`, returning a dictionary with extracted `text` and an `average_confidence` score.
+    - Dominant color analysis (`analyze_dominant_colors`) using k-means clustering.
+- **`engines.gemini_analyzer.GeminiAnalyzer` Class (NEW - for v4.0.0+):**
+  - **Responsibility:** Handles all communication with the Google Gemini API for advanced visual understanding (per ADR-008).
+  - **Initialization:** Takes API key (from `.env` via `ConfigManager`) and optional default model name.
+  - **Key Methods:** Provides `query_vision_model(image_data, prompt, [model_name])` which sends image/prompt to the API and returns a structured response (including parsed text/JSON and status/error info).
+  - **Configuration:** API key loaded from `.env`. Default model configurable via profile settings (`settings.gemini_default_model_name`).
+  - **Logging:** Comprehensive logging of API interactions, errors, and latency.
+  - _Details in Section 10._
+- **`engines.rules_engine.RulesEngine` Class:**
+  - Evaluates rules based on analysis results (from `AnalysisEngine` for local checks, or from **`GeminiAnalyzer` for Gemini-powered checks**).
+  - Supports single conditions, compound conditions (AND/OR logic per ADR-004), and rule-scoped variable capture and substitution.
+  - **Initialization (`__init__`):**
+    - Pre-parses rules to build `_analysis_requirements_per_region` for **local** analyses (OCR, dominant color, average color). `gemini_vision_query` conditions (v4.0.0+) do **not** add to these local pre-emptive requirements.
+    - **Instantiates or receives an instance of `GeminiAnalyzer` (for v4.0.0+).**
+  - **`_evaluate_single_condition_logic(...)` (Updated for v4.0.0):**
+    - Handles existing local condition types.
+    - **For `gemini_vision_query` type (v4.0.0+):**
+      - Retrieves the `captured_image` for the condition's target region.
+      - **Calls the `GeminiAnalyzer` with the image and prompt from the condition spec.**
+      - Evaluates Gemini's response based on `expected_response_contains` or `expected_response_json_path`/`expected_json_value`.
+      - Handles API call errors gracefully (condition evaluates to `False`, log error).
+      - If `capture_as` is defined, stores the relevant Gemini response (or part of it) in the `rule_variable_context`.
+- **`engines.action_executor.ActionExecutor` Class:**
+  - Simulates mouse and keyboard actions using `pyautogui` (per ADR-002).
+  - Calculates target coordinates for actions.
+  - **Enhancement for v4.0.0 (Phase 1 Stretch/Phase 2):** May be updated to handle a new `target_relation` like `center_of_gemini_identified_element`, requiring parsing of bounding box data (e.g., from a variable captured from a Gemini response).
+- **`main_controller.MainController` Class:** (Located in `py_pixel_bot/main_controller.py`)
+  - Orchestrates the main bot operation loop for runtime execution.
+  - Runs the monitoring loop in a separate thread (per ADR-006).
+  - For each monitored region in a profile:
+    - Instructs `CaptureEngine` to capture the image (always performed).
+    - Queries the `RulesEngine` instance (via `get_analysis_requirements_for_region`) to get the set of required **local** general analyses for the current region.
+    - Conditionally instructs `AnalysisEngine` to perform **only** those required local general analyses.
+    - Collects available local analysis results (and the captured image) into a data packet for that region.
+  - Passes the dictionary of all region data packets to `RulesEngine.evaluate_rules()`. (**Note:** Gemini API calls (`GeminiAnalyzer`) are **not** invoked by `MainController`; they are made on-demand by `RulesEngine` during its evaluation).
+- **`ui.cli` Module:**
+  - Provides the Command-Line Interface using `argparse` (per ADR-005).
+  - Handles subcommands: `run <profile>`, `add-region <profile>`, and `edit [profile]`.
+- **`ui.gui.region_selector.RegionSelectorWindow` Class:**
+  - Provides GUI for visually selecting screen regions.
+- **`ui.gui.main_app_window.MainAppWindow` Class (v3.0.0, with v4.0.0 updates):**
+  - The main application window (`CustomTkinter.CTk`) for the full GUI profile editor.
+  - **Updates for v4.0.0:**
+    - Will allow configuration of the new `gemini_vision_query` condition type and its parameters (prompt, response expectations, etc.) within the rule editor (DetailsPanel). See Section 11.
+    - Will include UI elements in settings to indicate Gemini API key status (e.g., "Configured" or "Not Configured") and allow setting a default Gemini model.
+- **`py_pixel_bot/__main__.py`:**
+  - Entry point for the application. Initializes core components (Env Vars, Logging, Config) and dispatches CLI commands.
 
 ## 2. Key Libraries & Justifications (Summary from ADRs)
-    *   Environment Management: `python-dotenv` (ADR-007)
-    *   Logging: Python `logging` module (ADR-007)
-    *   Screen Capture: `Pillow` (`ImageGrab` for Windows), `OpenCV-Python` (for conversion and potential alternatives) (ADR-001).
-    *   Image Processing & Analysis: `OpenCV-Python` (cv2), `NumPy`, `Pillow` (ADR-001).
-    *   OCR: `pytesseract` (ADR-001).
-    *   Input Simulation: `pyautogui` (ADR-002).
-    *   Configuration Storage: `json` (Python built-in) (ADR-003).
-    *   CLI Framework: `argparse` (Python built-in) (ADR-005).
-    *   GUI Framework: `CustomTkinter` (and its dependency `Pillow` for `CTkImage`) (ADR-005).
-    *   Concurrency (Bot Runtime): Python `threading` module (ADR-006).
+
+-   **Environment Management:** `python-dotenv` (ADR-007)
+-   **Logging:** Python `logging` module (ADR-007)
+-   **Screen Capture:** `Pillow` (`ImageGrab` for Windows), `OpenCV-Python` (for conversion and potential alternatives) (ADR-001).
+-   **Image Processing & Analysis (Local):** `OpenCV-Python` (cv2), `NumPy`, `Pillow` (ADR-001).
+-   **OCR (Local):** `pytesseract` (ADR-001).
+-   **Remote Advanced Visual Analysis (NEW for v4.0.0):** `google-generativeai` (Python SDK for Gemini) (ADR-008).
+-   **Input Simulation:** `pyautogui` (ADR-002).
+-   **Configuration Storage:** `json` (Python built-in) (ADR-003).
+-   **CLI Framework:** `argparse` (Python built-in) (ADR-005).
+-   **GUI Framework:** `CustomTkinter` (and its dependency `Pillow` for `CTkImage`) (ADR-005).
+-   **Concurrency (Bot Runtime):** Python `threading` module (ADR-006).
 
 ## 3. Defining and Capturing Regions
-    *   Regions are defined in the JSON profile with `name, x, y, width, height`.
-    *   The GUI (`MainAppWindow` using `RegionSelectorWindow`) allows users to define/edit these graphically.
-    *   `CaptureEngine.capture_region(region_spec)` uses `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` on Windows. The result (Pillow Image) is converted to an OpenCV BGR NumPy array.
+
+-   Regions are defined in the JSON profile with `name, x, y, width, height`.
+-   The GUI (`MainAppWindow` using `RegionSelectorWindow`) allows users to define/edit these graphically.
+-   `CaptureEngine.capture_region(region_spec)` uses `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` on Windows. The result (Pillow Image) is converted to an OpenCV BGR NumPy array.
+-   **This captured BGR image is then available for both local analysis by `AnalysisEngine` and remote analysis by `GeminiAnalyzer`.**
 
 ## 4. "Reading" from the Region - Analysis Strategies
-1.  **Selective General Pre-emptive Analysis (by `MainController`):**
-    *   `RulesEngine.__init__` pre-parses rules, creating `_analysis_requirements_per_region: Dict[region_name, Set[analysis_type_str]]` (e.g., `{"ocr", "dominant_color", "average_color"}`).
-    *   In each cycle, `MainController` calls `rules_engine.get_analysis_requirements_for_region(region_name)`.
-    *   Based on the returned set, `MainController` selectively calls `AnalysisEngine` methods (`analyze_ocr_text`, `analyze_dominant_colors`, `analyze_average_color`) only for required analyses on the `captured_image`.
-    *   Results are stored in the `all_region_data` packet (e.g., as `ocr_analysis_result`, `dominant_colors_result`, `average_color`). If an analysis is skipped, its key might be absent or its value `None`.
-2.  **On-Demand Analysis (by `RulesEngine`):**
-    *   Conditions like `pixel_color` and `template_match_found` are evaluated directly by `RulesEngine._evaluate_single_condition_logic` using the `captured_image` from the `all_region_data` packet. These do not rely on pre-emptive analysis flags.
-    *   `RulesEngine` includes fallback logic: if a pre-emptive analysis result (e.g., OCR text) is needed by a rule but was not provided by `MainController` (perhaps due to selective skipping), the `RulesEngine` will attempt an on-demand calculation if the `captured_image` is available. This is logged as a warning.
+
+1.  **Local Selective Pre-emptive Analysis (by `MainController` via `AnalysisEngine`):**
+    -   `RulesEngine.__init__` pre-parses rules, creating `_analysis_requirements_per_region: Dict[region_name, Set[analysis_type_str]]` (e.g., `{"ocr", "dominant_color", "average_color"}`) for **local** analysis types that benefit from being run once per cycle if needed by any rule.
+    -   In each cycle, `MainController` calls `rules_engine.get_analysis_requirements_for_region(region_name)`.
+    -   Based on the returned set, `MainController` selectively calls `AnalysisEngine` methods (`analyze_ocr_text`, `analyze_dominant_colors`, `analyze_average_color`) **only** for required local analyses on the `captured_image`.
+    -   Results are stored in the `all_region_data` packet for use by `RulesEngine`.
+2.  **Local On-Demand Analysis (by `RulesEngine` via `AnalysisEngine`):**
+    -   Conditions like `pixel_color` and `template_match_found` are evaluated directly by `RulesEngine._evaluate_single_condition_logic` using the `captured_image` from the `all_region_data` packet. These analyses are typically specific to the parameters of the condition being evaluated.
+    -   `RulesEngine` includes fallback logic for local pre-emptive analyses if data is missing from the packet but the image is available (though this should be rare with the selective pre-emptive strategy).
+3.  **Remote On-Demand Analysis (NEW - by `RulesEngine` via `GeminiAnalyzer` - for v4.0.0):**
+    -   When a `gemini_vision_query` condition is evaluated by `RulesEngine._evaluate_single_condition_logic`:
+        -   The `captured_image` for the target region is retrieved from the `all_region_data` packet.
+        -   `RulesEngine` calls `GeminiAnalyzer.query_vision_model()` with this image and the prompt specified in the rule's condition parameters.
+        -   The response from `GeminiAnalyzer` (e.g., text description, JSON data, error status) is then processed by `RulesEngine` to determine if the condition is met and to capture any specified variables.
+    -   This is **"on-demand"** as costly and potentially slow Gemini API calls are made **only** when a rule specifically requiring Gemini analysis is being evaluated in the current cycle.
 
 ## 5. Rules Engine & Evaluation
-    (This section describes the JSON rule structure and `RulesEngine`'s processing logic, including single/compound conditions, variable handling, and parameter evaluation.)
 
-### 5.1. Rule Structure in JSON Profiles
-    (Profiles store a list of rule objects. Each rule has `name`, optional default `region`, a `condition` object, and an `action` object.)
-*   **Condition Object:**
-    *   **Single Condition:** `{"type": "condition_name", "param1": value1, ...}`. May include `"capture_as": "var_name"`.
-    *   **Compound Condition:** `{"logical_operator": "AND" | "OR", "sub_conditions": [list_of_single_condition_objects]}`.
-*   **Action Object:** `{"type": "action_name", "param1": value1, ...}`. Parameters can contain placeholders like `{var_name}` or `{var_name.key}` for variable substitution.
-*   Specific parameters for each condition type (e.g., `ocr_contains_text` has `text_to_find`, `case_sensitive`, `min_ocr_confidence`, `capture_as`) and action type (e.g., `click` has `target_relation`, `x`, `y`, `button`) are defined. The GUI provides editors for these.
+(This section describes the JSON rule structure and `RulesEngine`'s processing logic, including single/compound conditions, variable handling, parameter evaluation, and the new Gemini integration.)
 
-### 5.2. `RulesEngine` Evaluation Logic
-*   **Initialization (`__init__`):** Parses rules to build `_analysis_requirements_per_region`. Loads templates specified in the profile into `_loaded_templates` cache.
-*   **`evaluate_rules(all_region_data)`:**
-    *   Iterates through each rule from the profile.
-    *   For each rule, creates a new, empty `rule_variable_context: Dict[str, Any]`.
-    *   Resets `_last_template_match_info`.
-    *   Calls `_check_condition(rule_name, condition_spec, default_rule_region, all_region_data, rule_variable_context)`.
-*   **`_check_condition(...)`:**
-    *   Determines if the `condition_spec` is single or compound.
-    *   **Variable Substitution (for sub-conditions):** If compound, before evaluating each `sub_condition_spec`, it's processed by `_substitute_variables` using the current `rule_variable_context`.
-    *   Calls `_evaluate_single_condition_logic(...)` for each actual condition check (either the main single condition or each sub-condition), passing the `rule_variable_context`.
-    *   For compound conditions, applies `logical_operator` with short-circuiting.
-*   **`_evaluate_single_condition_logic(...)`:**
-    *   Retrieves the `condition_type` and its parameters from the (potentially substituted) `single_condition_spec`.
-    *   Uses data from `region_data` (passed from `all_region_data`). If pre-analyzed data (like OCR results) is missing, it attempts an on-demand calculation using `AnalysisEngine` and the `captured_image` from `region_data` (logs a warning).
-    *   Performs the specific condition check (e.g., pixel color, template match, OCR text/confidence, dominant color).
-    *   If the condition is true AND `capture_as: "var_name"` is defined, it stores the relevant result (e.g., full OCR text, template match details dictionary) into the `rule_variable_context` under `"var_name"`.
-    *   Stores details of a successful template match in `self._last_template_match_info` for use by `center_of_last_match` action targeting.
-*   **Action Execution Trigger:** If `_check_condition` returns `True` for a rule:
-    *   The rule's `action_spec` is processed by `_substitute_variables` using the final `rule_variable_context`.
-    *   The (potentially modified) `action_spec_with_context` is passed to `ActionExecutor.execute_action()`.
+### 5.1. Rule Structure in JSON Profiles (Updates for v4.0.0)
+
+(Profiles store a list of rule objects. Each rule has `name`, optional default `region`, a `condition` object, and an `action` object.)
+
+-   **Condition Object:**
+    -   **Single Condition (Existing Local Types):** `{"type": "local_condition_name", "param1": value1, ...}`. May include `"capture_as": "var_name"`.
+    -   **Compound Condition (Existing Local Types):** `{"logical_operator": "AND" | "OR", "sub_conditions": [list_of_single_local_condition_objects]}`.
+    -   **NEW `gemini_vision_query` type (Single Condition Structure - for v4.0.0):**
+        ```json
+        {
+          "type": "gemini_vision_query",
+          "region": "optional_region_name_override", // Uses rule's default region if omitted
+          "prompt": "Describe this image in detail. Is there a prominent red button present? If so, describe its text.",
+          "expected_response_contains": ["red button", "submit"], // Optional: list of strings or single string. Checks text_content from Gemini.
+          // "expected_response_json_path": "elements[?(@.label=='button' && @.color=='red')].text", // Optional: JSONPath to query Gemini's json_content.
+          // "expected_json_value": "Proceed", // Optional: value expected at JSONPath. Requires careful type handling.
+          "case_sensitive_response_check": false, // Optional, defaults to false for 'expected_response_contains'
+          "capture_as": "gemini_analysis_result", // Optional: stores Gemini's text_content or JSONPath extracted value.
+          "model_name": "gemini-1.5-flash-latest" // Optional: overrides profile's default Gemini model for this query.
+        }
+        ```
+-   **Action Object:** `{"type": "action_name", "param1": value1, ...}`. Parameters can contain placeholders like `{var_name}` or `{var_name.key}` for variable substitution.
+    -   **Enhancement for v4.0.0 (Phase 1 Stretch/Phase 2):**
+        -   A potential new `target_relation` for click/mouse actions: `center_of_gemini_identified_element`.
+        -   Would require an associated parameter like `gemini_element_variable: "captured_button_info"`, where `captured_button_info` is a variable (from `capture_as` in a `gemini_vision_query` condition) expected to contain bounding box data (e.g., `{"box": [x,y,w,h], "label": "Confirm Button"}`). `ActionExecutor` would parse this.
+
+### 5.2. `RulesEngine` Evaluation Logic (Updates for v4.0.0)
+
+-   **Initialization (`__init__`):**
+    -   Parses rules to build `_analysis_requirements_per_region` (for **local** analyses only).
+    -   Loads templates into `_loaded_templates`.
+    -   **Instantiates `GeminiAnalyzer`** if Gemini features are to be supported, passing the API key (obtained via `ConfigManager`).
+-   **`evaluate_rules(all_region_data)`:** (Largely unchanged overall flow)
+-   **`_check_condition(...)`:** (Largely unchanged overall flow for single/compound logic)
+-   **`_evaluate_single_condition_logic(...)` (Key updates for v4.0.0):**
+    -   Handles existing local condition types (pixel_color, template_match, ocr_contains_text, etc.) by interacting with `AnalysisEngine` or directly using data from `all_region_data`.
+    -   **NEW for `gemini_vision_query` type:**
+        1.  Validates that necessary parameters (`prompt`) are present in `single_condition_spec`.
+        2.  Retrieves the `captured_image` for the target region from `region_data`. If no image, the condition fails.
+        3.  **Calls `self.gemini_analyzer.query_vision_model()`** with the image, prompt, and any specified `model_name`.
+        4.  If the `GeminiAnalyzer` call fails or returns an error status, the condition is marked as `False`, and the error is logged.
+        5.  If successful, evaluates the **structured response** from `GeminiAnalyzer`:
+            -   If `expected_response_contains` is specified, checks the `text_content` field.
+            -   If `expected_response_json_path` and `expected_json_value` are specified, attempts to parse `json_content` (if present), extract the value using the path, and compare it. (Requires careful error handling for JSON parsing and path extraction).
+            -   Sets `condition_met` accordingly.
+        6.  If `condition_met` is `True` AND `capture_as` is defined:
+            -   Stores the relevant data from Gemini's response (e.g., `text_content`, or the value extracted by JSONPath from `json_content`) into the `rule_variable_context` under the specified variable name. This makes Gemini's derived information available for subsequent conditions or actions.
+
+-   **Action Execution Trigger:** (No change in logic flow: if rule's overall condition is True, action is prepared and executed).
 
 ### 5.3. Variable Handling (`RulesEngine`)
-*   **Scope:** Rule-scoped. Variables exist only for the duration of a single rule's evaluation (from `_check_condition` start to action execution).
-*   **Lifetime:** Created and populated within `_evaluate_single_condition_logic` if `capture_as` is used. Discarded after the rule is fully processed.
-*   **Capture Points:**
-    *   `ocr_contains_text`: Captures the full `ocr_analysis_result["text"]` if the condition (text and confidence) is met.
-    *   `template_match_found`: Captures a dictionary `{"x", "y", "width", "height", "confidence"}` (coordinates relative to the search region) if the template is found.
-*   **Substitution (`_substitute_variables` method):**
-    *   Uses regex `re.compile(r"\{([\w_]+)((\.[\w_]+)*)\}")` to find placeholders like `{var_name}` or `{var_name.key.subkey}`.
-    *   Recursively processes strings, lists, and dictionaries in condition/action parameters.
-    *   Replaces placeholders with values from the current `rule_variable_context`.
-    *   If a variable/key is not found, logs a warning and leaves the placeholder unchanged (safer than erroring or empty string).
-    *   Values are substituted primarily as strings; `ActionExecutor` handles necessary type conversions.
 
-## 6. Data Flow Example (Simplified Continuous Loop with Selective Analysis & Variables)
-1.  **Init:** `RulesEngine` parses rules, builds `_analysis_requirements_per_region`.
-2.  `MainController` loop:
-    a.  For each `region_spec`: Captures image, gets `required_analyses`, selectively calls `AnalysisEngine`, populates `region_data_packet`. `all_region_data` is formed.
+-   **Scope & Lifetime:** Rule-scoped, created during `evaluate_rules` for each rule, discarded after rule evaluation.
+-   **Capture Points (Expanded for v4.0.0):**
+    -   Existing: `ocr_contains_text` (captures full text), `template_match_found` (captures match details dict).
+    -   **NEW:** `gemini_vision_query` can capture Gemini's `text_content` or a specific value extracted from its `json_content`. This captured data can be a string, a number, a boolean, or even a nested dictionary/list if Gemini returns complex JSON and `capture_as` targets a complex part via JSONPath.
+-   **Substitution (`_substitute_variables` method):**
+    -   Uses `PLACEHOLDER_REGEX` (`\{([\w_]+)((\.[\w_]+)*)\}`) to find placeholders in action parameters (strings, lists, dicts).
+    -   Replaces `{var_name}` with the string representation of the variable's value from `rule_variable_context`.
+    -   Supports basic dot notation access for nested dictionary keys or list indices (e.g., `{gemini_result.identified_button.coordinates.x}`). Handles `KeyError`, `IndexError`, `TypeError` during access gracefully, leaving the placeholder unsubstituted and logging a warning.
+
+## 6. Data Flow Example (Simplified Continuous Loop with Gemini Query)
+
+1.  **Init:** `RulesEngine` parses rules, builds **local** `_analysis_requirements_per_region`. `GeminiAnalyzer` is initialized with API key.
+2.  `MainController` loop starts (`run_monitoring_loop` in thread):
+    a.  For each `region_spec` in profile:
+        i.  `CaptureEngine.capture_region()` captures image -> `captured_image` (NumPy BGR).
+        ii. `RulesEngine.get_analysis_requirements_for_region()` -> `required_local_analyses`.
+        iii. For each `analysis_type` in `required_local_analyses`: `AnalysisEngine.analyze_X(captured_image)` -> `local_result`.
+        iv. Store `captured_image` and all `local_result`s in `region_data_packet`.
+        v.  Add `region_data_packet` to `all_region_data` dict keyed by `region_name`.
     b.  `RulesEngine.evaluate_rules(all_region_data)`:
         i.  For each `rule`: Creates empty `rule_variable_context`.
-        ii. `_check_condition` called. If compound, `sub_condition_spec` is processed by `_substitute_variables`.
-        iii.`_evaluate_single_condition_logic` is called. It checks condition, uses fallbacks if needed. If condition is true & `capture_as` exists, updates `rule_variable_context`.
-        iv. If rule's overall condition is `True`: `action_spec` is processed by `_substitute_variables` using `rule_variable_context`.
-        v.  `ActionExecutor.execute_action(substituted_action_spec)` is called.
-    c.  `ActionExecutor` performs action, attempting type conversions for parameters (e.g., string "100" to int 100 for coordinate).
-3.  Loop repeats.
+        ii. `_check_condition` called for the rule's condition block:
+            -   If the condition (or a sub-condition) is `gemini_vision_query`:
+                -   `_evaluate_single_condition_logic` retrieves the `captured_image` from `all_region_data`.
+                -   **Calls `self.gemini_analyzer.query_vision_model()`** with the image and prompt.
+                -   Receives structured response (`status`, `text_content`, `json_content`, `error_message`).
+                -   Evaluates response against `expected_*` parameters.
+                -   If `capture_as` used and condition met, updates `rule_variable_context` with Gemini's output.
+            -   For local conditions, uses data from `all_region_data` or `AnalysisEngine` fallbacks.
+        iii. If rule's overall condition is `True`:
+            -   `_substitute_variables` replaces placeholders in `action_spec` using the (potentially Gemini-populated) `rule_variable_context`.
+            -   `ActionExecutor.execute_action(substituted_action_spec)` is called.
+            -   **(Stretch/Phase 2):** If action targets `center_of_gemini_identified_element`, `ActionExecutor` will parse the `gemini_element_variable` from context to get bounding box data for click coordinates.
+    c.  Wait for `monitoring_interval_seconds` (minus cycle execution time).
+3.  Loop repeats until stop event.
 
 ## 7. Logging System (per ADR-007)
-    *   Initialized by `py_pixel_bot.core.logging_setup.setup_logging()` using `APP_ENV` and CLI flags.
-    *   Modules use `logging.getLogger(__name__)`.
-    *   Comprehensive logging covers:
-        *   **Backend:** Application start/stop, profile loading, capture events, analysis results (including selective skips and fallbacks), rule evaluation steps (condition checks, variable capture/substitution, short-circuiting), action execution attempts and outcomes.
-        *   **GUI:** User interactions (file ops, item selections, button clicks), data validation results (success/failure), internal state changes (dirty flag), dynamic UI rendering steps, errors.
+
+-   Uses Python's built-in `logging`, configured by `core.logging_setup`.
+-   Format includes timestamp, logger name, level, module:func:lineno, and message for files. Console format is simpler based on `APP_ENV`.
+-   Log levels controlled by `APP_ENV` (`DEBUG` for development, `INFO`+ for production) and CLI flags (`-v`).
+-   Uses `logging.getLogger(__name__)` in modules.
+-   Logs are written to `logs/YYYY-MM-DD.log` (rotating daily - originally intended, currently basic FileHandler).
+-   **NEW for v4.0.0:**
+    -   **`GeminiAnalyzer` MUST** log API requests (prompt summary, model used), API responses (status, success/error, latency), and **any errors** encountered during API communication (rate limits, auth errors, network issues, etc.). **Full image data MUST NOT be logged.**
+    -   **`RulesEngine` MUST** log when it's invoking `GeminiAnalyzer`, the prompt used (summarized), the model targeted, and the outcome of the `gemini_vision_query` condition evaluation (met/not met, error status from GeminiAnalyzer).
 
 ## 8. Error Handling
-    *   Extensive `try-except` blocks in all critical sections (engine methods, controller loop, GUI event handlers and apply methods).
-    *   Specific exceptions (`FileNotFoundError`, `json.JSONDecodeError`, `ValueError`, `TypeError`, `OSError`) are caught where appropriate. Generic `Exception` with `exc_info=True` for unexpected issues.
-    *   User-facing errors in the GUI are shown via `messagebox.showerror` or `messagebox.showwarning`.
-    *   All errors are logged with `ERROR` or `CRITICAL` level, including stack traces for exceptions.
-    *   `ActionExecutor` attempts safe type conversion of action parameters after variable substitution and logs failures.
-    *   GUI input validation in "Apply" methods prevents saving invalid data structures.
+
+-   Extensive `try-except` blocks are used throughout core components.
+-   User-facing errors are shown via `messagebox` in the GUI or printed to stderr for CLI.
+-   Detailed exceptions and context are logged using `logger.error` or `logger.exception`.
+-   Graceful degradation where possible (e.g., skipping a rule if its template is missing, continuing the loop).
+-   **NEW for v4.0.0:**
+    -   **`GeminiAnalyzer` MUST** implement robust error handling for API calls (e.g., `google.api_core.exceptions`, network errors) and return structured error information in its response dictionary or raise specific exceptions that `RulesEngine` can catch.
+    -   **`RulesEngine` MUST** gracefully handle failures from `GeminiAnalyzer` when evaluating `gemini_vision_query` conditions (e.g., treat condition as `False`, log the specific error clearly).
+    -   The GUI (`MainAppWindow`) should inform the user if a configured Gemini API key is missing or seems invalid (e.g., via status bar or log message, potentially a non-blocking warning on save if Gemini features are used). Persistent Gemini API failures during potential future "test rule" functionality should be clearly indicated.
 
 ## 9. Full GUI Architecture (v3.0.0+) (`MainAppWindow` using `CustomTkinter`)
-    (This section details the GUI's structure, components, and core logic as implemented up to Phase 1.8.1, focusing on profile management, settings, region/template/rule list displays, and the dynamic detail panel for interactive editing of selected items, including parameters for conditions, actions, and sub-conditions, plus condition structure conversion and input validation.)
+
+(This section details the GUI's structure, components, and core logic, including planned updates for v4.0.0 Gemini integration.)
 
 ### 9.1. Overview and Goals
-    (Provide a comprehensive, user-friendly GUI for all profile configuration tasks, minimizing direct JSON editing. Phase 1.X focuses on core editing layout, file operations, item management, parameter editing, and input validation.)
+
+-   Provide a comprehensive, user-friendly GUI for all aspects of profile creation, editing, and management.
+-   Eliminate the need for direct JSON editing for most users.
+-   **For v4.0.0:** Allow intuitive configuration of the new `gemini_vision_query` condition type.
 
 ### 9.2. Main Application Window (`MainAppWindow`)
-    (`customtkinter.CTk` based. Manages UI layout, menu actions, interaction with `ConfigManager`, internal `profile_data` state, dirty flag, and coordinates updates between various UI panels and the data model.)
-    <!-- Current implementation involves MainAppWindow and DetailsPanel handling significant amounts of logic. -->
-    <!-- A planned refactoring aims to improve modularity (see Section 9.8). -->
+
+-   Root window (`ctk.CTk`) managing the overall application layout and core file operations (New, Open, Save, Save As, Exit).
+-   Handles dirty state tracking and prompts for saving unsaved changes.
+-   Orchestrates interactions between the list panels (Left, Center) and the Details Panel.
 
 ### 9.3. GUI Layout and Components
-    (Three-panel layout: Left [Profile Info, Regions, Templates], Center [Rules List], Right [Scrollable Details Panel, managed by `DetailsPanel` class]. Uses `CTkFrame`, `CTkScrollableFrame`, `CTkEntry`, `CTkButton`, `CTkLabel`, `CTkOptionMenu`, `CTkCheckBox`, `CTkTextbox`, `tkinter.Menu`, `tkinter.filedialog`, `tkinter.messagebox`. Template previews use `Pillow` and `CTkImage`.)
-    Regions are managed in the left panel. Adding a new region or editing the coordinates of an existing region invokes the `RegionSelectorWindow`.
+
+-   **Three-Panel Layout:**
+    -   **Left Panel:** Profile Settings (Description, Interval, K), Regions List, Templates List. Includes Add/Remove buttons for regions and templates.
+    -   **Center Panel:** Rules List. Includes Add/Remove buttons for rules.
+    -   **Right Panel (`DetailsPanel`):** Dynamically displays detailed editors for the selected item (Region, Template, Rule).
 
 ### 9.4. Core Functionality Logic (in `MainAppWindow` and `DetailsPanel`)
-    <!-- This describes the current, less modular state. Section 9.8 outlines future improvements. -->
-    *   File Operations (`MainAppWindow`): `_new_profile`, `_open_profile` (loads via `ConfigManager`), `_save_profile` (updates internal data from UI, saves via `ConfigManager`), `_save_profile_as`.
-    *   UI Data Sync (`MainAppWindow`): `_populate_ui_from_profile_data` (renders UI from `profile_data`), `_update_profile_data_from_ui` (syncs basic settings from UI to `profile_data`). List item data (regions, templates, rules) is modified more directly in `self.profile_data` by their respective "Apply" logic, often orchestrated between `MainAppWindow` and `DetailsPanel`.
-    *   State Management (`MainAppWindow`): `_is_dirty` flag, `_set_dirty_status` (updates window title with "*"), `_prompt_save_if_dirty`.
-    *   Item Selection (`MainAppWindow`): `_on_item_selected` (handles list clicks), `_highlight_selected_list_item` (manages highlight state for main lists and, via delegation, sub-lists in `DetailsPanel`). Passes selected item data to `DetailsPanel` for display.
-    *   Detail Panel Rendering (`DetailsPanel`): `update_display` dynamically builds UI for the selected region, template, or rule based on item type.
-        *   **Regions:** Editable fields for name, x, y, width, height. Buttons for "Apply Changes" (handled by `MainAppWindow._apply_region_changes`), "Edit Coords via Selector" (handled by `MainAppWindow._edit_region_coordinates_with_selector`).
-        *   **Templates:** Editable name, read-only filename, image preview. Button for "Apply Changes" (handled by `MainAppWindow._apply_template_changes`).
-        *   **Rules:** Editable name, default region. "Convert Condition Structure" button. Sections for Condition and Action.
-            *   **Condition Editor (`DetailsPanel._render_rule_condition_editor_internal`):** If single, shows type dropdown and calls `_render_dynamic_parameters`. If compound, shows operator dropdown, sub-condition list (items call `DetailsPanel._on_sub_condition_selected_internal`), and a frame for selected sub-condition's parameters.
-            *   **Action Editor (`DetailsPanel`):** Shows type dropdown and calls `_render_dynamic_parameters`.
-    *   Parameter Rendering (`DetailsPanel._render_dynamic_parameters`): Dynamically create input widgets based on condition/action type. Populate from data, store widget refs.
-    *   Parameter Collection (`DetailsPanel._get_parameters_from_ui`): Retrieve values from dynamic widgets, perform type conversion/validation via `gui_utils.validate_and_get_widget_value`.
-    *   Input Validation (`gui_utils.validate_and_get_widget_value`, `gui_utils.parse_bgr_string`): Centralized helpers for type checking, range validation, non-empty checks, BGR string parsing. Show `messagebox.showerror` on failure.
-    *   "Apply" Methods (`MainAppWindow`): `_apply_region_changes`, `_apply_template_changes`, `_apply_rule_changes`. These methods typically:
-        1. Read general item properties (e.g., rule name) from widgets directly managed by `DetailsPanel` or `MainAppWindow`.
-        2. Call `DetailsPanel._get_parameters_from_ui` to get validated complex parameter blocks (like condition or action).
-        3. If all data is valid, update `self.profile_data` in `MainAppWindow`.
-        4. Set dirty status.
-        5. Refresh the relevant UI list in `MainAppWindow`.
-        6. Call `DetailsPanel.update_display` to re-render the details with the (potentially updated) data.
-    *   List Management (`MainAppWindow`): Methods for adding (placeholders or via dialogs like `RegionSelectorWindow`, template file copy) and removing items from regions, templates, rules. Sub-condition list management is handled within `DetailsPanel` and `MainAppWindow._apply_rule_changes`.
+
+-   **Profile Operations:** Implemented in `MainAppWindow` (`_new_profile`, `_open_profile`, `_save_profile`, `_save_profile_as`). Use `ConfigManager` for backend file operations.
+-   **Item Selection:** Clicking items in lists (Regions, Templates, Rules) triggers `_on_item_selected` in `MainAppWindow`, which updates the selection state, highlights the item, enables/disables remove buttons, and calls `DetailsPanel.update_display`. Sub-condition selection is managed within `DetailsPanel`.
+-   **Details Editing:**
+    -   `DetailsPanel` renders appropriate input widgets based on the selected item type and subtype using `gui_config.UI_PARAM_CONFIG`.
+    -   Input validation uses `gui_utils.validate_and_get_widget_value`.
+    -   "Apply Changes" buttons in `DetailsPanel` call corresponding methods in `MainAppWindow` (`_apply_region_changes`, `_apply_template_changes`, `_apply_rule_changes`). These methods retrieve validated data from `DetailsPanel` widgets, update the `self.profile_data` dictionary, set the dirty flag, and refresh the relevant list and details view.
+-   **Settings Panel (Left Panel of `MainAppWindow`) (Updates for v4.0.0):**
+    -   May add a read-only label indicating Gemini API Key status (e.g., "GEMINI_API_KEY: Configured via .env" / "Not Configured in .env").
+    -   Will add an entry for `gemini_default_model_name` to be stored in `profile_data["settings"]`.
+-   **Rule Editor (`DetailsPanel`) (Updates for v4.0.0):**
+    -   When editing a rule's condition (single or sub-condition):
+        -   The "Condition Type" dropdown MUST include `gemini_vision_query`.
+        -   When `gemini_vision_query` is selected, `_render_dynamic_parameters` in `DetailsPanel` MUST dynamically create and display input fields for its specific parameters as defined in `UI_PARAM_CONFIG` (see Section 11):
+            -   `prompt`: A `CTkTextbox` for potentially multi-line prompts.
+            -   `expected_response_contains`: `CTkEntry` or `CTkTextbox`.
+            -   `expected_response_json_path`: `CTkEntry`.
+            -   `expected_json_value`: `CTkEntry`.
+            -   `case_sensitive_response_check`: `CTkCheckBox`.
+            -   `capture_as`: `CTkEntry`.
+            -   `model_name`: `CTkEntry` (optional override).
+    -   **(Stretch/Phase 2)** If implementing `center_of_gemini_identified_element` for actions, the "Target Relation" dropdown for click actions will include this. A new `gemini_element_variable` entry field would appear when selected.
+-   Input validation (`gui_utils.validate_and_get_widget_value`) will apply to these new fields.
 
 ### 9.5. CLI Integration for GUI Editor
-    (CLI command `edit [profile_path]` instantiates and runs `MainAppWindow`.)
+
+-   The `edit [profile]` CLI command launches `MainAppWindow`.
+-   The `add-region <profile>` CLI command launches `RegionSelectorWindow`.
 
 ### 9.6. Logging for GUI Operations
-    (INFO for major user actions, DEBUG for UI state/rendering, WARNING/ERROR for validation failures or operational errors.)
+
+-   GUI actions (button clicks, selections, file operations, apply attempts) are logged at INFO level.
+-   UI state changes, dynamic rendering steps are logged at DEBUG level.
+-   Validation failures, file I/O errors, unexpected exceptions are logged at WARNING or ERROR/CRITICAL level.
+-   **v4.0.0:** Logging will include interactions with Gemini configuration elements.
 
 ### 9.7. Region Definition and Management Workflow
-    This section details the user experience and technical flow for defining and managing screen regions within the application.
 
-    *   **Representation:** Regions are defined by a unique `name`, and integer coordinates `x`, `y`, `width`, and `height`. These are stored in the `regions` list within the JSON profile.
-    *   **Listing in `MainAppWindow`:** The left panel of `MainAppWindow` displays a scrollable list of currently defined regions for the active profile. Each item shows the region's name.
-    *   **Adding a New Region:**
-        1.  The user clicks the "Add" button below the regions list in `MainAppWindow`.
-        2.  The profile must be saved first (or saved as a new file if untitled). `MainAppWindow` prompts the user if necessary.
-        3.  The `RegionSelectorWindow` is invoked. This is a modal, fullscreen, semi-transparent window.
-        4.  The user clicks and drags on their screen to draw a rectangle.
-        5.  Upon releasing the mouse, the user presses "Enter".
-        6.  A `CTkInputDialog` appears, prompting for a unique name for the new region. The dialog also displays the selected coordinates (x, y, w, h).
-        7.  If a valid, unique name is provided, the region data is saved to the currently open profile by `ConfigManager`, and `RegionSelectorWindow` closes.
-        8.  `MainAppWindow` reloads the profile (if changes were made directly by `RegionSelectorWindow`) or updates its internal data and refreshes the regions list.
-    *   **Editing an Existing Region's Properties (from `MainAppWindow` Details Panel):**
-        1.  The user selects a region from the list in `MainAppWindow`.
-        2.  The right-hand "Details Panel" populates with the selected region's properties: Name, X, Y, Width, Height (in `CTkEntry` widgets).
-        3.  **Name/Coordinate Text Entry:** The user can directly edit these text fields. Input validation (e.g., for unique name, positive width/height, integer coordinates) is performed when "Apply Changes" is clicked.
-        4.  **"Edit Coords via Selector" Button:**
-            *   If clicked, the profile is saved (if dirty, with prompt).
-            *   `RegionSelectorWindow` is invoked, pre-drawing the existing rectangle for that region.
-            *   The user can redraw the rectangle or press "Enter" to keep the current one.
-            *   The naming dialog appears, pre-filled with the region's current name. The user can confirm or change the name.
-            *   Upon confirmation, the profile is updated by `RegionSelectorWindow`'s `ConfigManager`, and `MainAppWindow` reloads/refreshes.
-    *   **Removing a Region:**
-        1.  User selects a region from the list.
-        2.  User clicks the "Remove" button.
-        3.  The region is removed from the `profile_data` in `MainAppWindow`.
-        4.  The UI list is refreshed. The profile is marked as dirty.
-    *   **Assigning Regions to Rules/Conditions:**
-        *   **Default Rule Region:** In the rule's details view (center panel in `MainAppWindow`), a dropdown menu lists all defined region names (plus an empty option for no default). The user selects a region from this list to set it as the default context for the rule's conditions.
-        *   **Sub-Condition Specific Region:** When editing a sub-condition (if the rule has a compound condition), the sub-condition's parameter editor includes a similar dropdown menu. This allows a sub-condition to operate on a different region than the rule's default or other sub-conditions. If left empty, it inherits the rule's default region.
-    *   **`RegionSelectorWindow` Technical Details:**
-        *   Uses `ImageGrab.grab(all_screens=True)` to capture the screen content for its background (if successful). The canvas is sized to the captured image (potentially virtual desktop).
-        *   The window itself is set to cover the virtual desktop dimensions using `self.geometry(widthxheight+0+0)` and `self.overrideredirect(True)` for a true borderless overlay. Fallback to primary screen `attributes("-fullscreen", True)` if full virtual desktop capture fails.
-        *   Drawing is done using absolute screen coordinates (`event.x_root`, `event.y_root`) on the canvas.
-        *   An instruction label is centered on the canvas (which should match virtual desktop size) using `canvas_width/2` for its x-placement.
-        *   Handles Escape key for cancellation and Enter key for confirmation (which then shows the naming dialog).
+-   "Add Region" button in `MainAppWindow` launches `RegionSelectorWindow` modally.
+-   `RegionSelectorWindow` allows drawing, provides preview/overlay, prompts for name, and calls `ConfigManager` to save the region to the profile file.
+-   `MainAppWindow` reloads the profile if `RegionSelectorWindow` reports changes.
+-   Region coordinates and name can also be edited directly via text entries in `DetailsPanel`.
 
-### 9.8. Planned GUI Modularity Refinements (Post v3.0.0 Core Stability)
-    To enhance long-term maintainability, testability, and code clarity, a refactoring of the GUI components is planned. The current implementation, while functional, concentrates significant logic within `MainAppWindow` and `DetailsPanel`. The refactoring aims to decompose these into smaller, more specialized, and potentially reusable components, inspired by component-based architecture.
+### 9.8. GUI Modularity Refinements (Post v3.0.0 Core Stability - Implemented in v3.0.x)
 
-    **Key Objectives:**
-    *   Improve Separation of Concerns: Each GUI component should have a clear, single responsibility.
-    *   Enhance Readability & Maintainability: Smaller, focused classes are easier to understand and modify.
-    *   Increase Testability: Isolate UI logic for easier unit or component testing in the future.
+-   `DetailsPanel` was introduced to encapsulate the logic for displaying and editing details of selected items, separating it from `MainAppWindow`'s primary role of managing lists, file operations, and overall layout.
+-   Further refinement could involve creating dedicated view classes within `DetailsPanel` (e.g., `RegionDetailView`, `RuleDetailView`) if complexity increases significantly.
 
-    **Proposed Strategy:**
-    1.  **`MainAppWindow` Streamlining:**
-        *   Focus: Overall application window, menu bar, file operations (New, Open, Save, Save As via `ConfigManager`), managing the primary `profile_data` object, and managing the main item lists (Regions, Templates, Rules in left/center panels).
-        *   Delegation: It will delegate the display and detailed editing of selected items to a dedicated coordinator/manager for the right panel.
-    2.  **Introduce `DetailsCoordinator` (or `RightPanelManager`):**
-        *   Responsibility: Manages the content of the right-hand details panel.
-        *   Interaction: Receives the selected item type and data (or a reference/ID) from `MainAppWindow`.
-        *   Function: Instantiates and displays the appropriate specialized "detail view" frame within the right panel. Clears or hides other detail views.
-    3.  **Create Specialized Detail View Frames:**
-        *   These will be new classes, likely residing in a dedicated subdirectory (e.g., `py_pixel_bot/ui/gui/panels/detail_views/`).
-        *   **`RegionDetailView(ctk.CTkFrame)`:**
-            *   Displays and manages the form for editing a region's name and coordinates (X, Y, Width, Height).
-            *   Handles its own "Apply Region Changes" logic: validates its input fields and signals the validated data back to `MainAppWindow` for updating `profile_data`.
-            *   Manages the "Edit Coords (Selector)" button, invoking `RegionSelectorWindow` (possibly via a callback to `MainAppWindow`).
-        *   **`TemplateDetailView(ctk.CTkFrame)`:**
-            *   Displays and manages the form for editing a template's name. Shows filename (read-only) and image preview.
-            *   Handles its own "Apply Template Changes" logic.
-        *   **`RuleDetailView(ctk.CTkFrame)`:**
-            *   This will be a primary container for rule editing, itself composed of more specialized sub-components.
-            *   Manages the overall display for a selected rule.
-            *   Contains and coordinates:
-                *   `RuleGeneralSettingsView(ctk.CTkFrame)`: For editing the rule's name and default region (dropdown).
-                *   `ConditionEditorView(ctk.CTkFrame)`: A significant component responsible for:
-                    *   Displaying and managing the UI for either a single condition or a compound condition.
-                    *   Handling the "Convert Condition Structure" button logic (signaling to `MainAppWindow` to modify the rule structure in `profile_data`).
-                    *   If compound: Managing the list of sub-conditions (add/remove, selection).
-                    *   Dynamically rendering the parameter input fields for the selected condition or sub-condition type.
-                *   `ActionEditorView(ctk.CTkFrame)`: Responsible for:
-                    *   Displaying the action type dropdown.
-                    *   Dynamically rendering the parameter input fields for the selected action type.
-            *   Handles its own "Apply Rule Changes" logic: Gathers validated data from its sub-components and signals the complete, validated rule data back to `MainAppWindow`.
-    4.  **Reusable Parameter Rendering Logic:**
-        *   The current `DetailsPanel._render_dynamic_parameters` and `_get_parameters_from_ui` (which relies on `gui_utils.validate_and_get_widget_value`) will be refactored. This logic might become part of a base class for these new detail view frames or a dedicated utility module that these frames can use to build and manage their dynamic forms.
-    5.  **Data Flow (Revised):**
-        *   `MainAppWindow` continues to own the master `profile_data`.
-        *   When an item is selected in `MainAppWindow`'s lists, a *copy* of the relevant data snippet (e.g., a specific rule dictionary) is passed to the `DetailsCoordinator`.
-        *   The `DetailsCoordinator` passes this data to the instantiated `DetailView` frame.
-        *   The `DetailView` frame populates its UI from this data.
-        *   When the user clicks "Apply Changes" within a `DetailView`, that view validates its local form data.
-        *   If valid, the `DetailView` signals the updated data snippet back to `MainAppWindow` (e.g., via a callback or by raising a custom event).
-        *   `MainAppWindow` receives the updated snippet, merges it into the corresponding item in its `profile_data`, sets the dirty flag, and triggers a refresh of its lists and potentially signals the `DetailsCoordinator` to re-display the (now updated) item.
+## 10. Gemini API Interaction (`GeminiAnalyzer` - NEW Section for v4.0.0)
 
-    This refactoring effort is tracked in `FEATURE_ROADMAP.MD` and aims to significantly improve the GUI's internal architecture for future development and maintenance.
+This section details the design of the `GeminiAnalyzer` module, responsible for all interactions with the Google Gemini API, based on ADR-008.
+
+### 10.1. Class Structure and Initialization
+
+-   **Class:** `py_pixel_bot.engines.gemini_analyzer.GeminiAnalyzer`
+-   **`__init__(self, api_key: str, default_model_name: str = "gemini-pro-vision")`:**
+    -   Stores the `api_key`.
+    -   Stores the `default_model_name` (e.g., "gemini-1.5-flash-latest").
+    -   Initializes the `google-generativeai` client using the provided API key (e.g., `genai.configure(api_key=api_key)`).
+    -   Logs initialization status, confirming API key presence (but not logging the key itself).
+
+### 10.2. Core Method: `query_vision_model`
+
+-   **Signature:** `query_vision_model(self, image_data: np.ndarray, prompt: str, model_name: Optional[str] = None) -> Dict[str, Any]`
+-   **Functionality:**
+    1.  Takes a NumPy BGR `image_data` and a text `prompt`.
+    2.  Uses `model_name` if provided, otherwise falls back to `self.default_model_name`.
+    3.  **Image Preparation:** Converts the NumPy BGR array to a PIL Image object (RGB format) as required by the `google-generativeai` SDK.
+        ```python
+        # Example within GeminiAnalyzer
+        from PIL import Image
+        import cv2
+        # ...
+        pil_image = Image.fromarray(cv2.cvtColor(image_data, cv2.COLOR_BGR2RGB))
+        ```
+    4.  Constructs the request payload for the Gemini API, typically a list containing the prompt string and the PIL image object.
+        ```python
+        # Example with google-generativeai SDK (simplified)
+        # model = genai.GenerativeModel(model_name_to_use)
+        # response = model.generate_content([prompt, pil_image])
+        ```
+    5.  Sends the request to the API within a `try...except` block to handle potential API errors and network issues. Records the start time.
+    6.  Handles the API response:
+        -   Records the end time to calculate latency.
+        -   Safely extracts the text content from the response (e.g., `response.text`).
+        -   Attempts to parse the text content as JSON **if** the prompt was designed to elicit a JSON response. This requires robust error handling (`json.JSONDecodeError`). Stores the parsed object or `None`.
+        -   Catches specific API exceptions (e.g., `google.api_core.exceptions.ResourceExhausted` for rate limits, `PermissionDenied` for auth issues) and general exceptions.
+    7.  **Return Value:** A structured dictionary containing the outcome:
+        ```python
+        {
+            "status": "success" | "error", # Indicates if the API call was successful
+            "text_content": "Full text response from Gemini, or None if error or no text part.",
+            "json_content": {parsed JSON object if successful and applicable, else None},
+            "error_message": "Error details if status is 'error', else None",
+            "model_used": "model_name_actually_queried",
+            "latency_ms": 1234 # Time taken for the API call in milliseconds
+        }
+        ```
+-   **Logging:** Logs the start of a query (summarized prompt, model). Logs the outcome (success/error, latency). If error, logs the `error_message`. **Does NOT log the API key or raw image data.**
+
+### 10.3. API Key Handling
+
+-   The API key is obtained by `ConfigManager` from the `.env` file (`GEMINI_API_KEY`).
+-   The key is passed to `GeminiAnalyzer` during its instantiation (likely by `RulesEngine` or potentially `MainController` if centralized initialization is preferred).
+-   If the API key is missing or invalid, `GeminiAnalyzer` logs this, and its `query_vision_model` method immediately returns an error status dictionary without attempting an API call.
+
+### 10.4. Error Handling and Retries
+
+-   Implement specific `try-except` blocks for relevant `google.api_core.exceptions` (e.g., `ResourceExhausted`, `PermissionDenied`, `InvalidArgument`, `DeadlineExceeded`, `InternalServerError`) and standard network errors (`requests.exceptions.RequestException` if using `requests`, or equivalent for the SDK's underlying transport).
+-   For initial implementation (v4.0.0 Phase 1), **no automatic retries** will be implemented. Failures will be reported immediately in the return dictionary. Retries could be added later for transient errors if needed.
+-   Return clear error messages in the `error_message` field of the response dictionary.
+
+### 10.5. Configuration
+
+-   The default Gemini model name (`default_model_name`) can be overridden per-query via the `model_name` parameter in the `gemini_vision_query` condition spec. It can also be set globally in the profile settings (`settings.gemini_default_model_name`).
+-   API call timeout should be handled by the underlying SDK where possible, or a reasonable default should be assumed. Advanced configuration is deferred.
+
+### 10.6. Security and Privacy
+
+-   Documentation and GUI MUST explicitly state that image data for `gemini_vision_query` conditions is sent to Google servers.
+-   API key (`GEMINI_API_KEY`) is sensitive and MUST be stored securely in `.env` and added to `.gitignore`.
+
+## 11. GUI Configuration for Gemini (v4.0.0 - `MainAppWindow` & `DetailsPanel`)
+
+This section details the configuration needed in `gui_config.py` and how `DetailsPanel` will use it to render the UI for the `gemini_vision_query` condition type.
+
+-   **`gui_config.py` Updates:**
+    -   Add `"gemini_vision_query"` to `CONDITION_TYPES` list.
+    -   Extend `UI_PARAM_CONFIG["conditions"]` dictionary with an entry for `"gemini_vision_query"`:
+        ```python
+        "gemini_vision_query": [
+            {"id": "prompt", "label": "Gemini Prompt:", "widget": "textbox", "type": str, "default": "Describe this image.", "required": True, "placeholder": "e.g., Is there a login button visible?"},
+            {"id": "expected_response_contains", "label": "Response Contains (Keywords):", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "e.g., login,error (comma-sep for OR)"},
+            {"id": "case_sensitive_response_check", "label": "Case Sensitive Check", "widget": "checkbox", "type": bool, "default": False},
+            {"id": "expected_response_json_path", "label": "JSON Path (for JSON response):", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "e.g., data.items[0].name"},
+            {"id": "expected_json_value", "label": "Expected JSON Value:", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "Value at JSON path (string comparison)"},
+            {"id": "capture_as", "label": "Capture Response As:", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "var_name_for_gemini_output"},
+            {"id": "model_name", "label": "Gemini Model (Optional):", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "e.g., gemini-1.5-flash-latest"}
+            # Add 'region' parameter if needed, similar to other conditions that need region override
+            # {"id": "region", "label": "Target Region (Override):", "widget": "optionmenu_dynamic", "options_source": "regions", "default": "", "required": False},
+        ]
+        ```
+-   **`DetailsPanel._render_dynamic_parameters`:**
+    -   Must correctly handle the `textbox` widget type for the `prompt` parameter.
+    -   Will use the above configuration to dynamically create the appropriate labels, entry fields, checkbox, and potentially dropdowns when `gemini_vision_query` is selected as the condition type (or sub-condition type).
+-   **`MainAppWindow` Profile Settings:**
+    -   Add a non-editable label widget showing the status of the `GEMINI_API_KEY` (e.g., "Loaded from .env", "Not found").
+    -   Add an editable `CTkEntry` widget bound to `profile_data["settings"]["gemini_default_model_name"]`.

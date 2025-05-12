@@ -2,22 +2,21 @@
     "profile_description": "Automates simple tasks in Notepad. Checks for 'TODO:' text and appends a message. Also checks menu bar color.",
     "settings": {
         "monitoring_interval_seconds": 2.0,
-        "analysis_dominant_colors_k": 3 
+        "analysis_dominant_colors_k": 3
     },
     "regions": [
         {
             "name": "notepad_text_area",
-            "x": 10, 
-            "y": 80, 
-            "width": 700,
-            "height": 400,
-            "comment": "Adjust to cover the main text editing area of your Notepad window."
+            "x": 6,
+            "y": 7,
+            "width": 995,
+            "height": 727
         },
         {
             "name": "notepad_file_menu_area",
-            "x": 5,  
-            "y": 5,  
-            "width": 50, 
+            "x": 5,
+            "y": 5,
+            "width": 50,
             "height": 25,
             "comment": "Approximate small area for 'File' menu text in Notepad (Windows). Adjust for your system's theme/Notepad version."
         }
@@ -46,7 +45,11 @@
             "region": "notepad_file_menu_area",
             "condition": {
                 "type": "average_color_is",
-                "expected_bgr": [240, 240, 240], 
+                "expected_bgr": [
+                    240,
+                    240,
+                    240
+                ],
                 "tolerance": 20,
                 "comment": "Typical light gray for Windows menu bars. May vary with themes."
             },
@@ -61,7 +64,11 @@
             "region": "notepad_text_area",
             "condition": {
                 "type": "dominant_color_matches",
-                "expected_bgr": [255,255,255],
+                "expected_bgr": [
+                    255,
+                    255,
+                    255
+                ],
                 "tolerance": 10,
                 "check_top_n_dominant": 1,
                 "min_percentage": 50.0,

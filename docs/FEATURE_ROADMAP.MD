@@ -1,6 +1,7 @@
+// File: docs/FEATURE_ROADMAP.MD
 # Feature Roadmap & Status
 
-This document tracks planned features and their status for this visual automation tool. The project has progressed through initial versions, including a significant "AI-Accelerated v1.0.0" release and "v2.0.0" which added advanced analysis and rule capabilities. The current focus is "v3.0.0" for enhanced GUI and usability.
+This document tracks planned features and their status for this visual automation tool. The project has progressed through initial versions, including a significant "AI-Accelerated v1.0.0" release and "v2.0.0" which added advanced analysis and rule capabilities. The current focus is "v3.0.0" for enhanced GUI and usability. A new major goal, "v4.0.0 (Gemini-Powered Visual Intelligence)", is now being planned.
 
 **Key Supporting Documents:**
 
@@ -63,45 +64,53 @@ This document tracks planned features and their status for this visual automatio
 | v3.0.0                                                                                  | Not Started | Medium   | Usability                | Profile Importer/Exporter                             | Simple way to share bot profiles.                                                                                                                                                                                                  | `ConfigManager` enhancements.                                                                                                 |
 | **v3.0.x (Post-Core GUI Stability - Internal Refactoring)**                             |
 | v3.0.x                                                                                  | Planning    | Medium   | DX/Maintainability       | GUI Component Refactoring                             | Refactor `MainAppWindow` and `DetailsPanel` into smaller, more specialized components (e.g., `RegionDetailView`, `RuleDetailView` with `ConditionEditorView`, `ActionEditorView`) for improved modularity. Strategy in `TECHNICAL_DESIGN.MD` Section 9.8. | `CustomTkinter`.                                                                                                              |
-| **vFuture (Advanced Enhancements & Integrations - Post v3.0.0)**                        |
+| **v4.0.0 (Gemini-Powered Visual Intelligence) - NEW**                                   |
+| v4.0.0 (Phase 1)                                                                        | Planning    | Critical | Gemini Integration       | `GeminiAnalyzer` Module - Core API Client             | Create a module to handle communication with the Gemini API (Vision models), including API key management (from .env), request formation, response parsing, and error handling. See ADR-008.                                            | `google-generativeai` SDK.                                                                                                    |
+| v4.0.0 (Phase 1)                                                                        | Planning    | Critical | Gemini Integration       | New Condition Type: `gemini_vision_query`             | Integrate `GeminiAnalyzer` into `RulesEngine` by adding a new condition type (`gemini_vision_query`). Params: `prompt`, `expected_response_contains`, `capture_as`, etc. (see ADR-008).                                         | `rules_engine.py`, JSON schema.                                                                                               |
+| v4.0.0 (Phase 1)                                                                        | Planning    | High     | Usability (Gemini)       | GUI Support for `gemini_vision_query` Conditions      | Update `MainAppWindow` and `DetailsPanel` to allow users to create, edit, and configure `gemini_vision_query` conditions, including prompt input and response expectation parameters.                                                  | `CustomTkinter`, `gui_config.py`.                                                                                             |
+| v4.0.0 (Phase 1)                                                                        | Not Started | Medium   | Advanced Actions (Gemini)| Action on Gemini-Identified Element Bounding Box    | Allow actions (e.g., click) to target coordinates derived from bounding boxes returned by Gemini for identified elements (stretch goal for Phase 1, see ADR-008).                                                                 | `action_executor.py`, `rules_engine.py` (variable handling).                                                                  |
+| v4.0.0 (Phase 1)                                                                        | Not Started | High     | Documentation (Gemini)   | Gemini Integration User Guide & NFRs                  | Document API key setup, costs, privacy, prompt engineering best practices, and NFRs (latency, internet) related to Gemini features (see ADR-008).                                                                                   | Markdown.                                                                                                                     |
+| **vFuture (Advanced Enhancements & Integrations - Post v3.0.0 & v4.0.0 Phase 1)**       |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis        | Fuzzy Template Matching & Tolerance                   | Allow template matching with varying degrees of tolerance for slight changes in color, rotation, or scale.                                                                                                                         | Advanced `OpenCV-Python` techniques.                                                                                          |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis        | Motion/Change Detection within Region                 | Detect if any significant visual change or motion occurs within a monitored region, not just static states.                                                                                                                        | Frame differencing, background subtraction.                                                                                   |
 | vFuture                                                                                 | Not Started | Low      | Advanced Analysis        | Basic Object/Shape Detection (Simplified)             | Detect simple geometric shapes (circles, rectangles) or basic pre-trained objects.                                                                                                                                                 | `OpenCV-Python` (contour detection, basic ML models if lightweight).                                                          |
-| vFuture                                                                                 | Not Started | High     | Advanced Actions         | Dynamic Action Parameters based on Analysis           | Allow actions to use data extracted during analysis more deeply (e.g., type OCR'd number, click at OCR'd text location).                                                                                                           | Enhanced `action_executor.py`, `rules_engine.py`.                                                                             |
+| vFuture                                                                                 | Not Started | High     | Advanced Actions         | Dynamic Action Parameters based on Analysis           | Allow actions to use data extracted during analysis more deeply (e.g., type OCR'd number, click at OCR'd text location). Already partially supported, enhance for Gemini.                                                        | Enhanced `action_executor.py`, `rules_engine.py`.                                                                             |
 | vFuture                                                                                 | Not Started | Low      | Advanced Actions         | Sound Alerts / System Notifications                   | Play a sound or send a system notification when a condition is met.                                                                                                                                                                | `playsound` library, platform-specific notification libs.                                                                     |
 | vFuture                                                                                 | Not Started | Medium   | Integration              | Webhook / API Call Action                             | Allow the bot to send an HTTP request to an external service when a condition is met.                                                                                                                                              | `requests` library. Potential ADR for security/config.                                                                        |
 | vFuture                                                                                 | Not Started | High     | Usability                | Visual Logging & Debugging History                    | Save snapshots of monitored regions when rules trigger/fail. Provide a visual history or step-through for debugging rules.                                                                                                         | Image saving, GUI enhancements. Potential ADR.                                                                                |
 | vFuture                                                                                 | Not Started | Medium   | Usability                | Region/Rule Library & Reusability                     | Allow users to save and import/export individual regions or rule definitions to be reused across different profiles.                                                                                                               | Enhanced `config_manager.py`.                                                                                                 |
+| vFuture (Gemini Phase 2+)                                                               | Not Started | Low      | Gemini Integration       | Gemini-Informed Decision Making (Dynamic Actions)     | Based on Gemini's visual analysis and a high-level goal, PyPixelBot (potentially with another Gemini text call) selects/parameterizes actions from a limited set or simple sequence. *This starts to approach "AI creates rule on the fly"*. | New `GeminiDecisionModule`.                                                                                                   |
+| vFuture (Gemini Phase 3+)                                                               | Not Started | Very Low | Gemini Integration       | Dynamic Rule/Plan Formulation by Gemini               | Highly ambitious: Gemini formulates a multi-step plan (sequence of conditions/actions) to achieve a user goal based on continuous visual analysis. Significant safety and reliability challenges. *This is the "100% free" vision.* | Advanced agent-based architecture.                                                                                            |
 
 ---
 
 **Summary & Next Steps:**
 
-- **AI-Accelerated v1.0.0 Complete.**
-- **v2.0.0 (Advanced Visual Analysis & Rules) Complete.**
-- **Core System Fixes & GUI Refinements (v3.0.0 Phase 1.8.1):**
-  - Resolved `FileNotFoundError` for `run` command.
-  - Resolved multiple `NameError` instances across engine modules.
-  - Flake8 & Black configured.
-  - `RegionSelectorWindow`: Improved to better cover full virtual desktop; rectangle fill is now solid.
-  - `MainAppWindow`: Corrected `AttributeError` for rule selection; rule selection and detail display should now be functional. The logic for saving sub-condition edits when switching between them has been improved.
-- **Current Status:** The core features of "Full GUI for Profile & Rule Configuration" (v3.0.0) are implemented and have undergone recent bug fixes and UX refinements. The status is now **"Pending Review"** by DevLead for comprehensive testing.
-- **Future Internal Improvement Planning:**
-    - A "GUI Component Refactoring" task (v3.0.x, Status: Planning) has been added to the roadmap and detailed in `TECHNICAL_DESIGN.MD` (Section 9.8). This aims to improve GUI code modularity and maintainability after core v3.0.0 features are stable.
-- **Immediate Next Step:** DevLead to perform thorough testing of the GUI:
-    1.  **Region Selector:** Test functionality on various display setups (single/multi-monitor if possible) to verify fullscreen coverage. Test adding new regions and editing existing region coordinates.
-    2.  **Rule Editor:**
-        *   Verify that rules can be selected and their details (name, default region, condition, action) are correctly displayed in the `DetailsPanel`.
-        *   Test editing all parts of a rule: name, default region.
-        *   Test editing single conditions: change type, edit all parameters for each type, save.
-        *   Test converting between single and compound conditions.
-        *   Test editing compound conditions: change logical operator, add/remove sub-conditions.
-        *   Test editing individual sub-conditions: change type, edit all parameters for each type, ensure changes to one sub-condition are preserved when selecting another sub-condition to edit *before* clicking "Apply Rule Changes".
-        *   Test editing actions: change type, edit all parameters for each type, save.
-        *   Verify input validation for all fields.
-    3.  **General GUI operations:** Test file operations (New, Open, Save, Save As), region management (Add, Remove), template management (Add, Remove, including image file handling and preview).
-    4.  Confirm the `run profiles/example_profile.json` command still executes correctly after GUI edits and saves.
-- **Following Successful Testing:** Update the "Full GUI for Profile & Rule Configuration" feature to "Testing" or "Done" based on findings. Then, proceed with previously outlined next steps: State Consistency Testing, Tooltips, Status Bar, general Code Refinements, and Logging Review for `MainAppWindow`.
-- After these, assess "Sub-condition/Rule Reordering (Simple)" feature before considering the planned "GUI Component Refactoring".
+- **AI-Accelerated v1.0.0 & v2.0.0 Complete.**
+- **v3.0.0 GUI Enhancements (Phase 1.8.1):** Current status is **"Pending Review"** by DevLead for comprehensive testing of GUI functionality.
+- **POST v3.0.0 STABILIZATION - PLANNING FOR v4.0.0 (Gemini Integration):**
+    1.  **Formalize ADR-008:** DevLead to review and approve ADR-008 for Gemini integration.
+    2.  **Update `DEV_CONFIG.MD`:**
+        *   Set `Active Version` to `v4.0.0 (Gemini - Phase 1: Core Integration)`.
+        *   Define `Primary Goal for Active Version` to cover the initial Gemini integration steps:
+            *   Implement `GeminiAnalyzer` module.
+            *   Secure API key management (`.env`).
+            *   Implement `gemini_vision_query` condition type in `RulesEngine`.
+            *   Add basic GUI support for configuring `gemini_vision_query` conditions.
+            *   Update all relevant documentation (ADRs, Technical Design, Requirements, NFRs, Roadmap).
+    3.  **Design & Implementation of v4.0.0 (Gemini - Phase 1):**
+        *   Begin work on the `GeminiAnalyzer` module.
+        *   Design the schema changes for `gemini_vision_query` conditions.
+        *   Plan `RulesEngine` modifications.
+        *   Design GUI elements for the new condition type.
+- **Focus for Gemini Phase 1 (v4.0.0):**
+    - Enable PyPixelBot to **query Gemini Vision API** with screen region images and text prompts.
+    - Allow rules to **use Gemini's responses** as conditions.
+    - Provide GUI tools for users to **configure these Gemini-powered conditions**.
+    - Ensure **NFRs** (latency, cost, privacy, internet dependency, API key security) are addressed and documented.
+- **Future Gemini Phases (Post v4.0.0 Phase 1):**
+    - **Phase 1 Stretch/Phase 2:** Allow actions to use bounding box information derived from Gemini's analysis for more precise targeting.
+    - **Phase 2+:** Explore using Gemini's reasoning to assist in selecting or parameterizing actions based on its visual understanding and a high-level user goal (approaching dynamic "rule" or plan creation).
+    - **Phase 3+:** Investigate highly autonomous behavior where Gemini formulates multi-step plans (long-term, very ambitious).
 
 ---
