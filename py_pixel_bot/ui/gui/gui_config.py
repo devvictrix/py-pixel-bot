@@ -81,7 +81,7 @@ UI_PARAM_CONFIG = {
             {"id": "region", "label": "Target Region (Override):", "widget": "optionmenu_dynamic", "options_source": "regions", "default": "", "required": False},
         ],
         "gemini_vision_query": [ 
-            {"id": "prompt", "label": "Gemini Prompt:", "widget": "textbox", "type": str, "default": "Describe this image.", "required": True, "placeholder": "e.g., Is there a login button visible?", "height": 120}, # Added height
+            {"id": "prompt", "label": "Gemini Prompt:", "widget": "textbox", "type": str, "default": "Describe this image.", "required": True, "placeholder": "e.g., Is there a login button visible?", "height": 120},
             {"id": "expected_response_contains", "label": "Response Contains (CSV for OR):", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "e.g., login,error"},
             {"id": "case_sensitive_response_check", "label": "Case Sensitive Check", "widget": "checkbox", "type": bool, "default": False},
             {"id": "expected_response_json_path", "label": "JSON Path (Basic Dot Notation):", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "e.g., data.items.0.name"},
@@ -115,7 +115,7 @@ UI_PARAM_CONFIG = {
             },
         ],
         "type_text": [
-            {"id": "text", "label": "Text to Type:", "widget": "textbox", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "Text to type or {var}", "height": 80}, # Added height
+            {"id": "text", "label": "Text to Type:", "widget": "textbox", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "Text to type or {var}", "height": 80},
             {"id": "interval", "label": "Typing Interval (s):", "widget": "entry", "type": str, "default": "0.0", "required": False, "allow_empty_string": True, "placeholder": "Seconds or {var}"},
             {
                 "id": "pyautogui_pause_before",
@@ -145,13 +145,13 @@ UI_PARAM_CONFIG = {
             {
                 "id": "message",
                 "label": "Log Message:",
-                "widget": "textbox", # Changed to textbox for potentially longer messages
+                "widget": "textbox", 
                 "type": str,
                 "default": "Rule triggered",
                 "required": False,
                 "allow_empty_string": True,
                 "placeholder": "Log message or {var}",
-                "height": 80 # Added height
+                "height": 80 
             },
             {"id": "level", "label": "Log Level:", "widget": "optionmenu_static", "options_const_key": "LOG_LEVELS", "default": "INFO", "required": True},
         ],

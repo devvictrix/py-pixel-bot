@@ -365,12 +365,8 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         if not param_definitions and item_subtype != "always_true":
             ctk.CTkLabel(parent_frame, text=f"No parameters defined for '{item_subtype}'.").grid(row=current_row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
             return
-        elif item_subtype == "always_true" and param_group_key == "conditions": # Check group key for always_true
-            # For 'always_true' condition, we might still have a region override.
-            # If param_definitions is empty (e.g. because UI_PARAM_CONFIG was simplified),
-            # we still might want to show *something* or handle it.
-            # The current UI_PARAM_CONFIG for always_true now includes an optional region.
-            pass # Let it fall through to process the (optional) region parameter.
+        elif item_subtype == "always_true" and param_group_key == "conditions":
+            pass 
 
 
         for param_def in param_definitions:
@@ -391,7 +387,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 label.grid(row=current_row, column=0, padx=5, pady=2, sticky="w")
                 widget.grid(row=current_row, column=1, padx=5, pady=2, sticky="ew")
             elif widget_type_str == "textbox":
-                textbox_height = param_def.get("height", 60) # Use height from config or default to 60
+                textbox_height = param_def.get("height", 60) 
                 widget = ctk.CTkTextbox(parent_frame, height=textbox_height, wrap="word")
                 widget.insert("0.0", str(current_val))
                 widget.bind("<FocusOut>", lambda e, wk=widget_full_key: self.parent_app._set_dirty_status(True))
@@ -425,7 +421,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 var = tk.BooleanVar(value=bool(current_val))
                 widget = ctk.CTkCheckBox(parent_frame, text=label_text, variable=var, command=lambda wk=widget_full_key: self.parent_app._set_dirty_status(True))
                 self.detail_optionmenu_vars[f"{widget_full_key}_var"] = var
-                widget.grid(row=current_row, column=0, columnspan=2, padx=5, pady=2, sticky="w") # Checkbox takes its own label
+                widget.grid(row=current_row, column=0, columnspan=2, padx=5, pady=2, sticky="w") 
             else:
                 logger.warning(f"Unknown widget type '{widget_type_str}' for param '{param_id}'. Skipping.")
                 continue
@@ -442,9 +438,8 @@ class DetailsPanel(ctk.CTkScrollableFrame):
             logger.debug(f"No parameters to get for '{param_group_key}/{item_subtype}' (prefix: {widget_prefix}).")
             return params
         
-        # Handle always_true explicitly if it has optional params like 'region'
         if item_subtype == "always_true" and param_group_key == "conditions":
-            for param_def in param_definitions: # Process its (few) defined params
+            for param_def in param_definitions: 
                  param_id = param_def["id"]
                  widget_key = f"{widget_prefix}{param_id}"
                  field_name = param_def["label"].rstrip(":")
@@ -458,8 +453,8 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                     "min_val": param_def.get("min_val"), "max_val": param_def.get("max_val"),
                  }
                  val, is_valid = validate_and_get_widget_value(widget_instance, tk_var_instance, field_name, target_type_def, default_val, **validation_args)
-                 if not is_valid: all_params_valid = False
-                 params[param_id] = val
+                 if not is_valid: all_params_valid = False # Still mark invalid even if only optional params
+                 params[param_id] = val # Store the value regardless of validity for optional field; required field validity checked below
             return params if all_params_valid else None
 
 
@@ -489,8 +484,10 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
             val, is_valid = validate_and_get_widget_value(widget_instance, tk_var_instance, field_name, target_type_def, default_val, **validation_args)
 
-            if not is_valid:
+            if not is_valid: # validate_and_get_widget_value already shows messagebox
                 all_params_valid = False
+                # For required fields, this 'all_params_valid = False' will cause function to return None
+                # For non-required, we store a default/empty to avoid type errors later if code expects the key.
                 if target_type_def == str:
                     params[param_id] = "" if param_def.get("allow_empty_string") else default_val
                 elif target_type_def == int: params[param_id] = 0
@@ -498,26 +495,35 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 elif target_type_def == bool: params[param_id] = False
                 elif target_type_def == "bgr_string": params[param_id] = [0,0,0]
                 else: params[param_id] = default_val
-                if param_def.get("required", False): logger.error(f"Required field '{field_name}' failed validation.")
-                else: logger.warning(f"Non-required field '{field_name}' failed validation, using default/empty.")
+                
+                if param_def.get("required", False): 
+                    logger.error(f"Required field '{field_name}' failed validation.")
+                else: 
+                    logger.warning(f"Non-required field '{field_name}' failed validation, using default/empty placeholder for key '{param_id}'.")
+            else: # is_valid is True
+                params[param_id] = val
 
+
+            # Special handling for template_name to store template_filename
             if param_id == "template_name" and param_group_key == "conditions":
-                selected_template_name = val
-                if selected_template_name:
+                selected_template_name = val # val here is the name string from OptionMenu
+                if selected_template_name: # If a name is selected
                     actual_filename = next((t.get("filename", "") for t in self.parent_app.profile_data.get("templates", []) if t.get("name") == selected_template_name), "")
-                    if not actual_filename and param_def.get("required", False) and selected_template_name:
-                        messagebox.showerror("Input Error", f"Could not find filename for selected template '{selected_template_name}'.")
-                        all_params_valid = False
-                    params["template_filename"] = actual_filename
-                elif param_def.get("required", False):
+                    if not actual_filename and param_def.get("required", False) and selected_template_name: 
+                        # This state implies the selected name in UI doesn't map to a template with a filename in profile_data
+                        # This should ideally not happen if list is populated correctly.
+                        messagebox.showerror("Internal Error", f"Could not find filename for selected template '{selected_template_name}'. Data inconsistency?")
+                        all_params_valid = False # Mark as invalid if required template is unresolvable
+                    params["template_filename"] = actual_filename 
+                elif param_def.get("required", False): # Template name is required but 'val' (selected_template_name) is empty
                     messagebox.showerror("Input Error", f"'{field_name}' must be selected.")
                     all_params_valid = False
+                    params["template_filename"] = "" # Ensure key exists
+                else: # Not required and empty
                     params["template_filename"] = ""
-                else:
-                    params["template_filename"] = ""
-                params["template_name"] = selected_template_name
-            else:
-                params[param_id] = val
+                # params["template_name"] = selected_template_name # No need to store 'template_name', it's just for UI selection. 'template_filename' is used by engine.
+                if "template_name" in params: # Remove the UI-only key
+                    del params["template_name"]
 
         logger.debug(f"Collected parameters for '{item_subtype}' (prefix '{widget_prefix}'): {params}. All valid: {all_params_valid}")
         return params if all_params_valid else None

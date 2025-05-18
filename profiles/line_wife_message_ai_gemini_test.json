@@ -9,12 +9,11 @@
     },
     "regions": [
         {
-            "name": "line_contact_list_zone",
-            "x": 70,
-            "y": 120,
-            "width": 400,
-            "height": 700,
-            "comment": "Area covering the contact list in LINE."
+            "name": "test",
+            "x": 5,
+            "y": 31,
+            "width": 498,
+            "height": 249
         },
         {
             "name": "line_active_chat_input_zone",
