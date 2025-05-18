@@ -1,5 +1,3 @@
-// File: docs/FEATURE_ROADMAP.MD
-
 # Feature Roadmap & Status
 
 This document tracks planned features and their status for this visual automation tool. The project has progressed through initial versions, including a significant "AI-Accelerated v1.0.0" release, "v2.0.0" (advanced analysis/rules), and "v3.0.0" (Enhanced GUI & Usability). The current major focus is **"v4.0.0 (Gemini-Powered Visual Intelligence)"**.
@@ -66,9 +64,9 @@ This document tracks planned features and their status for this visual automatio
 | **v3.0.x (Post-Core GUI Stability - Internal Refactoring)**                             |
 | v3.0.x                                                                                  | Done        | Medium   | DX/Maintainability       | GUI Component Refactoring                             | Refactored `MainAppWindow` and `DetailsPanel` into smaller, more specialized components (e.g., `RegionDetailView`, `RuleDetailView` with `ConditionEditorView`, `ActionEditorView`) for improved modularity. Strategy in `TECHNICAL_DESIGN.MD` Section 9.8. | `CustomTkinter`. Refactoring complete.                                                                                          |
 | **v4.0.0 (Gemini-Powered Visual Intelligence) - NEW / CURRENT FOCUS**                   |
-| v4.0.0 (Phase 1)                                                                        | Planning    | Critical | Gemini Integration       | `GeminiAnalyzer` Module - Core API Client             | Create a module to handle communication with the Gemini API (Vision models), including API key management (from .env), request formation, response parsing, and error handling. See ADR-008.                                            | `google-generativeai` SDK.                                                                                                    |
-| v4.0.0 (Phase 1)                                                                        | Planning    | Critical | Gemini Integration       | New Condition Type: `gemini_vision_query`             | Integrate `GeminiAnalyzer` into `RulesEngine` by adding a new condition type (`gemini_vision_query`). Params: `prompt`, `expected_response_contains`, `capture_as`, etc. (see ADR-008).                                         | `rules_engine.py`, JSON schema.                                                                                               |
-| v4.0.0 (Phase 1)                                                                        | Planning    | High     | Usability (Gemini)       | GUI Support for `gemini_vision_query` Conditions      | Update `MainAppWindow` and `DetailsPanel` to allow users to create, edit, and configure `gemini_vision_query` conditions, including prompt input and response expectation parameters.                                                  | `CustomTkinter`, `gui_config.py`.                                                                                             |
+| v4.0.0 (Phase 1)                                                                        | Done        | Critical | Gemini Integration       | `GeminiAnalyzer` Module - Core API Client             | Create a module to handle communication with the Gemini API (Vision models), including API key management (from .env), request formation, response parsing, and error handling. See ADR-008.                                            | `google-generativeai` SDK. Implemented core class, methods, image prep, response parsing, error handling, logging.             |
+| v4.0.0 (Phase 1)                                                                        | Done        | Critical | Gemini Integration       | New Condition Type: `gemini_vision_query`             | Integrate `GeminiAnalyzer` into `RulesEngine` by adding a new condition type (`gemini_vision_query`). Params: `prompt`, `expected_response_contains`, `capture_as`, etc. (see ADR-008).                                         | `rules_engine.py`, JSON schema. Modified `__init__` and `_evaluate_single_condition_logic`. Basic dot-notation JSONPath access. |
+| v4.0.0 (Phase 1)                                                                        | Done        | High     | Usability (Gemini)       | GUI Support for `gemini_vision_query` Conditions      | Update `MainAppWindow` and `DetailsPanel` to allow users to create, edit, and configure `gemini_vision_query` conditions, including prompt input and response expectation parameters.                                                  | `CustomTkinter`, `gui_config.py`. `gui_config.py` updated. `MainAppWindow` updated for settings. `DetailsPanel` picks up new config & textbox height. |
 | v4.0.0 (Phase 1)                                                                        | Not Started | Medium   | Advanced Actions (Gemini)| Action on Gemini-Identified Element Bounding Box    | (Stretch Goal) Allow actions (e.g., click) to target coordinates derived from bounding boxes returned by Gemini for identified elements (see ADR-008).                                                                            | `action_executor.py`, `rules_engine.py` (variable handling).                                                                  |
 | v4.0.0 (Phase 1)                                                                        | Planning    | High     | Documentation (Gemini)   | Gemini Integration User Guide & NFRs                  | Document API key setup, costs, privacy, prompt engineering best practices, and NFRs (latency, internet) related to Gemini features (see ADR-008). Needs update across Requirements, NFRs, Tech Design, README.                        | Markdown.                                                                                                                     |
 | **vFuture (Advanced Enhancements & Integrations - Post v4.0.0 Phase 1)**                |
@@ -90,21 +88,36 @@ This document tracks planned features and their status for this visual automatio
 - **v1.0.0, v2.0.0, v3.0.0 Complete.**
 - **v4.0.0 (Gemini-Powered Visual Intelligence): This is the active development target.**
     -   **Current Focus: Phase 1 - Core Integration.**
-    -   **Status:** Design documents (`ADR-008`, `TECHNICAL_DESIGN.MD`, Requirements, NFRs) have been updated. `DEV_CONFIG.MD` and `AI_INSTRUCTIONS.MD` are aligned.
+    -   **Status:**
+        -   Design documents (`ADR-008`, `TECHNICAL_DESIGN.MD`, Requirements, NFRs) updated.
+        -   `DEV_CONFIG.MD` and `AI_INSTRUCTIONS.MD` aligned.
+        -   `GeminiAnalyzer` module implementation is **Done**.
+        -   `requirements.txt` updated.
+        -   `gemini_vision_query` condition integration into `RulesEngine` is **Done**.
+        -   **GUI Support for Gemini configuration is Done.** This includes updates to `gui_config.py`, `MainAppWindow` (settings panel), and `DetailsPanel` (dynamic rendering of `gemini_vision_query` parameters, including textbox height).
     -   **Next Steps:**
-        1.  **Implementation of `GeminiAnalyzer` Module:** Develop the core class for interacting with the Gemini API SDK (`google-generativeai`), including robust error handling and logging.
-        2.  **Implementation of `gemini_vision_query` Condition:** Integrate the `GeminiAnalyzer` into the `RulesEngine` to handle the new condition type, including response evaluation and variable capture.
-        3.  **Implementation of GUI Support:** Update `gui_config.py` and `DetailsPanel` to allow users to configure the `gemini_vision_query` condition. Update Settings panel for API key status and default model.
-        4.  **Testing:** Conduct manual integration tests requiring a Gemini API key. Develop mocking strategy for potential future unit tests.
-        5.  **Documentation:** Ensure user guides, README, and technical docs fully cover Gemini setup (API key), usage (prompting), limitations (latency, cost, privacy), and configuration.
+        1.  **Thorough Testing of GUI and Engine Integration:** This is now the primary focus.
+            *   Manually test creating/editing rules with the `gemini_vision_query` condition in the `MainAppWindow`.
+            *   Verify all parameters are correctly saved to and loaded from JSON profiles.
+            *   Run profiles with Gemini conditions to ensure `RulesEngine` invokes `GeminiAnalyzer` and evaluates responses as expected (text, JSON path, variable capture).
+            *   Test error handling scenarios (invalid API key, network issues, blocked prompts/responses, invalid JSON paths in conditions).
+        2.  **Documentation:** Update user guides, README, and technical docs to fully cover Gemini:
+            *   API key setup instructions.
+            *   Guidance on prompt engineering for visual automation.
+            *   Explanation of `gemini_vision_query` condition parameters.
+            *   Information on potential costs, latency, privacy implications, and internet dependency.
+        3.  **(Stretch Goal for Phase 1 / Start of Phase 2):** If core Gemini condition functionality is stable and well-tested, begin design/implementation for actions targeting bounding boxes derived from Gemini analysis. This primarily involves:
+            *   `GeminiAnalyzer` potentially needing to parse structured bounding box data from Gemini if prompts are designed for this.
+            *   `RulesEngine` capturing this structured data.
+            *   `ActionExecutor` being enhanced to understand a new `target_relation` (e.g., `center_of_gemini_identified_element`) and use the captured bounding box data.
 - **Focus for Gemini Phase 1 (v4.0.0):**
     - Enable PyPixelBot to **query Gemini Vision API** with screen region images and text prompts.
     - Allow rules to **use Gemini's responses** as conditions.
     - Provide GUI tools for users to **configure these Gemini-powered conditions**.
     - Ensure **NFRs** (latency, cost, privacy, internet dependency, API key security) are addressed and documented.
 - **Future Gemini Phases (Post v4.0.0 Phase 1):**
-    - **Phase 1 Stretch/Phase 2:** Allow actions to use bounding box information derived from Gemini's analysis for more precise targeting.
-    - **Phase 2+:** Explore using Gemini's reasoning to assist in selecting or parameterizing actions based on its visual understanding and a high-level user goal (approaching dynamic "rule" or plan creation).
-    - **Phase 3+:** Investigate highly autonomous behavior where Gemini formulates multi-step plans (long-term, very ambitious).
+    - **Phase 1 Stretch/Phase 2:** Action on Gemini-Identified Element Bounding Box.
+    - **Phase 2+:** Explore using Gemini's reasoning to assist in selecting or parameterizing actions.
+    - **Phase 3+:** Investigate highly autonomous behavior where Gemini formulates multi-step plans.
 
 ---

@@ -3,14 +3,12 @@ import tkinter as tk
 from tkinter import messagebox
 import os
 
-# import json # No longer needed here
 import copy
 from typing import Optional, Dict, Any, List, Union
 
 import customtkinter as ctk
 from PIL import Image
 
-# Standardized Absolute Imports from the gui subpackage
 from py_pixel_bot.ui.gui.gui_config import UI_PARAM_CONFIG, OPTIONS_CONST_MAP, MAX_PREVIEW_WIDTH, MAX_PREVIEW_HEIGHT, CONDITION_TYPES, LOGICAL_OPERATORS, ACTION_TYPES
 from py_pixel_bot.ui.gui.gui_utils import validate_and_get_widget_value, parse_bgr_string, create_clickable_list_item
 
@@ -19,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class DetailsPanel(ctk.CTkScrollableFrame):
-    def __init__(self, master: Any, parent_app: Any, **kwargs):  # parent_app is MainAppWindow
+    def __init__(self, master: Any, parent_app: Any, **kwargs):
         super().__init__(master, label_text="Selected Item Details", **kwargs)
         self.parent_app = parent_app
 
@@ -145,7 +143,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
     def _display_rule_details(self, rule_data: Dict):
         logger.debug(f"Displaying rule details: {rule_data.get('name')}")
-        self.parent_app.selected_sub_condition_index = None  # Reset selected sub-condition when a new rule is displayed
+        self.parent_app.selected_sub_condition_index = None
 
         row_idx = 0
         ctk.CTkLabel(self.content_frame, text="Rule Name:").grid(row=row_idx, column=0, sticky="w", padx=5, pady=2)
@@ -245,7 +243,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
             self.sub_condition_params_frame.grid(row=2, column=0, sticky="nsew", padx=5, pady=5)
             self.sub_condition_params_frame.grid_columnconfigure(1, weight=1)
             ctk.CTkLabel(self.sub_condition_params_frame, text="Select sub-condition to edit.").pack(padx=5, pady=5)
-        else:  # Single condition
+        else:
             ctk.CTkLabel(self.condition_params_frame, text="Condition Type:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
             current_cond_type = str(condition_data.get("type", "always_true"))
             var_cond_type = ctk.StringVar(value=current_cond_type)
@@ -281,22 +279,19 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 self.sub_conditions_list_frame, summary, lambda e=None, scd=sub_cond, idx=i, ifc=item_frame_container: self._on_sub_condition_selected_internal(scd, idx, ifc.get("frame"))
             )
             item_frame_container["frame"] = item_frame
-            if i == self.parent_app.selected_sub_condition_index:  # Re-highlight if this index was selected
+            if i == self.parent_app.selected_sub_condition_index:
                 self.parent_app._highlight_selected_list_item("condition", item_frame, is_sub_list=True)
 
         if self.parent_app.selected_sub_condition_index is None and self.sub_condition_params_frame:
-            for widget in self.sub_condition_params_frame.winfo_children():  # Clear params if no sub-cond selected
+            for widget in self.sub_condition_params_frame.winfo_children():
                 widget.destroy()
             ctk.CTkLabel(self.sub_condition_params_frame, text="Select sub-condition to edit.").pack(padx=5, pady=5)
-        # If a sub-condition IS selected, _on_sub_condition_selected_internal will handle rendering its params.
 
     def _on_sub_condition_selected_internal(self, sub_cond_data_from_list_item: Dict, new_selected_index: int, item_widget_frame: Optional[ctk.CTkFrame]):
         if item_widget_frame is None:
             logger.warning("Attempted to select sub-condition, but item_widget_frame is None.")
             return
 
-        # Commit changes for the previously selected sub-condition (if any)
-        # before switching to the new one.
         prev_selected_idx = self.parent_app.selected_sub_condition_index
         if prev_selected_idx is not None and prev_selected_idx != new_selected_index and self.parent_app.selected_rule_index is not None:
             logger.debug(f"Sub-condition selection changing from index {prev_selected_idx} to {new_selected_index}. " f"Attempting to commit changes for old index {prev_selected_idx}.")
@@ -306,33 +301,22 @@ class DetailsPanel(ctk.CTkScrollableFrame):
             sub_conds_list = compound_cond_block.get("sub_conditions", [])
 
             if 0 <= prev_selected_idx < len(sub_conds_list):
-                # The widgets for the prev_selected_idx sub-condition are currently in self.detail_widgets
-                # (prefixed with "subcond_") and its type is in self.detail_optionmenu_vars.get("subcond_condition_type_var")
-
                 prev_sub_cond_type_var = self.detail_optionmenu_vars.get("subcond_condition_type_var")
                 if prev_sub_cond_type_var:
                     prev_sub_cond_type = prev_sub_cond_type_var.get()
                     logger.debug(f"Committing sub-condition at index {prev_selected_idx} of type '{prev_sub_cond_type}'")
-
                     params_from_ui = self._get_parameters_from_ui("conditions", prev_sub_cond_type, "subcond_")
-
                     if params_from_ui is not None:
-                        # Update the sub-condition in the main profile_data directly
-                        sub_conds_list[prev_selected_idx] = params_from_ui  # Assign new dict
+                        sub_conds_list[prev_selected_idx] = params_from_ui
                         self.parent_app._set_dirty_status(True)
                         logger.info(f"Committed UI changes for sub-condition index {prev_selected_idx} " f"to profile_data. New data: {sub_conds_list[prev_selected_idx]}")
                     else:
-                        logger.warning(
-                            f"Failed to get/validate parameters for sub-condition index "
-                            f"{prev_selected_idx} before switching. Changes might be lost if invalid. "
-                            "The UI for that sub-condition might have held invalid data which wasn't committed."
-                        )
+                        logger.warning(f"Failed to get/validate parameters for sub-condition index {prev_selected_idx} before switching. Changes might be lost if invalid.")
                 else:
                     logger.warning(f"Could not find type variable for previously selected sub-condition index {prev_selected_idx}. Cannot commit changes.")
             else:
                 logger.warning(f"Previously selected sub-condition index {prev_selected_idx} out of bounds for current sub_conds_list. Cannot commit changes.")
 
-        # Now, proceed to set the new selection and render its parameters
         self.parent_app.selected_sub_condition_index = new_selected_index
         self.parent_app._highlight_selected_list_item("condition", item_widget_frame, is_sub_list=True)
 
@@ -342,12 +326,10 @@ class DetailsPanel(ctk.CTkScrollableFrame):
             logger.error("sub_condition_params_frame is None, cannot render parameters.")
             return
 
-        for widget in self.sub_condition_params_frame.winfo_children():  # Clear previous sub-condition's params
+        for widget in self.sub_condition_params_frame.winfo_children():
             widget.destroy()
-        self.sub_condition_params_frame.grid_columnconfigure(1, weight=1)  # Ensure column configure is set
+        self.sub_condition_params_frame.grid_columnconfigure(1, weight=1)
 
-        # Use the sub_cond_data_from_list_item passed from the click event,
-        # which should be the most up-to-date version from profile_data for this newly selected item.
         current_type = sub_cond_data_from_list_item.get("type", "always_true")
         ctk.CTkLabel(self.sub_condition_params_frame, text=f"Edit Sub-Condition #{new_selected_index + 1} Type:").grid(row=0, column=0, padx=5, pady=2, sticky="w")
 
@@ -356,18 +338,15 @@ class DetailsPanel(ctk.CTkScrollableFrame):
             self.sub_condition_params_frame,
             variable=var_sub_cond_type,
             values=CONDITION_TYPES,
-            command=lambda choice: self.parent_app._on_rule_part_type_change("condition", choice),  # This will re-render params for the current sub-cond
+            command=lambda choice: self.parent_app._on_rule_part_type_change("condition", choice),
         )
         menu.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
         self.detail_optionmenu_vars["subcond_condition_type_var"] = var_sub_cond_type
-        self.detail_widgets["subcond_condition_type"] = menu  # Storing the menu itself
+        self.detail_widgets["subcond_condition_type"] = menu
 
-        # Render parameters for the NEWLY selected sub-condition
         self._render_dynamic_parameters("conditions", current_type, sub_cond_data_from_list_item, self.sub_condition_params_frame, start_row=1, widget_prefix="subcond_")
 
     def _render_dynamic_parameters(self, param_group_key: str, item_subtype: str, data_source: Dict[str, Any], parent_frame: ctk.CTkFrame, start_row: int, widget_prefix: str):
-        # Clear only the widgets relevant to this specific call (identified by widget_prefix)
-        # from self.detail_widgets and self.detail_optionmenu_vars
         widgets_to_remove_keys = [k for k in self.detail_widgets if k.startswith(widget_prefix) and k != f"{widget_prefix}type"]
         for key in widgets_to_remove_keys:
             widget_to_remove = self.detail_widgets.pop(key, None)
@@ -375,31 +354,30 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 widget_to_remove.destroy()
             self.detail_optionmenu_vars.pop(f"{key}_var", None)
 
-        # Clear widgets from the parent_frame that are in rows >= start_row
-        for widget in list(parent_frame.winfo_children()):  # Iterate over a copy
+        for widget in list(parent_frame.winfo_children()):
             grid_info = widget.grid_info()
-            # Check if it's one of our managed widgets or if it's simply in the target rows
-            # This check ensures we don't accidentally destroy the "Type" OptionMenu if start_row is 0 or 1
-            # and it also clears any old parameter labels/widgets.
             if grid_info and grid_info.get("row", -1) >= start_row:
                 widget.destroy()
 
         param_definitions = UI_PARAM_CONFIG.get(param_group_key, {}).get(item_subtype, [])
         current_row = start_row
 
-        if not param_definitions and item_subtype != "always_true":  # Handle cases with no defined params
+        if not param_definitions and item_subtype != "always_true":
             ctk.CTkLabel(parent_frame, text=f"No parameters defined for '{item_subtype}'.").grid(row=current_row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
             return
-        elif item_subtype == "always_true":  # Specific handling for always_true
-            ctk.CTkLabel(parent_frame, text="This condition is always met. No parameters needed.").grid(row=current_row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
-            return
+        elif item_subtype == "always_true" and param_group_key == "conditions": # Check group key for always_true
+            # For 'always_true' condition, we might still have a region override.
+            # If param_definitions is empty (e.g. because UI_PARAM_CONFIG was simplified),
+            # we still might want to show *something* or handle it.
+            # The current UI_PARAM_CONFIG for always_true now includes an optional region.
+            pass # Let it fall through to process the (optional) region parameter.
+
 
         for param_def in param_definitions:
             param_id = param_def["id"]
             label_text = param_def["label"]
             widget_type_str = param_def["widget"]
             default_val = param_def["default"]
-            # Use data_source which is the specific condition/action dict passed in
             current_val = data_source.get(param_id, default_val)
             widget_full_key = f"{widget_prefix}{param_id}"
 
@@ -408,16 +386,16 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
             if widget_type_str == "entry":
                 widget = ctk.CTkEntry(parent_frame, placeholder_text=str(param_def.get("placeholder", default_val)))
-                widget.insert(0, str(current_val))  # Ensure current_val is string for entry
+                widget.insert(0, str(current_val))
                 widget.bind("<KeyRelease>", lambda e, wk=widget_full_key: self.parent_app._set_dirty_status(True))
                 label.grid(row=current_row, column=0, padx=5, pady=2, sticky="w")
                 widget.grid(row=current_row, column=1, padx=5, pady=2, sticky="ew")
             elif widget_type_str == "textbox":
-                widget = ctk.CTkTextbox(parent_frame, height=60, wrap="word")
-                widget.insert("0.0", str(current_val))  # Ensure current_val is string
-                # Using <FocusOut> for textbox as KeyRelease can be too frequent and might not capture full paste.
+                textbox_height = param_def.get("height", 60) # Use height from config or default to 60
+                widget = ctk.CTkTextbox(parent_frame, height=textbox_height, wrap="word")
+                widget.insert("0.0", str(current_val))
                 widget.bind("<FocusOut>", lambda e, wk=widget_full_key: self.parent_app._set_dirty_status(True))
-                label.grid(row=current_row, column=0, padx=5, pady=2, sticky="nw")  # sticky "nw" for label
+                label.grid(row=current_row, column=0, padx=5, pady=2, sticky="nw")
                 widget.grid(row=current_row, column=1, padx=5, pady=2, sticky="ew")
             elif widget_type_str.startswith("optionmenu"):
                 options = []
@@ -430,10 +408,9 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 elif widget_type_str == "optionmenu_static":
                     options = OPTIONS_CONST_MAP.get(param_def.get("options_const_key", ""), [])
 
-                # Ensure current_val is a string and present in options, else use first option or default_val stringified
                 str_current_val = str(current_val)
-                if not options:  # Handle empty options list case
-                    options = [str(default_val)]  # Ensure at least one option (default)
+                if not options:
+                    options = [str(default_val)]
                     if str_current_val not in options:
                         str_current_val = options[0]
                 elif str_current_val not in options:
@@ -445,11 +422,10 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 label.grid(row=current_row, column=0, padx=5, pady=2, sticky="w")
                 widget.grid(row=current_row, column=1, padx=5, pady=2, sticky="ew")
             elif widget_type_str == "checkbox":
-                var = tk.BooleanVar(value=bool(current_val))  # Ensure current_val is bool
-                # For checkbox, the label_text is part of the widget itself.
+                var = tk.BooleanVar(value=bool(current_val))
                 widget = ctk.CTkCheckBox(parent_frame, text=label_text, variable=var, command=lambda wk=widget_full_key: self.parent_app._set_dirty_status(True))
                 self.detail_optionmenu_vars[f"{widget_full_key}_var"] = var
-                widget.grid(row=current_row, column=0, columnspan=2, padx=5, pady=2, sticky="w")
+                widget.grid(row=current_row, column=0, columnspan=2, padx=5, pady=2, sticky="w") # Checkbox takes its own label
             else:
                 logger.warning(f"Unknown widget type '{widget_type_str}' for param '{param_id}'. Skipping.")
                 continue
@@ -458,31 +434,50 @@ class DetailsPanel(ctk.CTkScrollableFrame):
             current_row += 1
 
     def _get_parameters_from_ui(self, param_group_key: str, item_subtype: str, widget_prefix: str) -> Optional[Dict[str, Any]]:
-        params: Dict[str, Any] = {"type": item_subtype}  # Initialize with the type
+        params: Dict[str, Any] = {"type": item_subtype}
         all_params_valid = True
         param_definitions = UI_PARAM_CONFIG.get(param_group_key, {}).get(item_subtype, [])
 
-        if not param_definitions and item_subtype != "always_true":  # No params for always_true
-            # If no params defined (other than 'always_true'), return the type dict
+        if not param_definitions and item_subtype != "always_true":
             logger.debug(f"No parameters to get for '{param_group_key}/{item_subtype}' (prefix: {widget_prefix}).")
             return params
+        
+        # Handle always_true explicitly if it has optional params like 'region'
+        if item_subtype == "always_true" and param_group_key == "conditions":
+            for param_def in param_definitions: # Process its (few) defined params
+                 param_id = param_def["id"]
+                 widget_key = f"{widget_prefix}{param_id}"
+                 field_name = param_def["label"].rstrip(":")
+                 target_type_def = param_def["type"]
+                 default_val = param_def["default"]
+                 widget_instance = self.detail_widgets.get(widget_key)
+                 tk_var_instance = self.detail_optionmenu_vars.get(f"{widget_key}_var")
+                 validation_args = {
+                    "required": param_def.get("required", False),
+                    "allow_empty_string": param_def.get("allow_empty_string", target_type_def == str),
+                    "min_val": param_def.get("min_val"), "max_val": param_def.get("max_val"),
+                 }
+                 val, is_valid = validate_and_get_widget_value(widget_instance, tk_var_instance, field_name, target_type_def, default_val, **validation_args)
+                 if not is_valid: all_params_valid = False
+                 params[param_id] = val
+            return params if all_params_valid else None
+
 
         for param_def in param_definitions:
             param_id = param_def["id"]
             widget_key = f"{widget_prefix}{param_id}"
-            field_name = param_def["label"].rstrip(":")  # For error messages
+            field_name = param_def["label"].rstrip(":")
             target_type_def = param_def["type"]
             default_val = param_def["default"]
 
             widget_instance = self.detail_widgets.get(widget_key)
             tk_var_instance = self.detail_optionmenu_vars.get(f"{widget_key}_var")
 
-            # If widget_instance is None and it's a checkbox, tk_var_instance should exist
-            if widget_instance is None and not isinstance(tk_var_instance, tk.BooleanVar):  # Check specific for checkbox case
+            if widget_instance is None and not isinstance(tk_var_instance, tk.BooleanVar):
                 logger.error(f"Widget for '{field_name}' (key: {widget_key}) not found in detail_widgets for _get_parameters_from_ui.")
-                if param_def.get("required", False):  # If required, this is a failure
+                if param_def.get("required", False):
                     all_params_valid = False
-                params[param_id] = default_val  # Use default if widget missing and not required
+                params[param_id] = default_val
                 continue
 
             validation_args = {
@@ -494,45 +489,33 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
             val, is_valid = validate_and_get_widget_value(widget_instance, tk_var_instance, field_name, target_type_def, default_val, **validation_args)
 
-            if not is_valid:  # validate_and_get_widget_value already shows messagebox
+            if not is_valid:
                 all_params_valid = False
-                # Store default_val or a type-appropriate empty value if validation failed but field not strictly required
-                # This avoids crashes later if code expects a certain type.
                 if target_type_def == str:
                     params[param_id] = "" if param_def.get("allow_empty_string") else default_val
-                elif target_type_def == int:
-                    params[param_id] = 0
-                elif target_type_def == float:
-                    params[param_id] = 0.0
-                elif target_type_def == bool:
-                    params[param_id] = False
-                elif target_type_def == "bgr_string":
-                    params[param_id] = [0, 0, 0]  # or default_val if it's a list
-                else:
-                    params[param_id] = default_val
-                # If a required field is invalid, we will return None at the end.
-                # If non-required field invalid, it gets a default/empty, process continues.
-                if param_def.get("required", False):
-                    logger.error(f"Required field '{field_name}' failed validation.")
-                else:
-                    logger.warning(f"Non-required field '{field_name}' failed validation, using default/empty.")
+                elif target_type_def == int: params[param_id] = 0
+                elif target_type_def == float: params[param_id] = 0.0
+                elif target_type_def == bool: params[param_id] = False
+                elif target_type_def == "bgr_string": params[param_id] = [0,0,0]
+                else: params[param_id] = default_val
+                if param_def.get("required", False): logger.error(f"Required field '{field_name}' failed validation.")
+                else: logger.warning(f"Non-required field '{field_name}' failed validation, using default/empty.")
 
-            # Special handling for template_name to store template_filename
             if param_id == "template_name" and param_group_key == "conditions":
                 selected_template_name = val
-                if selected_template_name:  # If a name is selected (could be empty string if not required)
+                if selected_template_name:
                     actual_filename = next((t.get("filename", "") for t in self.parent_app.profile_data.get("templates", []) if t.get("name") == selected_template_name), "")
-                    if not actual_filename and param_def.get("required", False) and selected_template_name:  # Required and non-empty selection but no filename found
+                    if not actual_filename and param_def.get("required", False) and selected_template_name:
                         messagebox.showerror("Input Error", f"Could not find filename for selected template '{selected_template_name}'.")
                         all_params_valid = False
-                    params["template_filename"] = actual_filename  # Store filename
-                elif param_def.get("required", False):  # Template name is required but 'val' is empty
+                    params["template_filename"] = actual_filename
+                elif param_def.get("required", False):
                     messagebox.showerror("Input Error", f"'{field_name}' must be selected.")
                     all_params_valid = False
                     params["template_filename"] = ""
-                else:  # Not required and empty
+                else:
                     params["template_filename"] = ""
-                params["template_name"] = selected_template_name  # Store the name itself too for clarity in JSON (optional)
+                params["template_name"] = selected_template_name
             else:
                 params[param_id] = val
 

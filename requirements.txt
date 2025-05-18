@@ -1,19 +1,8 @@
-# Core dependencies for screen interaction, image processing, and automation
+python-dotenv
+Pillow
 opencv-python
 numpy
-Pillow
 pytesseract
 pyautogui
-
-# Environment variable management
-python-dotenv
-
-# GUI (for region selector initially)
 customtkinter
-
-# Potential future additions (commented out for now)
-# requests # For future webhook actions
-# pytest # For future unit testing
-# flake8 # For future linting
-# black # For future formatting
-# isort # For future import sorting
+google-generativeai
