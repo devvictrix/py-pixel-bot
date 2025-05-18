@@ -48,7 +48,7 @@ class RulesEngine:
 
         # Initialize GeminiAnalyzer
         gemini_api_key = os.getenv("GEMINI_API_KEY")
-        gemini_default_model = self.config_manager.get_setting("gemini_default_model_name", "gemini-1.5-flash-latest")
+        gemini_default_model = self.config_manager.get_setting("gemini_default_model_name", "gemini-2.5-pro-preview-03-25")
         self.gemini_analyzer: Optional[GeminiAnalyzer] = None
         if gemini_api_key:
             self.gemini_analyzer = GeminiAnalyzer(api_key=gemini_api_key, default_model_name=gemini_default_model)

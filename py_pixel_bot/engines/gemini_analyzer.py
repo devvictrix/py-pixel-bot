@@ -37,13 +37,13 @@ class GeminiAnalyzer:
     Responsible for sending image data and prompts, and parsing responses.
     """
 
-    def __init__(self, api_key: str, default_model_name: str = "gemini-1.5-flash-latest"):
+    def __init__(self, api_key: str, default_model_name: str = "gemini-2.5-pro-preview-03-25"):
         """
         Initializes the GeminiAnalyzer.
 
         Args:
             api_key: The Google Gemini API key.
-            default_model_name: The default Gemini model to use (e.g., "gemini-1.5-flash-latest").
+            default_model_name: The default Gemini model to use (e.g., "gemini-2.5-pro-preview-03-25").
         """
         self.api_key = api_key
         self.default_model_name = default_model_name
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     cv2.putText(dummy_image_np, "Hello", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)  # Yellow text on black
 
     # --- Test Scenarios ---
-    analyzer = GeminiAnalyzer(api_key=TEST_API_KEY, default_model_name="gemini-1.5-flash-latest")
+    analyzer = GeminiAnalyzer(api_key=TEST_API_KEY, default_model_name="gemini-2.5-pro-preview-03-25")
 
     print("\n--- Test 1: Basic query ---")
     if analyzer.client_initialized:

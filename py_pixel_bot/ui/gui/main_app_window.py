@@ -137,7 +137,7 @@ class MainAppWindow(ctk.CTk):
 
         # Gemini Default Model (v4.0.0)
         ctk.CTkLabel(pif, text="Gemini Model:").grid(row=3, column=0, padx=5, pady=2, sticky="w")
-        self.entry_gemini_default_model = ctk.CTkEntry(pif, placeholder_text="gemini-1.5-flash-latest")
+        self.entry_gemini_default_model = ctk.CTkEntry(pif, placeholder_text="gemini-2.5-pro-preview-03-25")
         self.entry_gemini_default_model.grid(row=3, column=1, padx=5, pady=2, sticky="ew")
         self.entry_gemini_default_model.bind("<KeyRelease>", lambda e: self._set_dirty_status(True))
 
@@ -295,7 +295,7 @@ class MainAppWindow(ctk.CTk):
         
         # Populate Gemini settings (v4.0.0)
         self.entry_gemini_default_model.delete(0, tk.END)
-        self.entry_gemini_default_model.insert(0, str(settings.get("gemini_default_model_name", "gemini-1.5-flash-latest")))
+        self.entry_gemini_default_model.insert(0, str(settings.get("gemini_default_model_name", "gemini-2.5-pro-preview-03-25")))
         self.label_gemini_api_key_status.configure(text=self._check_gemini_api_key_status())
 
 
@@ -376,12 +376,12 @@ class MainAppWindow(ctk.CTk):
             
         # Gemini settings (v4.0.0)
         gemini_model_val, gemini_model_valid = validate_and_get_widget_value(
-            self.entry_gemini_default_model, None, "Gemini Default Model", str, settings.get("gemini_default_model_name", "gemini-1.5-flash-latest"), required=False, allow_empty_string=True
+            self.entry_gemini_default_model, None, "Gemini Default Model", str, settings.get("gemini_default_model_name", "gemini-2.5-pro-preview-03-25"), required=False, allow_empty_string=True
         )
         if gemini_model_valid:
             # If empty, store None or a default. For now, store as is (empty string or value).
             # ADR-008 specifies model_name as Optional[str], so empty implies fallback in GeminiAnalyzer.
-            settings["gemini_default_model_name"] = gemini_model_val if gemini_model_val else "gemini-1.5-flash-latest" # Fallback if empty
+            settings["gemini_default_model_name"] = gemini_model_val if gemini_model_val else "gemini-2.5-pro-preview-03-25" # Fallback if empty
         # No else all_settings_valid = False, as it's not strictly required.
 
         self.profile_data["settings"] = settings
