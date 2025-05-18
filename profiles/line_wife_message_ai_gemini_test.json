@@ -10,10 +10,10 @@
     "regions": [
         {
             "name": "test",
-            "x": 5,
-            "y": 31,
-            "width": 498,
-            "height": 249
+            "x": 0,
+            "y": 0,
+            "width": 920,
+            "height": 641
         },
         {
             "name": "line_active_chat_input_zone",

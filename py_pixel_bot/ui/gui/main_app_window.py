@@ -371,10 +371,7 @@ class MainAppWindow(ctk.CTk):
         )
         if gemini_model_valid:
             settings["gemini_default_model_name"] = gemini_model_val if gemini_model_val else "gemini-1.5-flash-latest"
-        # No else: all_settings_valid = False because an empty string is acceptable here (means use SDK default)
-        # We only care if the validation function itself (e.g. from gui_utils) deemed it invalid for other reasons.
-        # If validate_and_get_widget_value returned False for gemini_model_valid, then it failed a non-empty check or type.
-        elif not gemini_model_valid : # Only if validation truly failed
+        elif not gemini_model_valid : 
              all_settings_valid = False
 
 
@@ -461,13 +458,11 @@ class MainAppWindow(ctk.CTk):
                 
                 highlight_color_tuple = ctk.ThemeManager.theme["CTkButton"]["fg_color"]
                 if isinstance(highlight_color_tuple, tuple) and len(highlight_color_tuple) == 2:
-                    # Use the color appropriate for the current mode (light/dark)
-                    # This assumes _get_appearance_mode() returns "Light" or "Dark"
-                    current_mode = ctk.ThemeManager.theme.get("appearance_mode", "Light") # Fallback if not found
+                    current_mode = ctk.ThemeManager.get_現在の外観モード() if hasattr(ctk.ThemeManager, 'get_current_appearance_mode') else "Light" # Compatibility with older CTk versions
                     highlight_color = highlight_color_tuple[0] if current_mode == "Light" else highlight_color_tuple[1]
-                elif isinstance(highlight_color_tuple, str): # If it's a single color string
+                elif isinstance(highlight_color_tuple, str): 
                     highlight_color = highlight_color_tuple
-                else: # Fallback
+                else: 
                     highlight_color = "#3a7ebf" 
             except (KeyError, AttributeError, TypeError): 
                 highlight_color = "#3a7ebf" 
@@ -690,6 +685,7 @@ class MainAppWindow(ctk.CTk):
             region_being_edited_original_data = copy.deepcopy(self.profile_data["regions"][self.selected_region_index])
             
             selector_dialog = RegionSelectorWindow(master=self, config_manager=cm_for_selector, existing_region_data=region_being_edited_original_data)
+            self.wait_window(selector_dialog) # CRITICAL: Wait for the modal dialog to close
             
             if selector_dialog.changes_made and selector_dialog.saved_region_info:
                 logger.info("RegionSelector made changes. Reloading profile into MainAppWindow to reflect disk state.")
@@ -747,6 +743,7 @@ class MainAppWindow(ctk.CTk):
                 return
             
             selector_dialog = RegionSelectorWindow(master=self, config_manager=cm_for_selector, existing_region_data=None) 
+            self.wait_window(selector_dialog) # CRITICAL: Wait for the modal dialog to close
             
             if selector_dialog.changes_made and selector_dialog.saved_region_info:
                 logger.info("RegionSelector added a new region. Reloading profile into MainAppWindow.")
