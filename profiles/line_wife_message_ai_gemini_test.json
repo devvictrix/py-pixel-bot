@@ -9,7 +9,7 @@
     },
     "regions": [
         {
-            "name": "test",
+            "name": "line_contact_list_zone",
             "x": 0,
             "y": 0,
             "width": 920,
@@ -17,11 +17,10 @@
         },
         {
             "name": "line_active_chat_input_zone",
-            "x": 500,
-            "y": 800,
-            "width": 1000,
-            "height": 200,
-            "comment": "Area covering the chat input field once a chat is open."
+            "x": 449,
+            "y": 973,
+            "width": 1468,
+            "height": 180
         }
     ],
     "templates": [
