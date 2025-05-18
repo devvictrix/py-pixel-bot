@@ -1,0 +1,94 @@
+{
+    "profile_description": "AI-assisted (Gemini Test) profile to send 'Hello from PyPixelBot! \ud83d\ude0a' to a user in LINE.",
+    "settings": {
+        "monitoring_interval_seconds": 3.0,
+        "analysis_dominant_colors_k": 3,
+        "gemini_default_model_name": "gemini-2.5-pro-preview-03-25"
+    },
+    "regions": [
+        {
+            "name": "line_contact_list_zone",
+            "x": 70,
+            "y": 120,
+            "width": 400,
+            "height": 700,
+            "comment": "Area covering the contact list in LINE."
+        },
+        {
+            "name": "line_active_chat_input_zone",
+            "x": 500,
+            "y": 800,
+            "width": 1000,
+            "height": 200,
+            "comment": "Area covering the chat input field once a chat is open."
+        }
+    ],
+    "templates": [
+        {
+            "name": "message_field_template",
+            "filename": "message_input_field_template.png",
+            "comment": "User needs to create this: a unique part of the 'Enter a message' input field/area."
+        }
+    ],
+    "rules": [
+        {
+            "name": "R1_FindUserWithGeminiAndPrepareClick",
+            "region": "line_contact_list_zone",
+            "condition": {
+                "type": "gemini_vision_query",
+                "prompt": "Is there a contact visible in this list named '[Wife's Actual Name on LINE]'? Respond with 'yes' or 'no'.",
+                "expected_response_contains": "yes",
+                "case_sensitive_response_check": false,
+                "capture_as": "gemini_found_wife"
+            },
+            "action": {
+                "type": "log_message",
+                "message": "Gemini R1: Attempted to find user. Response: {gemini_found_wife}",
+                "level": "INFO"
+            }
+        },
+        {
+            "name": "R2_FindAndClickMessageInputField",
+            "region": "line_active_chat_input_zone",
+            "condition": {
+                "type": "template_match_found",
+                "template_filename": "message_input_field_template.png",
+                "min_confidence": 0.7
+            },
+            "action": {
+                "type": "click",
+                "target_relation": "center_of_last_match",
+                "pyautogui_pause_before": 0.4
+            }
+        },
+        {
+            "name": "R3_TypeGreetingMessage",
+            "region": "line_active_chat_input_zone",
+            "condition": {
+                "type": "template_match_found",
+                "template_filename": "message_input_field_template.png",
+                "min_confidence": 0.65
+            },
+            "action": {
+                "type": "type_text",
+                "text": "Hello from PyPixelBot (Gemini Test)! \ud83d\ude0a",
+                "interval": 0.04,
+                "pyautogui_pause_before": 0.2
+            }
+        },
+        {
+            "name": "R4_PressEnterToSend",
+            "region": "line_active_chat_input_zone",
+            "condition": {
+                "type": "template_match_found",
+                "template_filename": "message_input_field_template.png",
+                "min_confidence": 0.6
+            },
+            "action": {
+                "type": "press_key",
+                "key": "enter",
+                "pyautogui_pause_before": 0.3
+            }
+        }
+    ]
+}
