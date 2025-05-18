@@ -6,7 +6,7 @@ This project is a Python-based desktop automation tool designed to **capture and
 
 ## 2. Vision
 
-To create a precise, efficient, and user-friendly visual automation tool that empowers users to automate tasks requiring interaction with dynamic or non-standard UI elements. This tool will enable automation where traditional element selectors might fail, by focusing on visual cues. **By incorporating advanced AI like Gemini (v4.0.0+), the vision extends towards more intelligent, context-aware, and adaptable automation that can handle greater UI variability and interpret visual information more semantically.** It aims to be highly configurable through an intuitive GUI, while still offering a robust CLI for bot execution.
+To create a precise, efficient, and user-friendly visual automation tool that empowers users to automate tasks requiring interaction with dynamic or non-standard UI elements. This tool will enable automation where traditional element selectors might fail, by focusing on visual cues. **By incorporating advanced AI like Google Gemini (v4.0.0+), the vision extends towards more intelligent, context-aware, and adaptable automation that can handle greater UI variability and interpret visual information more semantically.** It aims to be highly configurable through an intuitive GUI, while still offering a robust CLI for bot execution.
 
 ## 3. Core Goals
 

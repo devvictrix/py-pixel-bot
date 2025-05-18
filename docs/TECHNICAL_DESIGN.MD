@@ -165,7 +165,7 @@ The tool is modular, comprising several key Python components, all residing with
             -   If `expected_response_json_path` and `expected_json_value` are specified, attempts to parse `json_content` (if present), extract the value using basic dot-notation path accessor, and compare it as strings. (Full JSONPath via library is deferred).
             -   Sets `condition_met` accordingly. If no specific content checks are defined, a successful API call means `condition_met = True`.
         7.  If `condition_met` is `True` AND `capture_as` is defined:
-            -   Stores the relevant data from Gemini's response (e.g., `text_content`, or the value extracted by JSONPath from `json_content`, or the full `json_content` if no path) into the `rule_variable_context`.
+            -   Stores the relevant data from Gemini's response (e.g., `text_content`, or the value extracted by JSONPath from `json_content`, or the full `json_content` if no path specified for extraction) into the `rule_variable_context`.
 
 -   **Action Execution Trigger:** (No change in logic flow: if rule's overall condition is True, action is prepared and executed).
 
@@ -257,7 +257,7 @@ The tool is modular, comprising several key Python components, all residing with
     -   `UI_PARAM_CONFIG["conditions"]` has an entry for `"gemini_vision_query"`:
         ```python
         "gemini_vision_query": [
-            {"id": "prompt", "label": "Gemini Prompt:", "widget": "textbox", "type": str, "default": "Describe this image.", "required": True, "placeholder": "e.g., Is there a login button visible?", "height": 120},
+            {"id": "prompt", "label": "Gemini Prompt:", "widget": "textbox", "type": str, "default": "Describe this image.", "required": True, "placeholder": "e.g., Is there a login button visible?", "height": 120}, # height attribute for textbox
             {"id": "expected_response_contains", "label": "Response Contains (CSV for OR):", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "e.g., login,error"},
             {"id": "case_sensitive_response_check", "label": "Case Sensitive Check", "widget": "checkbox", "type": bool, "default": False},
             {"id": "expected_response_json_path", "label": "JSON Path (Basic Dot Notation):", "widget": "entry", "type": str, "default": "", "required": False, "allow_empty_string": True, "placeholder": "e.g., data.items.0.name"},
@@ -268,9 +268,39 @@ The tool is modular, comprising several key Python components, all residing with
         ]
         ```
 -   **`DetailsPanel._render_dynamic_parameters`:**
-    -   Handles `widget: "textbox"` and respects the optional `height` attribute from `param_def` (e.g., `param_def.get("height", 60)`).
+    -   Handles `widget: "textbox"` and respects the optional `height` attribute from `param_def` (e.g., `param_def.get("height", 60)` where 60 is a smaller default for other textboxes).
 -   **`MainAppWindow` Settings Panel:**
     -   `self.entry_gemini_default_model = CTkEntry(...)`
     -   `self.label_gemini_api_key_status = CTkLabel(...)`
     -   `_populate_ui_from_profile_data` populates these.
     -   `_update_profile_data_from_ui` reads from these.
+
+## 12. Testing Strategy (v4.0.0 - Gemini Integration)
+
+-   **Manual Integration Testing (Primary):**
+    -   Requires a valid `GEMINI_API_KEY` in the `.env` file.
+    -   **Focus Areas:**
+        -   GUI: Creating, editing, saving, and loading profiles containing `gemini_vision_query` conditions.
+        -   `RulesEngine`: Correct invocation of `GeminiAnalyzer`, accurate evaluation of text and JSON responses, proper variable capture.
+        -   `GeminiAnalyzer`: Handling of various API responses (success, errors, blocked content), image preparation.
+        -   End-to-end bot runs with profiles using Gemini conditions to verify actions are triggered correctly.
+        -   Error handling for API key issues, network problems, and invalid prompts.
+-   **Automated Testing (Future - Requires Mocking):**
+    -   **Mocking `GeminiAnalyzer`:**
+        -   A `MockGeminiAnalyzer` class will be created (e.g., in a `tests/mocks/` directory).
+        -   This mock class will implement the same `query_vision_model` interface as the real `GeminiAnalyzer`.
+        -   It will be configurable to return predefined responses for specific (image_hash, prompt) inputs or follow a sequence of responses. This allows simulating:
+            -   Successful responses with varying text/JSON content.
+            -   API error statuses (`"status": "error", "error_message": "..."`).
+            -   Blocked prompt/response statuses.
+            -   Different latencies (by including a `time.sleep` in the mock).
+        -   **Dependency Injection:** `RulesEngine` will be refactored slightly in its `__init__` to allow injecting an instance of `GeminiAnalyzer` (or `MockGeminiAnalyzer`). By default, it will create the real one. Test setups will instantiate `RulesEngine` with the mock.
+            ```python
+            # Example in RulesEngine.__init__
+            # self.gemini_analyzer = gemini_analyzer_instance if gemini_analyzer_instance else GeminiAnalyzer(...)
+            ```
+    -   **Unit Tests (e.g., using `pytest`):**
+        -   Test `RulesEngine._evaluate_single_condition_logic` for `gemini_vision_query` by providing various mock responses and verifying condition outcomes and variable capture.
+        -   Test `GeminiAnalyzer` internal logic (e.g., image preparation, basic response parsing structure) if complex enough, though direct API interaction mocking is key.
+    -   **Integration Tests (Automated):**
+        -   Test `RulesEngine.evaluate_rules` with profiles containing Gemini conditions, using the `MockGeminiAnalyzer` to simulate a sequence of visual states and API responses.
