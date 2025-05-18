@@ -89,7 +89,7 @@ This ADR proposes integrating the Google Gemini API, specifically its multimodal
     *   Add `GEMINI_API_KEY` to `.env` file specification.
     *   `ConfigManager` loads the key from `.env`.
     *   `MainAppWindow` settings UI should indicate if the key is configured (read-only status).
-    *   Add a profile setting (`settings.gemini_default_model_name`) to allow users to specify a preferred Gemini model (e.g., "gemini-2.5-pro-preview-03-25", "gemini-1.5-pro-latest"). Default to a sensible choice like Flash for cost/latency balance initially.
+    *   Add a profile setting (`settings.gemini_default_model_name`) to allow users to specify a preferred Gemini model (e.g., "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"). Default to a sensible choice like Flash for cost/latency balance initially.
 3.  **New Condition Type in `RulesEngine` (`gemini_vision_query`):**
     *   Define schema in JSON (see `TECHNICAL_DESIGN.MD` Section 5.1 for details):
         *   `type`: "gemini_vision_query"

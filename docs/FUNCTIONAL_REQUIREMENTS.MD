@@ -72,7 +72,7 @@ This document outlines the functional requirements for the visual automation too
 *   **FR-CONFIG-002: Variable Capture in Rules:** Conditions (specifically `ocr_contains_text`, `template_match_found`, **and `gemini_vision_query` (v4.0.0)**) MUST allow their primary result (full OCR text, template match details dictionary, **Gemini text/JSON response/extracted value**) to be captured into a named, rule-scoped variable using a `capture_as` parameter in the JSON rule definition, configurable via the GUI.
 *   **FR-CONFIG-003: Gemini Settings Management (v4.0.0):**
     *   The system MUST load the `GEMINI_API_KEY` from the `.env` file (via `os.getenv` in `GeminiAnalyzer`'s instantiation path).
-    *   Users MUST be able to configure a default Gemini model name (e.g., `"gemini-2.5-pro-preview-03-25"`) within the profile settings (`settings.gemini_default_model_name`), manageable via the GUI.
+    *   Users MUST be able to configure a default Gemini model name (e.g., `"gemini-1.5-flash-latest"`) within the profile settings (`settings.gemini_default_model_name`), manageable via the GUI.
 
 ## FR-UI: User Interface
 

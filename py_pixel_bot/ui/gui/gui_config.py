@@ -10,7 +10,7 @@ DEFAULT_PROFILE_STRUCTURE = {
         "analysis_dominant_colors_k": 3,
         "tesseract_cmd_path": None,
         "tesseract_config_custom": "",
-        "gemini_default_model_name": "gemini-2.5-pro-preview-03-25" # Added for v4.0.0
+        "gemini_default_model_name": "gemini-1.5-flash-latest" # Added for v4.0.0
     },
     "regions": [],
     "templates": [],

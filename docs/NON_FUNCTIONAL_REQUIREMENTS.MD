@@ -66,6 +66,6 @@ This document outlines the non-functional requirements for the visual automation
 *   **NFR-CONF-001: Comprehensive Profile Configuration (via GUI & JSON):** All aspects of bot behavior MUST be configurable. **v4.0.0 (Gemini): This includes all parameters for `gemini_vision_query` conditions (prompt, expected response checks, model override, capture variable) via the GUI and JSON, as defined in `gui_config.py`.**
 *   **NFR-CONF-002: Logging Configuration:** Logging behavior MUST be primarily controlled via `APP_ENV` and secondarily via CLI runtime flags.
 *   **NFR-CONF-003: Core Loop Interval (Bot Runtime):** The `monitoring_interval_seconds` MUST be configurable.
-*   **NFR-CONF-004: Analysis Parameters:** Key parameters for local analysis engines (e.g., `analysis_dominant_colors_k`) SHOULD be configurable. **v4.0.0 (Gemini): The default Gemini model (e.g., "gemini-2.5-pro-preview-03-25") MUST be configurable in profile settings (`settings.gemini_default_model_name`), and can be overridden per `gemini_vision_query` condition.**
+*   **NFR-CONF-004: Analysis Parameters:** Key parameters for local analysis engines (e.g., `analysis_dominant_colors_k`) SHOULD be configurable. **v4.0.0 (Gemini): The default Gemini model (e.g., "gemini-1.5-flash-latest") MUST be configurable in profile settings (`settings.gemini_default_model_name`), and can be overridden per `gemini_vision_query` condition.**
 
 ---

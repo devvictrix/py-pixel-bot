@@ -3,7 +3,9 @@
     "settings": {
         "monitoring_interval_seconds": 3.0,
         "analysis_dominant_colors_k": 3,
-        "gemini_default_model_name": "gemini-2.5-pro-preview-03-25"
+        "tesseract_cmd_path": null,
+        "tesseract_config_custom": "",
+        "gemini_default_model_name": "gemini-1.5-flash-latest"
     },
     "regions": [
         {
@@ -36,7 +38,7 @@
             "region": "line_contact_list_zone",
             "condition": {
                 "type": "gemini_vision_query",
-                "prompt": "Is there a contact visible in this list named '[Wife's Actual Name on LINE]'? Respond with 'yes' or 'no'.",
+                "prompt": "Is there a contact visible in this list named '\u0e2b\u0e19\u0e39\u0e19\u0e34\u0e27'? Respond with 'yes' or 'no'.",
                 "expected_response_contains": "yes",
                 "case_sensitive_response_check": false,
                 "capture_as": "gemini_found_wife"

@@ -134,7 +134,7 @@ The tool is modular, comprising several key Python components, all residing with
           "expected_response_json_path": "elements[?(@.label=='button' && @.color=='red')].text", 
           "expected_json_value": "Proceed", 
           "capture_as": "gemini_analysis_result", 
-          "model_name": "gemini-2.5-pro-preview-03-25" 
+          "model_name": "gemini-1.5-flash-latest" 
         }
         ```
         *(Note: All fields except `type` and `prompt` are optional for `gemini_vision_query`. If `region` is omitted, it uses the rule's default region.)*
@@ -239,7 +239,7 @@ The tool is modular, comprising several key Python components, all residing with
 ### 10.1. Class Structure and Initialization
 
 -   **Class:** `py_pixel_bot.engines.gemini_analyzer.GeminiAnalyzer`
--   **`__init__(self, api_key: str, default_model_name: str = "gemini-2.5-pro-preview-03-25")`:**
+-   **`__init__(self, api_key: str, default_model_name: str = "gemini-1.5-flash-latest")`:**
     -   Stores `api_key` and `default_model_name`.
     -   Initializes `google-generativeai` client. Logs status.
 
@@ -253,7 +253,7 @@ The tool is modular, comprising several key Python components, all residing with
 
 -   **`gui_config.py` Updates:**
     -   `"gemini_vision_query"` added to `CONDITION_TYPES`.
-    -   `DEFAULT_PROFILE_STRUCTURE["settings"]` includes `"gemini_default_model_name": "gemini-2.5-pro-preview-03-25"`.
+    -   `DEFAULT_PROFILE_STRUCTURE["settings"]` includes `"gemini_default_model_name": "gemini-1.5-flash-latest"`.
     -   `UI_PARAM_CONFIG["conditions"]` has an entry for `"gemini_vision_query"`:
         ```python
         "gemini_vision_query": [
