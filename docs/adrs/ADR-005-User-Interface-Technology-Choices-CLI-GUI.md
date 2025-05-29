@@ -1,4 +1,3 @@
-// File: docs/adrs/ADR-005-User-Interface-Technology-Choices-CLI-GUI.md
 # ADR-005: User Interface Technology Choices (CLI & GUI)
 
 *   **Status:** Approved (and actively being implemented)
@@ -7,7 +6,7 @@
 
 ## Context and Problem Statement
 
-The tool requires user interfaces for configuration and control:
+The tool (Mark-I) requires user interfaces for configuration and control:
 1.  **Command-Line Interface (CLI):** For initial versions, for users who prefer CLI, and for potentially running bots in headless/scripted environments. Core CLI functions include loading profiles, starting/stopping bot runtime, and invoking GUI tools for specific tasks like region definition or full profile editing.
 2.  **Graphical User Interface (GUI):** For user-friendly visual region definition, comprehensive profile management (including intuitive creation and editing of regions, templates, rules, conditions, actions, and settings), and potentially real-time feedback during bot setup or debugging (though live feedback is a more advanced feature).
 
@@ -54,7 +53,7 @@ We need Python technologies for both, prioritizing cross-platform compatibility,
 ## Consequences
 
 *   **CLI Development:**
-    *   The CLI is built using Python's `argparse` module, located in `py_pixel_bot/ui/cli.py`. It handles parsing commands and options passed at startup.
+    *   The CLI is built using Python's `argparse` module, located in `mark_i/ui/cli.py`. It handles parsing commands and options passed at startup.
 *   **GUI Development:**
     *   The project has a dependency on the `CustomTkinter` library (and its dependencies, like `Pillow`). This is managed via `requirements.txt`.
     *   The initial GUI component for region selection (`RegionSelectorWindow`) was built with `CustomTkinter`.

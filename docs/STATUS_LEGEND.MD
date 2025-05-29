@@ -1,4 +1,3 @@
-// File: docs/STATUS_LEGEND.MD
 # Status Legend for Feature Roadmap
 
 This document defines the meaning of status indicators used in `FEATURE_ROADMAP.MD`.

@@ -1,4 +1,3 @@
-// File: docs/adrs/ADR-007-Logging-Strategy-and-Environment-Configuration.md
 # ADR-007: Logging Strategy and Environment Configuration
 
 *   **Status:** Approved (and implemented)
@@ -7,7 +6,7 @@
 
 ## Context and Problem Statement
 
-The visual automation tool, encompassing both its bot runtime and GUI editor, requires robust and configurable logging for multiple purposes:
+The visual automation tool (Mark-I), encompassing both its bot runtime and GUI editor, requires robust and configurable logging for multiple purposes:
 *   **Development:** Detailed tracing of execution paths, variable states, and component interactions.
 *   **Debugging:** Identifying issues and understanding error contexts.
 *   **User Support/Troubleshooting (UAT/Production):** Allowing users or support personnel to gather information about bot behavior or GUI issues.
@@ -57,7 +56,7 @@ We also need a standard method for managing environment-specific settings, prima
 
 ## Logging Strategy Details (Implemented in `core/logging_setup.py`)
 
-*   **Logger Naming:** Modules use `logging.getLogger(__name__)` to leverage the hierarchical nature of loggers. The root logger for the application (e.g., `py_pixel_bot`) is configured.
+*   **Logger Naming:** Modules use `logging.getLogger(__name__)` to leverage the hierarchical nature of loggers. The root logger for the application (e.g., `mark_i`) is configured.
 *   **Log Levels:** Standard levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) are used.
 *   **Log Format:** A consistent, detailed format is used for file logs:
     `%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s`
@@ -80,7 +79,7 @@ We also need a standard method for managing environment-specific settings, prima
 
 *   A `.env` file (e.g., containing `APP_ENV=development`) is expected in the project root for local development. This file **MUST** be added to `.gitignore`.
 *   The `python-dotenv` library is a project dependency (listed in `requirements.txt`).
-*   A dedicated module, `py_pixel_bot/core/logging_setup.py`, encapsulates all logging initialization logic.
+*   A dedicated module, `mark_i/core/logging_setup.py`, encapsulates all logging initialization logic.
 *   Developers must be diligent in adding comprehensive logging statements throughout their code, using appropriate log levels.
 *   The `logs/` directory needs to be created by the application if it doesn't exist and **MUST** be added to `.gitignore`.
 

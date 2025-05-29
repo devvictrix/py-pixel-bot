@@ -1,17 +1,17 @@
-# Technical Design Document
+# Technical Design Document: Mark-I
 
-This document outlines the technical design and architectural considerations for the visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status. As of the last update, v1.0.0, v2.0.0, and v3.0.0 are complete. Development for **v4.0.0 (Gemini-Powered Visual Intelligence)** Phase 1 (Core Integration) is also complete. The current focus is on **v4.0.0 Phase 1.5 / Start of Phase 2: Action on Gemini-Identified Element Bounding Box**, as detailed in ADR-008 and this document.
+This document outlines the technical design and architectural considerations for the Mark-I visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status. As of the last update, v1.0.0, v2.0.0, and v3.0.0 are complete. Development for **v4.0.0 (Gemini-Powered Visual Intelligence)** Phase 1 (Core Integration) is also complete. The current focus is on **v4.0.0 Phase 1.5 / Start of Phase 2: Action on Gemini-Identified Element Bounding Box**, as detailed in ADR-008 and this document.
 
 ## 1. Core Architecture
 
-The tool is modular, comprising several key Python components, all residing within the main `py_pixel_bot` package located at the project root:
+The tool is modular, comprising several key Python components, all residing within the main `py_pixel_bot` package located at the project root: (Note: Python package name remains `py_pixel_bot`)
 
 - **`core.config_manager` Module:**
   - `load_environment_variables()` function: Called at application startup to load `.env` (containing `APP_ENV` and **`GEMINI_API_KEY` for v4.0.0+**) using `python-dotenv` (per ADR-007, ADR-008).
   - `ConfigManager` class: Responsible for loading, validating (basic structure), providing access to, and saving bot profiles (JSON files from the `profiles/` directory, per ADR-003). It also provides the base path for profile-related assets like templates.
   - **Utilized by the `MainAppWindow` (GUI) for loading, saving, and path resolution for profiles and associated template images.**
 - **`core.logging_setup` Module:**
-  - `setup_logging()` function: Called after environment variables are loaded. Initializes Python's `logging` system based on `APP_ENV`, configuring handlers (console, date-stamped rotating file), formatters, and log levels (per ADR-007). CLI flags can override console log level.
+  - `setup_logging()` function: Called after environment variables are loaded. Initializes Python's `logging` system based on `APP_ENV`, configuring handlers (console, date-stamped rotating file), formatters, and log levels (per ADR-007). CLI flags can override console log level. The `APP_ROOT_LOGGER_NAME` is "py_pixel_bot".
 - **`engines.capture_engine.CaptureEngine` Class:**
   - Responsible for capturing image data from specified screen regions using `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` for Windows capture (per ADR-001).
   - Converts captured Pillow Image objects to OpenCV BGR NumPy arrays for consistent use by the `AnalysisEngine` and `GeminiAnalyzer`.
@@ -43,13 +43,13 @@ The tool is modular, comprising several key Python components, all residing with
       - **Calls the `GeminiAnalyzer` with the image and prompt from the condition spec.**
       - Evaluates Gemini's response based on `expected_response_contains` or `expected_response_json_path`/`expected_json_value`.
       - Handles API call errors gracefully (condition evaluates to `False`, log error).
-      - If `capture_as` is defined, stores the relevant Gemini response (e.g., full text, specific JSON-extracted value, or the **entire parsed JSON object which could contain bounding box data**) into the `rule_variable_context`.
+      - If `capture_as` is defined, stores the relevant Gemini response (e.g., full text, specific JSON-extracted value, or the **entire parsed JSON object which could contain bounding box data, along with the source region name**) into the `rule_variable_context`.
 - **`engines.action_executor.ActionExecutor` Class (Updated for v4.0.0 Phase 1.5):**
   - Simulates mouse and keyboard actions using `pyautogui` (per ADR-002).
   - Calculates target coordinates for actions.
   - **Enhancement for v4.0.0 Phase 1.5:**
     - Modified to handle new `target_relation` values like `center_of_gemini_element` and `top_left_of_gemini_element`.
-    - Requires an associated parameter `gemini_element_variable` referencing a variable that holds element details including a bounding box (e.g., `{"box": [x_rel, y_rel, w, h], "label": "element_label", "found": true}`).
+    - Requires an associated parameter `gemini_element_variable` referencing a variable that holds element details including a `box` field (e.g., `{"value": {"box": [x_rel, y_rel, w, h], "label": "element_label", "found": true}, "_source_region_for_capture_": "region_name"}`).
     - `_get_target_coords` method updated to parse this variable and calculate absolute screen coordinates based on the bounding box relative to the region where the Gemini query was performed.
 - **`main_controller.MainController` Class:** (Located in `py_pixel_bot/main_controller.py`)
   - Orchestrates the main bot operation loop for runtime execution.
@@ -138,7 +138,7 @@ The tool is modular, comprising several key Python components, all residing with
         }
         ```
         *(Note: All fields except `type` and `prompt` are optional for `gemini_vision_query`. If `region` is omitted, it uses the rule's default region.)*
-    -   For **v4.0.0 Phase 1.5 (Bounding Box Actions)**, the `gemini_vision_query` condition is used to capture JSON containing bounding box data. The specific prompt and expected JSON structure are detailed in Section 10.3. The `capture_as` field will store this entire JSON object.
+    -   For **v4.0.0 Phase 1.5 (Bounding Box Actions)**, the `gemini_vision_query` condition is used to capture JSON containing bounding box data. The specific prompt and expected JSON structure are detailed in Section 10.3. The `capture_as` field will store this entire JSON object, wrapped in a structure that also includes its source region (see 5.3).
 
 -   **Action Object:** (Updates for click/mouse actions in v4.0.0 Phase 1.5)
     ```json
@@ -147,7 +147,6 @@ The tool is modular, comprising several key Python components, all residing with
       "type": "click",
       "target_relation": "center_of_gemini_element", // NEW target_relation
       "gemini_element_variable": "captured_button_info", // NEW parameter: name of variable holding element data
-      // "target_region": "optional_region_name_for_context_if_different_from_gemini_query_region", // Typically not needed as context is derived from the Gemini query's region
       "button": "left",
       "clicks": 1,
       "interval": 0.0,
@@ -158,30 +157,31 @@ The tool is modular, comprising several key Python components, all residing with
     -   **New `target_relation` values for click/mouse actions (v4.0.0 Phase 1.5):**
         -   `center_of_gemini_element`: Clicks the center of the bounding box provided by the Gemini-identified element.
         -   `top_left_of_gemini_element`: Clicks the top-left corner of the bounding box.
-        -   (Future Consideration) `relative_to_gemini_element`: Clicks at an `x, y` offset relative to the top-left of the bounding box (would require additional `x`, `y` parameters in the action spec).
     -   **New action parameter `gemini_element_variable` (string) (v4.0.0 Phase 1.5):**
         -   Required when `target_relation` is one of the `*_gemini_element` types.
-        -   Specifies the name of the rule-scoped variable (captured by a `gemini_vision_query` condition) that holds the structured data for the identified element. This data MUST include a `box` field (e.g., `[x_rel, y_rel, width, height]`) and ideally a `found` boolean flag (see Section 10.3).
+        -   Specifies the name of the rule-scoped variable (captured by a `gemini_vision_query` condition) that holds the structured data for the identified element. This data is expected to be a dictionary from the `RulesEngine` like `{"value": {"box": [x,y,w,h], "found":true}, "_source_region_for_capture_": "region_name"}`.
 
 ### 5.2. `RulesEngine` Evaluation Logic (Updates for v4.0.0 Phase 1.5)
 
 -   **`_evaluate_single_condition_logic(...)` for `gemini_vision_query`:**
-    -   If `capture_as` is defined and the `gemini_response.get("json_content")` is not `None` (meaning Gemini returned valid JSON which `GeminiAnalyzer` parsed), the **entire parsed JSON object** (Python dictionary/list) is stored in `rule_variable_context[capture_as_var_name]`. This is critical for making complex data like bounding boxes available.
-    -   If `expected_response_json_path` is *also* specified in the condition along with `capture_as`, then only the value extracted by that JSON path is stored in the variable. For the bounding box use case, users should generally capture the whole JSON object and then use dot notation in action parameters if needed, or rely on `ActionExecutor` to parse the standard `box` field.
+    -   If `capture_as` is defined, the `captured_value_for_var` (which can be the full text, specific JSON-extracted value, or entire parsed JSON object) is stored along with the `region_name` (where the Gemini query operated) in a dictionary structure: `{"value": captured_value_for_var, "_source_region_for_capture_": region_name}`. This combined object is then put into `rule_variable_context[capture_as_var_name]`.
+    -   This ensures that `ActionExecutor` can later retrieve both the Gemini data (`value`) and the `_source_region_for_capture_` needed to correctly interpret relative bounding box coordinates.
 -   **`evaluate_rules(...)` - Context for Actions (Updated for v4.0.0 Phase 1.5):**
-    -   When preparing the `action_context` for `ActionExecutor`, if the rule's condition that led to the action involved a `gemini_vision_query` that captured data, the `condition_region` (the name of the region on which that specific Gemini query operated) MUST be passed in the `action_context`. This is because bounding boxes from Gemini are relative to the image it analyzed.
-    -   `RulesEngine._check_condition` will determine the `target_region_name` for any single condition (including `gemini_vision_query`). This `target_region_name` will be associated with the `rule_variable_context` or passed along so that `evaluate_rules` can put it into the `action_context` as `condition_region`.
+    -   The `_check_condition` method now returns a tuple: `(condition_met_status, determinant_region_name)`.
+    -   The `determinant_region_name` is used to populate `action_context["condition_region"]`. This `condition_region` provides general context for actions.
+    -   For Gemini-specific actions, `ActionExecutor` primarily relies on the `_source_region_for_capture_` stored within the captured variable itself (retrieved via `gemini_element_variable`).
 
 ### 5.3. Variable Handling (`RulesEngine`)
 
 -   **Scope & Lifetime:** Rule-scoped, created during `evaluate_rules` for each rule, discarded after rule evaluation.
 -   **Capture Points (Expanded for v4.0.0):**
     -   Existing: `ocr_contains_text` (captures full text), `template_match_found` (captures match details dict).
-    -   **NEW (v4.0.0):** `gemini_vision_query` can capture Gemini's `text_content`, a specific value extracted from its `json_content` (if `expected_response_json_path` is used for extraction), or the **entire `json_content` as a Python dictionary/list** (if `json_content` is available and `expected_response_json_path` is not used for extraction).
+    -   **NEW (v4.0.0):** `gemini_vision_query` can capture Gemini's `text_content`, a specific value extracted from its `json_content` (if `expected_response_json_path` is used for extraction), or the **entire `json_content` as a Python dictionary/list**.
+    -   **NEW (v4.0.0 Phase 1.5): When `gemini_vision_query` captures data via `capture_as`, the value stored in `rule_variable_context` is a dictionary: `{"value": <actual_captured_data>, "_source_region_for_capture_": "region_name_of_gemini_query"}`.**
 -   **Substitution (`_substitute_variables` method):**
     -   Uses `PLACEHOLDER_REGEX` (`\{([\w_]+)((\.[\w_]+)*)\}`) to find placeholders.
-    -   Supports basic dot notation access for nested dictionary keys or list indices (e.g., `{my_gemini_var.box.0}` to get the x-coordinate if `box` is `[x,y,w,h]`).
-    -   For the `gemini_element_variable` action parameter, the placeholder mechanism will substitute the *name* of the variable. `ActionExecutor` then uses this name to look up the actual data (the dictionary with `box` info) from the `variables` sub-dictionary within the `action_context`.
+    -   Supports basic dot notation access for nested dictionary keys or list indices (e.g., `{my_gemini_var.value.box.0}` to get the x-coordinate if `my_gemini_var` holds the wrapped Gemini capture and `box` is `[x,y,w,h]` inside its `value`).
+    -   For the `gemini_element_variable` action parameter, the placeholder mechanism will substitute the *name* of the variable. `ActionExecutor` then uses this name to look up the actual wrapped data (the dictionary with `value` and `_source_region_for_capture_`) from the `variables` sub-dictionary within the `action_context`.
 
 ## 6. Data Flow Example (Simplified Continuous Loop with Gemini Bounding Box Click - v4.0.0 Phase 1.5)
 
@@ -207,7 +207,7 @@ The tool is modular, comprising several key Python components, all residing with
             -   `_evaluate_single_condition_logic` is called for this condition on "main_app_area".
             -   It calls `self.gemini_analyzer.query_vision_model()` with "main_app_area"'s image and the prompt.
             -   Gemini responds, e.g., `{"status": "success", "json_content": {"label": "login_btn", "box": [50, 70, 120, 30], "found": true}, ...}`.
-            -   `rule_variable_context["login_button_data"]` is set to the full `json_content`: `{"label": "login_btn", "box": [50, 70, 120, 30], "found": true}`.
+            -   `rule_variable_context["login_button_data"]` is set to `{"value": {"label": "login_btn", "box": [50, 70, 120, 30], "found": true}, "_source_region_for_capture_": "main_app_area"}`.
             -   The `expected_response_json_path` "found" and `expected_json_value` true are checked against the `json_content`, also passing.
             -   The overall condition for the rule is `True`.
         ii. Rule's `action` to be executed:
@@ -222,20 +222,20 @@ The tool is modular, comprising several key Python components, all residing with
             ```python
             action_context = {
                 "rule_name": "FindAndClickLoginButton",
-                "condition_region": "main_app_area", // Critical: region where Gemini query ran
-                "last_match_info": {...}, // Not relevant for this action type
+                "condition_region": "main_app_area", // From _check_condition's determinant_region
+                "last_match_info": {...}, 
                 "variables": {
-                    "login_button_data": {"label": "login_btn", "box": [50, 70, 120, 30], "found": true}
+                    "login_button_data": {"value": {"label": "login_btn", "box": [50, 70, 120, 30], "found": true}, "_source_region_for_capture_": "main_app_area"}
                 }
-            }
             ```
         iv. `ActionExecutor.execute_action(substituted_action_spec, action_context)` is called.
             -   Inside `ActionExecutor._get_target_coords`:
                 -   `target_relation` is "center_of_gemini_element".
                 -   `gemini_var_name` from spec is "login_button_data".
-                -   `element_data` is retrieved from `action_context["variables"]["login_button_data"]`.
+                -   `wrapped_element_data` is retrieved from `action_context["variables"]["login_button_data"]`.
+                -   `element_value = wrapped_element_data["value"]` (which is `{"box": [50,70,120,30], ...}`)
                 -   `box_data` is `[50, 70, 120, 30]`.
-                -   `gemini_query_region_name` is "main_app_area" from `action_context["condition_region"]`.
+                -   `gemini_query_region_name` is "main_app_area" from `wrapped_element_data["_source_region_for_capture_"]`.
                 -   `gemini_query_region_config` for "main_app_area" is fetched: `{"x": 100, "y": 200, "width": 800, "height": 600}`.
                 -   `region_base_x = 100`, `region_base_y = 200`.
                 -   `rel_x=50, rel_y=70, box_w=120, box_h=30`.
@@ -247,7 +247,7 @@ The tool is modular, comprising several key Python components, all residing with
 
 ## 7. Logging System (per ADR-007)
 
--   Uses Python's built-in `logging`, configured by `core.logging_setup`.
+-   Uses Python's built-in `logging`, configured by `core.logging_setup`. Root logger for Mark-I is `py_pixel_bot`.
 -   Format includes timestamp, logger name, level, module:func:lineno, and message for files.
 -   **v4.0.0+ Specifics:**
     -   **`GeminiAnalyzer` MUST** log API requests (prompt summary, model used), API responses (status, success/error, latency), and **any errors** encountered.
@@ -263,10 +263,11 @@ The tool is modular, comprising several key Python components, all residing with
     -   GUI informs user if API key is missing/invalid.
     -   **`ActionExecutor._get_target_coords` (v4.0.0 Phase 1.5):**
         -   Must handle cases where `gemini_element_variable` is missing from action spec or not found in rule context's `variables`.
-        -   Must validate that the resolved variable's value is a dictionary and contains a `box` key.
+        -   Must validate that the resolved variable's value is a dictionary and contains the `value` (actual Gemini data) and `_source_region_for_capture_` keys.
+        -   Must validate that `element_data["value"]` is a dictionary and contains a `box` key.
         -   Must validate that `box` is a list of 4 numeric values.
         -   Should ideally check a `found: true` flag in the element data if present and skip action if `false`.
-        -   Must handle cases where the `condition_region` (context for Gemini query) is missing or its config cannot be found.
+        -   Must handle cases where the `_source_region_for_capture_` is missing or its config cannot be found.
         -   All such errors should be logged clearly, and `_get_target_coords` should return `None`, causing the action to be skipped.
 
 ## 9. Full GUI Architecture (v3.0.0+) (`MainAppWindow` using `CustomTkinter`)
@@ -363,28 +364,25 @@ The tool is modular, comprising several key Python components, all residing with
     Do not add any explanatory text outside of this JSON object.
     ```
 -   **Expected JSON Response Structure (from Gemini, captured by `RulesEngine` into a variable):**
-    The `gemini_vision_query` condition's `capture_as` variable (e.g., `login_button_data`) would hold a Python dictionary like:
+    The `gemini_vision_query` condition's `capture_as` variable (e.g., `login_button_data`) would hold a Python dictionary (wrapped by `RulesEngine` as described in 5.3):
     ```python
-    # If found:
+    # Example of what variable_context["login_button_data"] would hold:
     {
-        "element_label": "login_button",
-        "found": True,
-        "box": [50, 100, 120, 30]  # [x_rel_to_img, y_rel_to_img, width, height]
-    }
-    # If not found (as per prompt instructions):
-    {
-        "element_label": "login_button", # Label might still be present
-        "found": False,
-        "box": None # Or an empty list []
+        "value": { # This is the actual data from Gemini
+            "element_label": "login_button",
+            "found": True,
+            "box": [50, 100, 120, 30]  # [x_rel_to_img, y_rel_to_img, width, height]
+        },
+        "_source_region_for_capture_": "name_of_region_gemini_analyzed"
     }
     ```
     The `found: true` flag is highly recommended. `ActionExecutor` will check this; if `found` is `False` or the `box` is invalid/null, the action should be skipped.
--   **Coordinate System:** The `[x, y, width, height]` in the `box` array are coordinates **relative to the top-left of the image region that was sent to Gemini.** `ActionExecutor` must account for this by adding the screen `x, y` of that region (obtained from the action context) to these relative coordinates to get absolute screen coordinates for PyAutoGUI.
+-   **Coordinate System:** The `[x, y, width, height]` in the `box` array are coordinates **relative to the top-left of the image region that was sent to Gemini.** `ActionExecutor` must account for this by adding the screen `x, y` of that region (obtained from the `_source_region_for_capture_` field in the captured variable) to these relative coordinates to get absolute screen coordinates for PyAutoGUI.
 
 ### 10.4. Parsing Bounding Box Responses in `GeminiAnalyzer`
 
 -   No specific changes are required in `GeminiAnalyzer.query_vision_model` for parsing bounding boxes beyond its existing capability to parse any valid JSON response from Gemini into the `json_content` field of its return dictionary.
--   The `RulesEngine` will then take this `json_content` (which is a Python dict/list) and store it in the `rule_variable_context` if `capture_as` is used and no `expected_response_json_path` is specified to extract a sub-part. This makes the entire structured data (including the `box` array) available for `ActionExecutor`.
+-   The `RulesEngine` will then take this `json_content` (which is a Python dict/list) and store it (wrapped with source region info) in the `rule_variable_context` if `capture_as` is used. This makes the entire structured data (including the `box` array) and its origin available for `ActionExecutor`.
 
 ## 11. GUI Configuration for Gemini (v4.0.0 Phase 1.5 - Actions)
 
@@ -406,17 +404,14 @@ The tool is modular, comprising several key Python components, all residing with
     -   `UI_PARAM_CONFIG["actions"]["click"]` will have a new parameter definition added for `gemini_element_variable`:
         ```python
         # In gui_config.py, within UI_PARAM_CONFIG["actions"]["click"] list:
-        # ... (after x, y, target_region, etc.)
+        # ... (other params)
         {
-            "id": "gemini_element_variable",
-            "label": "Gemini Element Var:",
-            "widget": "entry",
-            "type": str,
-            "default": "",
-            "required": False, # Dynamically required by DetailsPanel based on target_relation
-            "allow_empty_string": False, # Must not be empty if this targeting mode is active
+            "id": "gemini_element_variable", 
+            "label": "Gemini Element Var:", 
+            "widget": "entry", "type": str, 
+            "default": "", "required": False, # Dynamically required
+            "allow_empty_string": False, 
             "placeholder": "e.g., captured_button_data",
-            # NEW meta-property for DetailsPanel to handle conditional visibility/requirement:
             "condition_show": {"field_id_prefix": "act_", "field": "target_relation", "values": ["center_of_gemini_element", "top_left_of_gemini_element"]}
         },
         # ... (button, clicks, interval, pyautogui_pause_before)
@@ -433,103 +428,36 @@ The tool is modular, comprising several key Python components, all residing with
 
 ## 12. `ActionExecutor` - Handling Gemini Element Clicks (v4.0.0 Phase 1.5)
 
-The `ActionExecutor._get_target_coords` method will be extended:
-
-```python
-# In ActionExecutor._get_target_coords method:
-# ... (existing logic for absolute, center_of_region, relative_to_region, center_of_last_match) ...
-
-elif target_relation in ["center_of_gemini_element", "top_left_of_gemini_element"]:
-    gemini_var_name = action_spec.get("gemini_element_variable")
-    if not gemini_var_name: # Check if empty or None
-        logger.error(f"R '{rule_name_for_log}', A '{action_type_for_log}': Parameter 'gemini_element_variable' is missing or empty for target_relation '{target_relation}'. Action skipped.")
-        # Potentially show messagebox to user if in a mode where that's acceptable
-        # messagebox.showerror("Action Error", f"Rule '{rule_name_for_log}': 'Gemini Element Var' not specified for action '{action_type_for_log}'.")
-        return None
-
-    # Retrieve the dictionary containing element data from the rule's variable context
-    # The 'variables' dictionary is passed within the 'context' argument to execute_action
-    element_data = context.get("variables", {}).get(gemini_var_name)
-    if not isinstance(element_data, dict):
-        logger.error(f"R '{rule_name_for_log}', A '{action_type_for_log}': Variable '{gemini_var_name}' (value: {element_data}) is not a dictionary in rule context. Cannot extract bounding box. Action skipped.")
-        # messagebox.showerror("Action Error", f"Rule '{rule_name_for_log}': Variable '{gemini_var_name}' for Gemini element is invalid.")
-        return None
-
-    # Check the 'found' flag from the element_data, as per recommended prompt structure.
-    if "found" in element_data and not element_data["found"]:
-        logger.info(f"R '{rule_name_for_log}', A '{action_type_for_log}': Gemini element variable '{gemini_var_name}' indicates element was not found (e.g., 'found': false). Action will be skipped.")
-        return None # Element explicitly not found
-
-    box_data = element_data.get("box")
-    # Validate box_data: must be a list/tuple of 4 numbers.
-    if not (isinstance(box_data, (list, tuple)) and len(box_data) == 4 and all(isinstance(n, (int, float)) for n in box_data)):
-        logger.error(f"R '{rule_name_for_log}', A '{action_type_for_log}': Variable '{gemini_var_name}' does not contain a valid 'box' array/tuple of 4 numbers [x,y,w,h]. Box data: {box_data}. Action skipped.")
-        # messagebox.showerror("Action Error", f"Rule '{rule_name_for_log}': Bounding box data in '{gemini_var_name}' is invalid.")
-        return None
-    
-    # The bounding box coords [x_rel, y_rel, w, h] are relative to the region where the Gemini query was performed.
-    # This region's name is passed in the action context by RulesEngine.
-    gemini_query_region_name = context.get("condition_region") 
-    if not gemini_query_region_name:
-        logger.error(f"R '{rule_name_for_log}', A '{action_type_for_log}': Cannot determine the region context for Gemini element. 'condition_region' (name of region for Gemini query) is missing in action context. Action skipped.")
-        return None
-        
-    gemini_query_region_config = self.config_manager.get_region_config(gemini_query_region_name)
-    if not gemini_query_region_config:
-        logger.error(f"R '{rule_name_for_log}', A '{action_type_for_log}': Configuration for Gemini query region '{gemini_query_region_name}' not found. Action skipped.")
-        return None
-
-    region_base_x = gemini_query_region_config.get("x", 0)
-    region_base_y = gemini_query_region_config.get("y", 0)
-
-    # Ensure box coordinates are integers for pixel calculations
-    try:
-        rel_x, rel_y, box_w, box_h = int(box_data[0]), int(box_data[1]), int(box_data[2]), int(box_data[3])
-    except (ValueError, TypeError) as e_conv:
-        logger.error(f"R '{rule_name_for_log}', A '{action_type_for_log}': Invalid numeric types in 'box' data for '{gemini_var_name}': {box_data}. Error: {e_conv}. Action skipped.")
-        return None
-
-    if box_w <= 0 or box_h <= 0: # Check for valid dimensions
-        logger.warning(f"R '{rule_name_for_log}', A '{action_type_for_log}': Bounding box for Gemini element '{gemini_var_name}' has non-positive width/height: w={box_w}, h={box_h}. This might indicate element not found or a Gemini error. Action skipped.")
-        return None
-
-    abs_x: int
-    abs_y: int
-    if target_relation == "center_of_gemini_element":
-        abs_x = region_base_x + rel_x + (box_w // 2)
-        abs_y = region_base_y + rel_y + (box_h // 2)
-    elif target_relation == "top_left_of_gemini_element":
-        abs_x = region_base_x + rel_x
-        abs_y = region_base_y + rel_y
-    else: # Should not be reached if called correctly based on prior checks
-        logger.error(f"R '{rule_name_for_log}', A '{action_type_for_log}': Internal error - unhandled Gemini target_relation '{target_relation}' in _get_target_coords. Action skipped.")
-        return None
-    
-    logger.info(f"R '{rule_name_for_log}', A '{action_type_for_log}': Targeting Gemini element from var '{gemini_var_name}'. Relative box: [{rel_x},{rel_y},{box_w},{box_h}] in region '{gemini_query_region_name}' (base screen coords {region_base_x},{region_base_y}). Calculated absolute click target: ({abs_x},{abs_y}).")
-    return abs_x, abs_y
-# ... (rest of the _get_target_coords method and ActionExecutor class)
-```
+The `ActionExecutor._get_target_coords` method will be extended as shown in the previous `action_executor.py` code block. It will:
+- Retrieve the wrapped Gemini data object using `gemini_element_variable` from the `context["variables"]`.
+- Extract the `value` (actual Gemini JSON response) and `_source_region_for_capture_`.
+- Validate the presence and format of `box` within `value`.
+- Check the `found` flag in `value` if present.
+- Use `_source_region_for_capture_` to get the base coordinates of the region Gemini analyzed.
+- Calculate absolute screen coordinates for the click.
+- Log errors and return `None` if any step fails, preventing the action.
 
 ## 13. Testing Strategy (v4.0.0 - Gemini Bounding Box Actions)
 
 -   **Manual Integration Testing:**
     *   Craft profiles with `gemini_vision_query` conditions that ask for bounding boxes (including the `found` flag and `element_label` as per Section 10.3).
-    *   Verify that variables capture the JSON structure correctly (inspect logs or use `log_message` action to print the variable: `{my_var}`).
+    *   Verify that variables capture the wrapped JSON structure correctly (inspect logs or use `log_message` action to print the variable: `{my_var.value.box}`).
     *   Test "click" actions using `center_of_gemini_element` and `top_left_of_gemini_element` target relations, ensuring accurate targeting on screen based on visual confirmation.
     *   Test with various Gemini models (Flash, Pro) if access permits, to see if box accuracy varies.
     *   Test error cases:
         -   `gemini_element_variable` specified in action but the variable is not captured by the condition (or condition failed).
-        -   Captured variable does not contain a `box` key or `box` is malformed (e.g., wrong number of elements, non-numeric values, null when `found` is true).
-        -   Captured variable has `found: false`.
+        -   Captured variable does not contain a `value` or `_source_region_for_capture_` key.
+        -   Captured `value` does not contain a `box` key or `box` is malformed.
+        -   Captured `value` has `found: false`.
         -   Gemini fails to find the element or returns unexpected JSON.
-        -   The region context for the Gemini query is somehow lost or misidentified.
+        -   The `_source_region_for_capture_` is somehow lost or misidentified.
     *   Test cases where the Gemini query region (specified in the `gemini_vision_query` condition) is different from the rule's default region.
 -   **Automated Testing (Requires Mocking `GeminiAnalyzer`):**
     *   Extend `MockGeminiAnalyzer` to return predefined JSON responses including `box`, `found`, and `element_label` keys for specific prompts/image hashes. This allows simulating Gemini's output without actual API calls.
     *   **Unit Tests for `ActionExecutor._get_target_coords`:**
-        *   Provide various `action_spec` and `context` dictionaries (with mocked `variables` containing element data and mocked `condition_region` names).
+        *   Provide various `action_spec` and `context` dictionaries (with mocked `variables` containing wrapped element data and mocked `_source_region_for_capture_` names).
         *   Verify correct absolute coordinate calculation for `center_of_gemini_element` and `top_left_of_gemini_element`.
-        *   Test all error conditions outlined in manual testing (missing `gemini_element_variable`, malformed `box`, `found: false`, missing `condition_region` in context, `condition_region` config not found in mocked `ConfigManager`). Ensure `None` is returned and errors are logged.
+        *   Test all error conditions outlined in manual testing. Ensure `None` is returned and errors are logged.
     *   **Integration Tests for `RulesEngine` + `ActionExecutor`:**
         *   Configure `RulesEngine` with the `MockGeminiAnalyzer`.
         *   Define test profiles with rules that:
@@ -537,6 +465,6 @@ elif target_relation in ["center_of_gemini_element", "top_left_of_gemini_element
             2.  Use `capture_as` to store this mocked Gemini response.
             3.  Have an action (e.g., "click") that uses `center_of_gemini_element` with the captured variable.
         *   Execute `RulesEngine.evaluate_rules` with mock region data.
-        *   Verify that `ActionExecutor.execute_action` is called with the correctly formed `action_context` (including `variables` and `condition_region`).
+        *   Verify that `ActionExecutor.execute_action` is called with the correctly formed `action_context` (including `variables` where Gemini captures are wrapped, and `condition_region`).
         *   Further mock or spy on `ActionExecutor._get_target_coords` or `pyautogui.click` to confirm the final coordinates would have been correct.
         *   Test scenarios where the mock `GeminiAnalyzer` returns `found: false` and ensure the action is appropriately skipped by `ActionExecutor`.

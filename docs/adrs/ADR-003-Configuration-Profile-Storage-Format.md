@@ -1,4 +1,3 @@
-// File: docs/adrs/ADR-003-Configuration-Profile-Storage-Format.md
 # ADR-003: Configuration Profile Storage Format
 
 *   **Status:** Approved
@@ -7,7 +6,7 @@
 
 ## Context and Problem Statement
 
-The visual automation tool needs to store user configurations (bot profiles), which include:
+The visual automation tool (Mark-I) needs to store user configurations (bot profiles), which include:
 *   Definitions of screen regions to monitor.
 *   Paths to template images for matching.
 *   Analysis parameters for these regions/conditions.

@@ -1,6 +1,6 @@
-# Functional Requirements
+# Functional Requirements for Mark-I
 
-This document outlines the functional requirements for the visual automation tool, describing *what* the system will do. It reflects the capabilities of the system up to and including the v3.0.0 features (Enhanced GUI & Usability) and the **planned v4.0.0 Gemini-Powered Visual Intelligence integration.**
+This document outlines the functional requirements for the Mark-I visual automation tool, describing *what* the system will do. It reflects the capabilities of the system up to and including the v3.0.0 features (Enhanced GUI & Usability) and the **planned v4.0.0 Gemini-Powered Visual Intelligence integration.**
 
 ## FR-CORE: Core System
 
@@ -45,8 +45,8 @@ This document outlines the functional requirements for the visual automation too
     *   Optionally specify a Gemini model name to override the profile's default model.
     *   Evaluate the condition based on the Gemini API's response:
         *   Check if the returned text content contains specific keyword(s) (case-sensitive or insensitive, comma-separated for OR logic on keywords).
-        *   **(Phase 1 - Basic JSON Check)** Optionally check if a value extracted from the returned JSON content (using basic dot-notation path, e.g., `data.items.0.name`) matches an expected string value. (Full JSONPath support deferred).
-    *   Capture the Gemini API's text response, or the extracted JSON value (if path specified and valid), into a rule-scoped variable using the `capture_as` parameter.
+        *   Check if a value extracted from the returned JSON content (using basic dot-notation path, e.g., `data.items.0.name`) matches an expected string value. (Full JSONPath support deferred).
+    *   Capture the Gemini API's text response, or the **entire parsed JSON object (if JSON response)**, or a specific value extracted from its `json_content` (if `expected_response_json_path` is used for extraction), into a rule-scoped variable using the `capture_as` parameter. This variable will be a dictionary `{ "value": <captured_data>, "_source_region_for_capture_": "region_name_used_for_gemini_query" }`.
     *   Handle API errors gracefully (condition evaluates to `False`, error logged).
 
 ## FR-ACTION: Action Execution Module (Bot Runtime)
@@ -56,20 +56,20 @@ This document outlines the functional requirements for the visual automation too
     *   The center of a specified region.
     *   Coordinates relative to a specified region's top-left corner.
     *   The center of the last successfully matched template (from a `template_match_found` condition).
-    *   **(v4.0.0 - Stretch/Phase 2) Coordinates derived from bounding box data captured from a `gemini_vision_query` condition.**
+    *   **(v4.0.0 - Phase 1.5) Coordinates derived from bounding box data captured from a `gemini_vision_query` condition (e.g., center or top-left of element, via `gemini_element_variable` parameter).**
 *   **FR-ACTION-002: Keyboard Input Simulation:** The system MUST be able to simulate:
     *   Typing a string of characters (with configurable interval between key presses).
     *   Pressing individual special keys (e.g., "enter", "ctrl", "shift", "f1", etc.).
     *   Pressing key combinations (hotkeys, e.g., "ctrl,c" or `["ctrl", "alt", "delete"]` if specified as a list in JSON, or "ctrl,alt,delete" if CSV in GUI).
 *   **FR-ACTION-003: Conditional Actions:** Actions MUST only be triggered if their associated rule's condition (single or compound) evaluates to true.
 *   **FR-ACTION-004: Log Message Action:** The system MUST provide an action to write a custom message (with a configurable log level: DEBUG, INFO, WARNING, ERROR, CRITICAL) to the application logs.
-*   **FR-ACTION-005: Dynamic Action Parameters (Variables):** Action parameters (e.g., text to type, X/Y coordinates for clicks, parts of log messages) MUST be able to utilize values captured into rule-scoped variables from conditions using a placeholder substitution mechanism (e.g., `{var_name}` or `{var_name.key}`). `ActionExecutor` must attempt to convert substituted string values to appropriate types for PyAutoGUI.
+*   **FR-ACTION-005: Dynamic Action Parameters (Variables):** Action parameters (e.g., text to type, X/Y coordinates for clicks, parts of log messages) MUST be able to utilize values captured into rule-scoped variables from conditions using a placeholder substitution mechanism (e.g., `{my_var}` or `{my_var.value.some_key}`). `ActionExecutor` must attempt to convert substituted string values to appropriate types for PyAutoGUI.
 *   **FR-ACTION-006: Configurable Pause Before Action:** Actions MUST allow a configurable pause (e.g., `pyautogui_pause_before` parameter) before their PyAutoGUI execution.
 
 ## FR-CONFIG: Configuration & Management (CLI & GUI)
 
 *   **FR-CONFIG-001: Save/Load Bot Profile:** Users MUST be able to save the complete bot setup to a JSON profile file and load it for execution (via CLI `run`) or editing (via GUI `edit`).
-*   **FR-CONFIG-002: Variable Capture in Rules:** Conditions (specifically `ocr_contains_text`, `template_match_found`, **and `gemini_vision_query` (v4.0.0)**) MUST allow their primary result (full OCR text, template match details dictionary, **Gemini text/JSON response/extracted value**) to be captured into a named, rule-scoped variable using a `capture_as` parameter in the JSON rule definition, configurable via the GUI.
+*   **FR-CONFIG-002: Variable Capture in Rules:** Conditions (specifically `ocr_contains_text`, `template_match_found`, **and `gemini_vision_query` (v4.0.0)**) MUST allow their primary result (full OCR text, template match details dictionary, **Gemini text/JSON response/extracted value**) to be captured into a named, rule-scoped variable using a `capture_as` parameter in the JSON rule definition, configurable via the GUI. **(v4.0.0) For Gemini captures, the variable will be a dictionary containing `{"value": <captured_data>, "_source_region_for_capture_": "region_name_used_for_gemini_query"}`.**
 *   **FR-CONFIG-003: Gemini Settings Management (v4.0.0):**
     *   The system MUST load the `GEMINI_API_KEY` from the `.env` file (via `os.getenv` in `GeminiAnalyzer`'s instantiation path).
     *   Users MUST be able to configure a default Gemini model name (e.g., `"gemini-1.5-flash-latest"`) within the profile settings (`settings.gemini_default_model_name`), manageable via the GUI.
@@ -93,7 +93,7 @@ This document outlines the functional requirements for the visual automation too
             *   The GUI MUST allow converting a rule's condition structure between "single" and "compound".
             *   **For single conditions and sub-conditions:** Allow selection of condition `type` (including **`gemini_vision_query` (v4.0.0)**) from a dropdown. Dynamically display and allow editing of all relevant parameters for the selected type using appropriate input widgets (**including multi-line `CTkTextbox` for Gemini prompts and other fields as per `gui_config.py`**). This includes specifying a region override.
             *   For compound conditions: Allow selection of `logical_operator` (AND/OR). List sub-conditions, allow adding/removing.
-        *   **Action Editing:** Allow selection of action `type` from a dropdown. Dynamically display and allow editing of all relevant parameters.
+        *   **Action Editing:** Allow selection of action `type` from a dropdown. Dynamically display and allow editing of all relevant parameters **(including conditional parameters for `gemini_element_variable` based on `target_relation` for click actions - v4.0.0 Phase 1.5)**.
         *   Parameter fields SHOULD allow the use of placeholders for variables (e.g., `{my_var}`).
     *   **FR-UI-003.6: Input Validation & Feedback:** The GUI MUST validate user inputs for all editable fields and provide clear error messages.
 *   **FR-UI-004: User Feedback (General):** The system (CLI and GUI) MUST provide clear feedback about its operations, successes, warnings, and errors. **(v4.0.0) This includes feedback related to Gemini API interactions (e.g., errors during condition evaluation if they occur, API key status in GUI).**

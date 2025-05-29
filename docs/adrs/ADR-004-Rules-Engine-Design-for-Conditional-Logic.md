@@ -1,4 +1,3 @@
-// File: docs/adrs/ADR-004-Rules-Engine-Design-for-Conditional-Logic.md
 # ADR-004: Rules Engine Design for Conditional Logic
 
 *   **Status:** Approved (and implemented, including evolution to Option 2)
@@ -7,7 +6,7 @@
 
 ## Context and Problem Statement
 
-The tool's core functionality relies on a "Rules Engine" that evaluates conditions based on visual analysis and triggers actions ("IF `visual_condition(s)` MET for `region(s)`, THEN PERFORM `action_sequence`."). We need a clear, extensible, and configurable way to define these rules.
+The tool's (Mark-I) core functionality relies on a "Rules Engine" that evaluates conditions based on visual analysis and triggers actions ("IF `visual_condition(s)` MET for `region(s)`, THEN PERFORM `action_sequence`."). We need a clear, extensible, and configurable way to define these rules.
 
 The design should consider:
 *   How conditions are expressed (e.g., color match, template found, text present, dominant color).

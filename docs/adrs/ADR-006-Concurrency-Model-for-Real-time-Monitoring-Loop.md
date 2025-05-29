@@ -1,4 +1,3 @@
-// File: docs/adrs/ADR-006-Concurrency-Model-for-Real-time-Monitoring-Loop.md
 # ADR-006: Concurrency Model for Real-time Monitoring Loop
 
 *   **Status:** Approved (and implemented)
@@ -7,7 +6,7 @@
 
 ## Context and Problem Statement
 
-The tool's core bot runtime involves a continuous loop: Capture -> Analyze -> Evaluate Rules -> Act. This loop, managed by `MainController`, runs repeatedly at a user-configurable rate (FPS/interval). If this loop were to run in the main application thread, it would block any other interactions.
+The tool's (Mark-I) core bot runtime involves a continuous loop: Capture -> Analyze -> Evaluate Rules -> Act. This loop, managed by `MainController`, runs repeatedly at a user-configurable rate (FPS/interval). If this loop were to run in the main application thread, it would block any other interactions.
 Specifically:
 1.  For the CLI `run` command, the main thread needs to remain responsive to signals like `Ctrl+C` for graceful shutdown.
 2.  If, in the future, a GUI provides a "Start/Stop Bot" button for a loaded profile (distinct from the GUI *editor*), the GUI event loop must not freeze while the bot is running.

@@ -1,13 +1,12 @@
-// File: docs/adrs/ADR-001-Choice-Screen-Capture-Analysis-Tech.md
 # ADR-001: Choice of Core Technologies for Screen Capture and Region Analysis
 
 *   **Status:** Approved
-*   **Date:** 2025-05-11 <!-- Assuming current date for approval -->
+*   **Date:** 2025-05-11
 *   **Deciders:** DevLead
 
 ## Context and Problem Statement
 
-The visual automation tool requires the ability to:
+The visual automation tool (Mark-I) requires the ability to:
 1.  Capture image data from specific rectangular regions of the screen across different operating systems (Windows, macOS, Linux).
 2.  Perform analysis on this captured image data, including pixel-level inspection, basic template matching, and eventually Optical Character Recognition (OCR).
 3.  The capture and analysis need to be performant enough for potential real-time applications.

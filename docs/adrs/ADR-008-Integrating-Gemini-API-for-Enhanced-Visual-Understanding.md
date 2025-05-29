@@ -1,4 +1,5 @@
 // File: docs/adrs/ADR-008-Integrating-Gemini-API-for-Enhanced-Visual-Understanding.md
+
 # ADR-008: Integrating Gemini API for Enhanced Visual Understanding and Decision Making
 
 *   **Status:** Approved <!-- Assuming DevLead approves based on roadmap -->
@@ -7,24 +8,24 @@
 
 ## Context and Problem Statement
 
-PyPixelBot currently operates based on deterministic visual analysis techniques (pixel color matching, template image searching, Optical Character Recognition) and a rule engine that triggers predefined actions based on explicit, user-configured conditions. While effective for well-defined, stable automation tasks, this approach faces limitations:
+Mark-I currently operates based on deterministic visual analysis techniques (pixel color matching, template image searching, Optical Character Recognition) and a rule engine that triggers predefined actions based on explicit, user-configured conditions. While effective for well-defined, stable automation tasks, this approach faces limitations:
 
 1.  **Limited Scene Comprehension:** The bot lacks a deeper, semantic understanding of the visual scene. It cannot infer context, recognize objects or UI elements beyond exact templates/text patterns, or understand relationships between elements without explicit rules.
 2.  **Brittleness to UI Changes:** Reliance on pixel-perfect color matches or exact template images makes automations fragile. Minor UI redesigns, changes in resolution, themes, or font rendering can easily break existing rules.
 3.  **Inflexible Decision Making:** The current rules engine, even with compound conditions, is fundamentally deterministic. It cannot make nuanced decisions based on a holistic interpretation of the visual environment or handle ambiguity effectively.
-4.  **Goal: Enhance AI Capabilities ("AI Moving More Freely"):** There is a strategic goal to evolve PyPixelBot towards incorporating more sophisticated AI, enabling it to interpret visual information more intelligently and act with greater flexibility, adaptability, and understanding – moving beyond rigid, pre-programmed responses.
+4.  **Goal: Enhance AI Capabilities ("AI Moving More Freely"):** There is a strategic goal to evolve Mark-I towards incorporating more sophisticated AI, enabling it to interpret visual information more intelligently and act with greater flexibility, adaptability, and understanding – moving beyond rigid, pre-programmed responses.
 
 This ADR proposes integrating the Google Gemini API, specifically its multimodal capabilities (understanding images and text), as a concrete step to enhance the bot's visual understanding and pave the way for more intelligent decision-making.
 
 ## Considered Options
 
 1.  **Gemini for Visual Scene Description & Question Answering (Chosen Path - v4.0.0 Phase 1):**
-    *   *Description:* PyPixelBot captures screen regions as usual. For specific rules, these images (or designated sub-regions) are sent to a Gemini Vision model (e.g., Gemini Pro Vision, Gemini Flash) via API call, along with a carefully crafted text prompt. The prompt instructs Gemini to perform tasks like:
+    *   *Description:* Mark-I captures screen regions as usual. For specific rules, these images (or designated sub-regions) are sent to a Gemini Vision model (e.g., Gemini Pro Vision, Gemini Flash) via API call, along with a carefully crafted text prompt. The prompt instructs Gemini to perform tasks like:
         *   Describe the scene/region content.
         *   Identify specific types of elements (buttons, text fields, icons with certain characteristics).
         *   Answer questions about the visual content ("Is the status 'Complete'?", "What text is on the red button?").
         *   Extract structured information (e.g., return identified elements and their approximate locations as JSON).
-    *   *Integration:* Gemini's response (text or structured JSON) is received by PyPixelBot. This output can then be used:
+    *   *Integration:* Gemini's response (text or structured JSON) is received by Mark-I. This output can then be used:
         *   Within the existing `RulesEngine` via new condition types (e.g., `gemini_vision_query` checking if the response contains keywords, matches expected JSON values, etc.).
         *   Potentially by a new "GeminiDecisionModule" in later phases to influence action selection based on the richer context provided by Gemini.
     *   *Pros:*
@@ -43,7 +44,7 @@ This ADR proposes integrating the Google Gemini API, specifically its multimodal
         *   **Determinism Reduction:** Introduces non-determinism from the AI model's responses.
 
 2.  **Gemini for Rule/Action Generation from Natural Language:**
-    *   *Description:* User describes an automation task in natural language (e.g., "If I see an error message, click the OK button"). A Gemini text model attempts to parse this description and generate the corresponding PyPixelBot JSON profile structure.
+    *   *Description:* User describes an automation task in natural language (e.g., "If I see an error message, click the OK button"). A Gemini text model attempts to parse this description and generate the corresponding Mark-I JSON profile structure.
     *   *Pros:* Potentially offers a very user-friendly way to configure simple automations.
     *   *Cons:*
         *   **High Complexity & Risk:** Extremely challenging to implement reliably and safely. High risk of misinterpreting instructions and generating incorrect or even harmful automation rules. Requires sophisticated parsing and mapping to the specific profile schema.
@@ -51,7 +52,7 @@ This ADR proposes integrating the Google Gemini API, specifically its multimodal
         *   **Ambiguity:** Natural language is inherently ambiguous; translating it accurately to formal rules is difficult.
 
 3.  **Gemini for End-to-End Visual Task Execution (Agent-like Behavior):**
-    *   *Description:* PyPixelBot provides visual context (full screen or relevant regions) to a Gemini model (likely a hypothetical future Vision-Language-Action model or a complex prompting strategy with current models). The model directly decides the *next* action (e.g., "click coordinates (x,y)", "type 'text'") needed to achieve a high-level user goal (e.g., "Respond to the latest message"). PyPixelBot executes the action, captures the new visual state, and feeds it back to the model in a loop.
+    *   *Description:* Mark-I provides visual context (full screen or relevant regions) to a Gemini model (likely a hypothetical future Vision-Language-Action model or a complex prompting strategy with current models). The model directly decides the *next* action (e.g., "click coordinates (x,y)", "type 'text'") needed to achieve a high-level user goal (e.g., "Respond to the latest message"). Mark-I executes the action, captures the new visual state, and feeds it back to the model in a loop.
     *   *Pros:* Represents the ultimate vision of an AI "moving freely" and performing complex tasks autonomously based on visual input.
     *   *Cons:*
         *   **Technologically Immature/Complex:** Currently at the edge of research and practical reliability for general, unconstrained desktop automation. Requires sophisticated prompting, state management, and potentially fine-tuning.
@@ -79,7 +80,7 @@ This ADR proposes integrating the Google Gemini API, specifically its multimodal
 
 ## Clearest Path to Achieve This Goal (High-Level Steps for Initial Integration - v4.0.0 Phase 1)
 
-1.  **Core `GeminiAnalyzer` Module (`py_pixel_bot.engines.gemini_analyzer.GeminiAnalyzer`):**
+1.  **Core `GeminiAnalyzer` Module (`mark_i.engines.gemini_analyzer.GeminiAnalyzer`):**
     *   Implement robust interaction using the `google-generativeai` Python SDK.
     *   Include methods like `query_vision_model(image_data: np.ndarray, prompt: str, model_name: Optional[str] = None) -> Dict[str, Any]`.
     *   Handle image preparation (NumPy BGR to PIL RGB suitable for the SDK).

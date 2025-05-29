@@ -1,4 +1,3 @@
-// File: docs/adrs/ADR-002-Input-Simulation-Library-Choice.md
 # ADR-002: Input Simulation Library Choice
 
 *   **Status:** Approved
@@ -7,7 +6,7 @@
 
 ## Context and Problem Statement
 
-The visual automation tool requires the ability to programmatically simulate mouse movements, clicks (left, right, middle), and keyboard presses (character keys, special keys) as part of its "React" phase. This functionality needs to be reliable and cross-platform (Windows, macOS, Linux) to align with the project's core requirements.
+The visual automation tool (Mark-I) requires the ability to programmatically simulate mouse movements, clicks (left, right, middle), and keyboard presses (character keys, special keys) as part of its "React" phase. This functionality needs to be reliable and cross-platform (Windows, macOS, Linux) to align with the project's core requirements.
 
 ## Considered Options
 
