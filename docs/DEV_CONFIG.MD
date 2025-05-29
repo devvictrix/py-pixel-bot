@@ -29,18 +29,19 @@ This document outlines key development choices, current phase settings, and envi
 *   **Overall Goal for Third Major Deliverable:** `v3.0.0 (Enhanced GUI & Usability)` - **COMPLETED**
 *   **Overall Goal for Fourth Major Deliverable (Current Target):** `v4.0.0 (Gemini-Powered Visual Intelligence)`
     *   This version integrates the Google Gemini API to enhance visual understanding, enabling more robust and context-aware automation rules. Details are in `FEATURE_ROADMAP.MD` and `ADR-008`.
-*   **Active Version (Current Focus for Implementation):** `v4.0.0 (Gemini - Phase 1.5 Review & Phase 2 Planning)`
-    *   *This version, set here, dictates the immediate components and features being developed/reviewed by the AI collaborator, contributing towards the larger v4.0.0 goal.*
+*   **Active Version (Current Focus for Implementation):** `v4.0.0 (Gemini - Phase 2 Design: Gemini-Informed Decision Making)`
+    *   *This version, set here, dictates the immediate components and features being designed and developed by the AI collaborator, contributing towards the larger v4.0.0 goal.*
 *   **Primary Goal for Active Version:**
-    1.  **Complete Review of Phase 1.5 ("Action on Gemini-Identified Element Bounding Box"):** DevLead to review code, conduct manual testing, and confirm documentation updates.
-    2.  **Initiate Design & Planning for Phase 2 ("Gemini-Informed Decision Making"):**
+    1.  **AI Collaborator to design the "Gemini-Informed Decision Making" feature (Phase 2):**
         *   Develop detailed design specifications for a `GeminiDecisionModule`.
-        *   Outline how user goals will be translated for Gemini and how Gemini's suggestions will be processed and executed safely.
-        *   Update `TECHNICAL_DESIGN.MD` and potentially draft a new ADR if architectural changes are significant.
+        *   Outline how user goals will be translated for Gemini and how Gemini's suggestions for actions (from a limited, predefined set) will be processed and executed safely by Mark-I.
+        *   Propose updates to `TECHNICAL_DESIGN.MD` and determine if a new ADR is required for architectural changes.
+    2.  **DevLead to review and approve the design.**
+    3.  **AI Collaborator to proceed with prototyping and implementation upon design approval.**
 *   **Testing Strategy for Active Version (and towards v4.0.0):**
-    *   **Unit Tests:** Deferred until core components are more stable, or upon explicit DevLead enablement. **Testing `GeminiAnalyzer` will likely require mocking the external `google-generativeai` API.**
+    *   **Unit Tests:** Deferred until core components are more stable, or upon explicit DevLead enablement. **Testing `GeminiAnalyzer` and the new `GeminiDecisionModule` will require mocking the external `google-generativeai` API.**
         *   **Status:** `Pending DevLead Enablement`
-    *   **Integration Tests (Phase 1.5 Focus):** Manual, focused on end-to-end scenarios for "Action on Gemini-Identified Element Bounding Box". Log outputs are crucial. GUI interactions (creating/editing profiles with Gemini conditions and bounding box actions) will be tested manually by DevLead. **Requires a valid `GEMINI_API_KEY` in `.env` for testing Gemini features.**
+    *   **Integration Tests (Phase 2 Focus):** Will involve manual testing of end-to-end scenarios where Gemini influences action selection. Log outputs will be crucial. GUI interactions for specifying goals/tasks will also require manual testing.
 *   **Linting/Formatting Setup:**
     *   **Flake8 (Linter):** Enabled (Configured for Black compatibility via `.flake8`).
     *   **Black (Formatter):** Enabled (Configured via `pyproject.toml`).
@@ -49,7 +50,7 @@ This document outlines key development choices, current phase settings, and envi
 ## 3. Architectural & Design Approach
 *   **Overall Architectural Style:** Modular (Capture, Analysis, Action, Rules, Gemini engines, UI). Approved ADRs are foundational.
     *   *Details in `TECHNICAL_DESIGN.MD`.*
-*   **Logging Strategy:** Comprehensive and persistent logging using Python's `logging` module (per ADR-007). **v4.0.0: Logging must include details of Gemini API interactions.**
+*   **Logging Strategy:** Comprehensive and persistent logging using Python's `logging` module (per ADR-007). **v4.0.0: Logging must include details of Gemini API interactions, including decision-making processes.**
 *   **Code Design Principles:** Readability, Simplicity, Modularity, Testability, Diagnosability (via logs). Adherence to Black/Flake8.
 
 ## 4. Tooling Choices (Key Tools - per ADRs)
@@ -71,19 +72,19 @@ This document outlines key development choices, current phase settings, and envi
 ## 5. Version Control
 *   **System:** Git
 *   **Branching (Simplified Strategy):**
-    *   `main`: Represents the latest stable release (currently post-v3.0.0).
-    *   `develop`: Active development branch for ongoing work towards the current overall goal (v4.0.0). Feature branches (e.g., `feature/gemini-phase2-design`) are created from `develop`.
+    *   `main`: Represents the latest stable release (currently post-v4.0.0 Phase 1.5).
+    *   `develop`: Active development branch for ongoing work towards the current overall goal (v4.0.0 Phase 2). Feature branches (e.g., `feature/gemini-decision-module`) are created from `develop`.
 *   **Commit Messages:** Aim for conventional commit style.
 
 ## 6. Documentation
 *   **Docstring Style:** Google Python Style.
 *   **Project Documentation Status:**
-    *   **`CHANGELOG.MD`:** Should be updated for v3.0.0 release and maintained for v4.0.0.
-        *   **Status:** `Pending DevLead Update for v3.0.0 content`
+    *   **`CHANGELOG.MD`:** Should be updated for v4.0.0 Phase 1.5 release and maintained for Phase 2.
+        *   **Status:** `Pending DevLead Update for v4.0.0 Phase 1.5 content`
     *   **`CONTRIBUTING.MD`:** Deferred.
         *   **Status:** `Pending DevLead Enablement`
-    *   **Core Docs:** Established, updated iteratively. `ADR-008` added for v4.0.0. `AI_INSTRUCTIONS.MD` updated for v4.0.0. `TECHNICAL_DESIGN.MD`, Requirements, NFRs updated for v4.0.0 (Phase 1 & 1.5).
-*   **README.md (Project Root):** Needs updates for v3.0.0 (GUI) and **v4.0.0 (Gemini)** features once stable.
+    *   **Core Docs:** Established, updated iteratively. `ADR-008` guides v4.0.0. `AI_INSTRUCTIONS.MD` updated for v4.0.0 Phase 2. `TECHNICAL_DESIGN.MD`, Requirements, NFRs updated for v4.0.0 (Phase 1 & 1.5). Will require significant updates for Phase 2.
+*   **README.md (Project Root):** Needs updates for **v4.0.0 (Gemini)** features once stable.
 
 ## 7. Development Environment
 *   **Target OS for Bot Runtime:** **Windows** (Primary initial focus).
@@ -91,6 +92,6 @@ This document outlines key development choices, current phase settings, and envi
 *   **Key Dependencies Installation (Windows Focus):**
     *   Ensure Python 3.9+ is installed and in PATH.
     *   Create virtual environment: `python -m venv .venv` & activate.
-    *   Install packages: `pip install -r requirements.txt` (ensure `google-generativeai` is added for v4.0.0).
+    *   Install packages: `pip install -r requirements.txt`.
     *   **Tesseract OCR Engine:** Must be installed system-wide and in PATH for OCR features.
     *   **(v4.0.0+) Gemini API Key:** Requires a `.env` file with `GEMINI_API_KEY=your_key`.
