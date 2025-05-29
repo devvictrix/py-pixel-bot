@@ -69,9 +69,11 @@ This document tracks planned features and their status for the Mark-I visual aut
 | v4.0.0 (Phase 1)                                                                        | Done        | High     | Usability (Gemini)       | GUI Support for `gemini_vision_query` Conditions      | Update `MainAppWindow` and `DetailsPanel` to allow users to create, edit, and configure `gemini_vision_query` conditions, including prompt input and response expectation parameters.                                                  | `CustomTkinter`, `gui_config.py`. `gui_config.py` updated. `MainAppWindow` updated for settings. `DetailsPanel` picks up new config & textbox height. |
 | v4.0.0 (Phase 1)                                                                        | Done        | High     | Gemini Integration       | Testing: GUI, Engine, and Profile I/O for Gemini      | Thorough manual testing of creating, editing, saving, loading profiles with Gemini conditions. Test bot runs with Gemini rules. Verify error handling. Define mock strategy for `GeminiAnalyzer`.                                 | Manual testing by DevLead. `TECHNICAL_DESIGN.MD` updated with mock strategy. DevLead confirmed successful testing.           |
 | v4.0.0 (Phase 1)                                                                        | Done        | High     | Documentation (Gemini)   | Gemini Integration User Guide & NFRs                  | Document API key setup, costs, privacy, prompt engineering best practices, and NFRs (latency, internet) related to Gemini features (see ADR-008). Needs update across Requirements, NFRs, Tech Design, README.                        | Markdown. Updated `README.md`, `FUNCTIONAL_REQUIREMENTS.MD`, `NON_FUNCTIONAL_REQUIREMENTS.MD`. Review of `TECHNICAL_DESIGN.MD`. |
-| **v4.0.0 (Phase 1.5 / Start of Phase 2 - Bounding Box Actions)**                        |
+| **v4.0.0 (Phase 1.5 - Bounding Box Actions)**                                           |
 | v4.0.0 (Phase 1.5)                                                                      | Pending Review    | High     | Advanced Actions (Gemini)| Action on Gemini-Identified Element Bounding Box    | Allow actions (e.g., click) to target coordinates derived from bounding boxes returned by Gemini for identified elements. Requires new `target_relation` and `gemini_element_variable` param in ActionExecutor. See ADR-008 & Tech Design. | `action_executor.py`, `rules_engine.py` (variable handling for source_region), `gui_config.py`, `DetailsPanel`. Implementation of core logic and GUI config complete. Manual testing by DevLead is next. |
-| **vFuture (Advanced Enhancements & Integrations - Post v4.0.0 Phase 1.5)**              |
+| **v4.0.0 (Phase 2 - Gemini-Informed Decision Making)**                                  |
+| v4.0.0 (Phase 2)                                                                      | Planning    | High     | Gemini Integration       | Gemini-Informed Decision Making (Design & Prototype)  | Based on Gemini's visual analysis and a high-level goal, Mark-I (potentially with another Gemini text call) selects/parameterizes actions from a limited set or simple sequence. This starts to approach "AI creates rule on the fly". | New `GeminiDecisionModule`. Research/Design needed. This is a key step towards the user's "fantastic vision".                |
+| **vFuture (Advanced Enhancements & Integrations - Post v4.0.0 Phase 2)**                |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis        | Fuzzy Template Matching & Tolerance                   | Allow template matching with varying degrees of tolerance for slight changes in color, rotation, or scale.                                                                                                                         | Advanced `OpenCV-Python` techniques.                                                                                          |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis        | Motion/Change Detection within Region                 | Detect if any significant visual change or motion occurs within a monitored region, not just static states.                                                                                                                        | Frame differencing, background subtraction.                                                                                   |
 | vFuture                                                                                 | Not Started | Low      | Advanced Analysis        | Basic Object/Shape Detection (Simplified)             | Detect simple geometric shapes (circles, rectangles) or basic pre-trained objects.                                                                                                                                                 | `OpenCV-Python` (contour detection, basic ML models if lightweight).                                                          |
@@ -80,7 +82,6 @@ This document tracks planned features and their status for the Mark-I visual aut
 | vFuture                                                                                 | Not Started | Medium   | Integration              | Webhook / API Call Action                             | Allow the bot to send an HTTP request to an external service when a condition is met.                                                                                                                                              | `requests` library. Potential ADR for security/config.                                                                        |
 | vFuture                                                                                 | Not Started | High     | Usability                | Visual Logging & Debugging History                    | Save snapshots of monitored regions when rules trigger/fail. Provide a visual history or step-through for debugging rules.                                                                                                         | Image saving, GUI enhancements. Potential ADR.                                                                                |
 | vFuture                                                                                 | Not Started | Medium   | Usability                | Region/Rule Library & Reusability                     | Allow users to save and import/export individual regions or rule definitions to be reused across different profiles.                                                                                                               | Enhanced `config_manager.py`.                                                                                                 |
-| vFuture (Gemini Phase 2+)                                                               | Planning    | High     | Gemini Integration       | Gemini-Informed Decision Making (Dynamic Actions)     | Based on Gemini's visual analysis and a high-level goal, Mark-I (potentially with another Gemini text call) selects/parameterizes actions from a limited set or simple sequence. *This starts to approach "AI creates rule on the fly"*. | New `GeminiDecisionModule`. Research/Design needed. This is a key step towards the user's "fantastic vision".                |
 | vFuture (Gemini Phase 3+)                                                               | Planning    | Medium   | Gemini Integration       | Natural Language Command Interface for Bot Control      | Allow user to type high-level commands (e.g., "attack monster then get items") for the bot to interpret and execute a sequence of Gemini-identified actions.                                                                      | Advanced NLU, Task Planning, Agent-like architecture. This directly addresses the user's "fantastic vision".                   |
 
 ---
@@ -90,7 +91,7 @@ This document tracks planned features and their status for the Mark-I visual aut
 - **v1.0.0, v2.0.0, v3.0.0 Complete.**
 - **v4.0.0 (Gemini-Powered Visual Intelligence): This is the active development target.**
     -   **Phase 1 - Core Integration: Status is `Done`**.
-    -   **Phase 1.5 / Start of Phase 2 - "Action on Gemini-Identified Element Bounding Box":**
+    -   **Phase 1.5 - "Action on Gemini-Identified Element Bounding Box":**
         -   **Status:** `Pending Review`.
         -   **Goal:** Enable actions (like clicks) to target elements identified by Gemini using their bounding boxes.
         -   **Notes:**
@@ -101,17 +102,25 @@ This document tracks planned features and their status for the Mark-I visual aut
                 -   `UI_PARAM_CONFIG["actions"]["click"]` now defines `gemini_element_variable` with `condition_show` logic.
             -   `DetailsPanel._render_dynamic_parameters` updated to handle `condition_show` for dynamic field visibility.
             -   `DetailsPanel._get_parameters_from_ui` updated to respect conditional visibility for `required` field validation.
-        -   **Next Steps:**
-            1.  **DevLead Review:** Review the implemented code changes for "Action on Gemini-Identified Element Bounding Box".
+        -   **Next Steps for Phase 1.5 (Bounding Box Actions):**
+            1.  **DevLead Review (Current Focus):** Review the implemented code changes for "Action on Gemini-Identified Element Bounding Box".
             2.  **(Post-Review) Testing:** DevLead to perform thorough manual integration testing of creating, configuring, and running profiles that use actions targeting Gemini-identified elements (bounding boxes). This includes testing various prompts for Gemini to return box data, different click relations, and error handling (e.g., malformed box data, element not found).
             3.  **Documentation Updates:** Update user guides (`README.md`), `TECHNICAL_DESIGN.MD` (if any deviations from plan or further clarifications needed), and potentially `FUNCTIONAL_REQUIREMENTS.MD`/`NON_FUNCTIONAL_REQUIREMENTS.MD` to fully reflect the new feature.
             4.  **Consideration for `_check_condition` return for `action_context['condition_region']`:** The current implementation for passing `condition_region` to `action_context` (using `determinant_region_for_action_context` derived from `_check_condition`) is a general approach. For actions targeting Gemini elements, the `_source_region_for_capture_` stored *with the variable itself* is more precise and is what `ActionExecutor` now uses. The general `action_context['condition_region']` can remain as is for other action types or as a fallback. This detail should be confirmed during review/testing.
+            5.  **Mark Phase 1.5 as `Done`** upon successful review, testing, and documentation.
 
-- **Focus for Gemini Phase 1.5 / Start of Phase 2 (v4.0.0):**
-    - Ensure the implemented bounding box action feature is robust and user-configurable.
-    - Gather feedback from testing to refine prompt engineering guidelines for reliable bounding box extraction.
-- **Future Gemini Phases (Post v4.0.0 Phase 1.5):**
-    - **Phase 2+ (Gemini-Informed Decision Making):** Explore using Gemini's reasoning to assist in selecting or parameterizing actions based on broader goals or simpler natural language cues.
+- **Next Major Focus: v4.0.0 (Phase 2 - Gemini-Informed Decision Making):**
+    -   **Trigger:** Commence after Phase 1.5 is `Done`.
+    -   **Goal:** Evolve Mark-I beyond explicit rule-action mapping by enabling Gemini to assist in selecting or parameterizing actions based on a broader understanding of the visual scene and higher-level user goals.
+    -   **Initial Steps for Phase 2:**
+        1.  **Detailed Design (ADR or `TECHNICAL_DESIGN.MD` Update):**
+            *   Define the architecture for a `GeminiDecisionModule`.
+            *   Specify how user goals/tasks will be input (e.g., simplified natural language prompts, selection from predefined task types).
+            *   Outline the interaction flow: Mark-I provides scene context + goal -> Gemini suggests an action (or parameters for an action type) from a *predefined, limited set of capabilities*.
+            *   Address safety, controllability, and how Mark-I vets/executes suggested actions.
+        2.  **Prototyping:** Implement a basic version of the `GeminiDecisionModule` and test its feasibility with simple scenarios.
+        3.  **GUI Enhancements:** Design UI elements for users to specify goals or invoke Gemini-informed actions.
+    -   This phase directly addresses the "thinking then action" aspect with more advanced AI, aligning with the vision of a "great assistance".
+
+- **Future Gemini Phases (Post v4.0.0 Phase 2):**
     - **Phase 3+ (Natural Language Command Interface):** Investigate allowing users to type high-level, multi-step commands in natural language for the bot to interpret and execute, achieving more autonomous behavior.
-
----

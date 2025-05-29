@@ -29,18 +29,18 @@ This document outlines key development choices, current phase settings, and envi
 *   **Overall Goal for Third Major Deliverable:** `v3.0.0 (Enhanced GUI & Usability)` - **COMPLETED**
 *   **Overall Goal for Fourth Major Deliverable (Current Target):** `v4.0.0 (Gemini-Powered Visual Intelligence)`
     *   This version integrates the Google Gemini API to enhance visual understanding, enabling more robust and context-aware automation rules. Details are in `FEATURE_ROADMAP.MD` and `ADR-008`.
-*   **Active Version (Current Focus for Implementation):** `v4.0.0 (Gemini - Phase 1: Core Integration)`
-    *   *This version, set here, dictates the immediate components and features being developed by the AI collaborator, contributing towards the larger v4.0.0 goal.*
-*   **Primary Goal for Active Version:** Implement the foundational integration with the Gemini API as outlined in ADR-008 Phase 1:
-    *   Create the `GeminiAnalyzer` module for API communication.
-    *   Implement secure API key management (`.env` and `ConfigManager`).
-    *   Add the `gemini_vision_query` condition type to the `RulesEngine`.
-    *   Add basic GUI support in `MainAppWindow`/`DetailsPanel` for configuring `gemini_vision_query` conditions.
-    *   Update all relevant documentation (ADRs, Technical Design, Requirements, NFRs, Roadmap).
+*   **Active Version (Current Focus for Implementation):** `v4.0.0 (Gemini - Phase 1.5 Review & Phase 2 Planning)`
+    *   *This version, set here, dictates the immediate components and features being developed/reviewed by the AI collaborator, contributing towards the larger v4.0.0 goal.*
+*   **Primary Goal for Active Version:**
+    1.  **Complete Review of Phase 1.5 ("Action on Gemini-Identified Element Bounding Box"):** DevLead to review code, conduct manual testing, and confirm documentation updates.
+    2.  **Initiate Design & Planning for Phase 2 ("Gemini-Informed Decision Making"):**
+        *   Develop detailed design specifications for a `GeminiDecisionModule`.
+        *   Outline how user goals will be translated for Gemini and how Gemini's suggestions will be processed and executed safely.
+        *   Update `TECHNICAL_DESIGN.MD` and potentially draft a new ADR if architectural changes are significant.
 *   **Testing Strategy for Active Version (and towards v4.0.0):**
     *   **Unit Tests:** Deferred until core components are more stable, or upon explicit DevLead enablement. **Testing `GeminiAnalyzer` will likely require mocking the external `google-generativeai` API.**
         *   **Status:** `Pending DevLead Enablement`
-    *   **Integration Tests:** Manual, focused on end-to-end scenarios for the target version features. Log outputs are crucial. GUI interactions (creating/editing profiles with Gemini conditions) will be tested manually by DevLead. **Requires a valid `GEMINI_API_KEY` in `.env` for testing Gemini features.**
+    *   **Integration Tests (Phase 1.5 Focus):** Manual, focused on end-to-end scenarios for "Action on Gemini-Identified Element Bounding Box". Log outputs are crucial. GUI interactions (creating/editing profiles with Gemini conditions and bounding box actions) will be tested manually by DevLead. **Requires a valid `GEMINI_API_KEY` in `.env` for testing Gemini features.**
 *   **Linting/Formatting Setup:**
     *   **Flake8 (Linter):** Enabled (Configured for Black compatibility via `.flake8`).
     *   **Black (Formatter):** Enabled (Configured via `pyproject.toml`).
@@ -72,7 +72,7 @@ This document outlines key development choices, current phase settings, and envi
 *   **System:** Git
 *   **Branching (Simplified Strategy):**
     *   `main`: Represents the latest stable release (currently post-v3.0.0).
-    *   `develop`: Active development branch for ongoing work towards the current overall goal (v4.0.0). Feature branches (e.g., `feature/gemini-core-integration`) are created from `develop`.
+    *   `develop`: Active development branch for ongoing work towards the current overall goal (v4.0.0). Feature branches (e.g., `feature/gemini-phase2-design`) are created from `develop`.
 *   **Commit Messages:** Aim for conventional commit style.
 
 ## 6. Documentation
@@ -82,7 +82,7 @@ This document outlines key development choices, current phase settings, and envi
         *   **Status:** `Pending DevLead Update for v3.0.0 content`
     *   **`CONTRIBUTING.MD`:** Deferred.
         *   **Status:** `Pending DevLead Enablement`
-    *   **Core Docs:** Established, updated iteratively. `ADR-008` added for v4.0.0. `AI_INSTRUCTIONS.MD` updated for v4.0.0. `TECHNICAL_DESIGN.MD`, Requirements, NFRs updated for v4.0.0.
+    *   **Core Docs:** Established, updated iteratively. `ADR-008` added for v4.0.0. `AI_INSTRUCTIONS.MD` updated for v4.0.0. `TECHNICAL_DESIGN.MD`, Requirements, NFRs updated for v4.0.0 (Phase 1 & 1.5).
 *   **README.md (Project Root):** Needs updates for v3.0.0 (GUI) and **v4.0.0 (Gemini)** features once stable.
 
 ## 7. Development Environment

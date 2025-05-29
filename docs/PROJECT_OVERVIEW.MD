@@ -2,11 +2,11 @@
 
 ## 1. Purpose
 
-This project, **Mark-I**, is a Python-based desktop automation tool designed to **capture and analyze specific regions of the screen in real-time**. It aims to extract information (e.g., text with confidence scores, colors, pixel patterns, dominant colors) from these user-defined areas and then perform actions (mouse clicks, keyboard inputs, logging) based on a configurable rules engine. **(v4.0.0 Goal)** It further aims to **leverage advanced AI models, specifically Google Gemini, for enhanced visual understanding and more robust decision-making** based on screen content. A key component is a Graphical User Interface (GUI) for comprehensive profile creation, editing, and management, making complex automation accessible.
+This project, **Mark-I** (inspired by Tony Stark's pioneering suit in Iron Man, with the long-term vision of evolving into a "J.A.R.V.I.S."-like assistant for visual automation), is a Python-based desktop automation tool designed to **capture and analyze specific regions of the screen in real-time**. It aims to extract information (e.g., text with confidence scores, colors, pixel patterns, dominant colors) from these user-defined areas and then perform actions (mouse clicks, keyboard inputs, logging) based on a configurable rules engine. **(v4.0.0 Goal)** It further aims to **leverage advanced AI models, specifically Google Gemini, for enhanced visual understanding and more robust decision-making** based on screen content. A key component is a Graphical User Interface (GUI) for comprehensive profile creation, editing, and management, making complex automation accessible.
 
 ## 2. Vision
 
-To create a precise, efficient, and user-friendly visual automation tool, **Mark-I**, that empowers users to automate tasks requiring interaction with dynamic or non-standard UI elements. This tool will enable automation where traditional element selectors might fail, by focusing on visual cues. **By incorporating advanced AI like Google Gemini (v4.0.0+), the vision extends towards more intelligent, context-aware, and adaptable automation that can handle greater UI variability and interpret visual information more semantically.** It aims to be highly configurable through an intuitive GUI, while still offering a robust CLI for bot execution.
+To create a precise, efficient, and user-friendly visual automation tool, **Mark-I**, that empowers users to automate tasks requiring interaction with dynamic or non-standard UI elements. This tool will enable automation where traditional element selectors might fail, by focusing on visual cues. **By incorporating advanced AI like Google Gemini (v4.0.0+), the vision extends towards more intelligent, context-aware, and adaptable automation that can handle greater UI variability and interpret visual information more semantically – ultimately aspiring to the helpfulness and adaptability of a system like J.A.R.V.I.S.** It aims to be highly configurable through an intuitive GUI, while still offering a robust CLI for bot execution.
 
 ## 3. Core Goals
 
@@ -57,5 +57,3 @@ To create a precise, efficient, and user-friendly visual automation tool, **Mark
 *   **Command-Line Interface (CLI):** `argparse`.
 *   **Graphical User Interface (GUI):** `CustomTkinter`.
 *   **Concurrency (Bot Runtime):** `threading`.
-
----
