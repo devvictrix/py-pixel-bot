@@ -1,6 +1,6 @@
 # Development Configuration & Choices
 
-This document outlines key development choices, current phase settings, and environment setup for the **Mark-I** project. **It reflects the shift towards v4.0.0 (Gemini-Powered Visual Intelligence).**
+This document outlines key development choices, current phase settings, and environment setup for the **Mark-I** project. **Version 4.0.0 (Gemini-Powered Visual Intelligence) is now COMPLETE.**
 
 ## 1. Core Project Setup
 *   **Project Name (Informal):** Mark-I
@@ -24,33 +24,27 @@ This document outlines key development choices, current phase settings, and envi
 *   **`.gitignore`:** The `.env` file **MUST** be added to `.gitignore` to prevent committing environment-specific or sensitive settings (like API keys). The `logs/` directory should also be ignored.
 
 ## 2. Current Development Phase Focus
-*   **Overall Goal for First Major Deliverable:** `AI-Accelerated v1.0.0` - **COMPLETED**
-*   **Overall Goal for Second Major Deliverable:** `v2.0.0 (Advanced Visual Analysis & Rules)` - **COMPLETED**
-*   **Overall Goal for Third Major Deliverable:** `v3.0.0 (Enhanced GUI & Usability)` - **COMPLETED**
-*   **Overall Goal for Fourth Major Deliverable (Current Target):** `v4.0.0 (Gemini-Powered Visual Intelligence)`
-    *   This version integrates the Google Gemini API to enhance visual understanding, enabling more robust and context-aware automation rules. Details are in `FEATURE_ROADMAP.MD` and `ADR-008`.
-*   **Active Version (Current Focus for Implementation):** `v4.0.0 (Gemini - Phase 2 Design: Gemini-Informed Decision Making)`
-    *   *This version, set here, dictates the immediate components and features being designed and developed by the AI collaborator, contributing towards the larger v4.0.0 goal.*
+*   **Overall Goal for Fourth Major Deliverable:** `v4.0.0 (Gemini-Powered Visual Intelligence)` - **COMPLETED**
+    *   Phase 1: Core Gemini Integration - `COMPLETED`
+    *   Phase 1.5: Bounding Box Actions - `COMPLETED`
+    *   Phase 2: Gemini-Informed Decision Making - `COMPLETED`
+    *   Phase 3: Natural Language Command Interface - `COMPLETED`
+*   **Active Version (Current Focus):** `v4.0.0 (Release Finalization & v5.0.0 Planning)`
+    *   *Current activities involve finalizing all documentation for v4.0.0, DevLead preparing for a potential release tag, and initiating discussions for prioritizing features for v5.0.0 from the "vFuture" list in `FEATURE_ROADMAP.MD`.*
 *   **Primary Goal for Active Version:**
-    1.  **AI Collaborator to design the "Gemini-Informed Decision Making" feature (Phase 2):**
-        *   Develop detailed design specifications for a `GeminiDecisionModule`.
-        *   Outline how user goals will be translated for Gemini and how Gemini's suggestions for actions (from a limited, predefined set) will be processed and executed safely by Mark-I.
-        *   Propose updates to `TECHNICAL_DESIGN.MD` and determine if a new ADR is required for architectural changes.
-    2.  **DevLead to review and approve the design.**
-    3.  **AI Collaborator to proceed with prototyping and implementation upon design approval.**
-*   **Testing Strategy for Active Version (and towards v4.0.0):**
-    *   **Unit Tests:** Deferred until core components are more stable, or upon explicit DevLead enablement. **Testing `GeminiAnalyzer` and the new `GeminiDecisionModule` will require mocking the external `google-generativeai` API.**
-        *   **Status:** `Pending DevLead Enablement`
-    *   **Integration Tests (Phase 2 Focus):** Will involve manual testing of end-to-end scenarios where Gemini influences action selection. Log outputs will be crucial. GUI interactions for specifying goals/tasks will also require manual testing.
+    1.  **Finalize all v4.0.0 documentation** (`README.MD`, `CHANGELOG.MD` if used, ensuring all technical docs are accurate).
+    2.  **DevLead to perform final review and consider tagging v4.0.0 release.**
+    3.  **Begin planning and prioritizing features for v5.0.0.**
+*   **Testing Strategy:** Focus on regression testing for v4.0.0 if any patches are made. New feature testing will apply to v5.0.0 development.
 *   **Linting/Formatting Setup:**
     *   **Flake8 (Linter):** Enabled (Configured for Black compatibility via `.flake8`).
     *   **Black (Formatter):** Enabled (Configured via `pyproject.toml`).
     *   Manual adherence to PEP 8 encouraged.
 
 ## 3. Architectural & Design Approach
-*   **Overall Architectural Style:** Modular (Capture, Analysis, Action, Rules, Gemini engines, UI). Approved ADRs are foundational.
+*   **Overall Architectural Style:** Modular, with agent-like capabilities introduced in v4.0.0 Phase 3.
     *   *Details in `TECHNICAL_DESIGN.MD`.*
-*   **Logging Strategy:** Comprehensive and persistent logging using Python's `logging` module (per ADR-007). **v4.0.0: Logging must include details of Gemini API interactions, including decision-making processes.**
+*   **Logging Strategy:** Comprehensive and persistent logging using Python's `logging` module (per ADR-007).
 *   **Code Design Principles:** Readability, Simplicity, Modularity, Testability, Diagnosability (via logs). Adherence to Black/Flake8.
 
 ## 4. Tooling Choices (Key Tools - per ADRs)
@@ -72,19 +66,20 @@ This document outlines key development choices, current phase settings, and envi
 ## 5. Version Control
 *   **System:** Git
 *   **Branching (Simplified Strategy):**
-    *   `main`: Represents the latest stable release (currently post-v4.0.0 Phase 1.5).
-    *   `develop`: Active development branch for ongoing work towards the current overall goal (v4.0.0 Phase 2). Feature branches (e.g., `feature/gemini-decision-module`) are created from `develop`.
+    *   `main`: Represents the latest stable release (to be tagged as v4.0.0).
+    *   `develop`: Base for any v4.0.x patches or for starting v5.0.0 development.
 *   **Commit Messages:** Aim for conventional commit style.
 
 ## 6. Documentation
 *   **Docstring Style:** Google Python Style.
 *   **Project Documentation Status:**
-    *   **`CHANGELOG.MD`:** Should be updated for v4.0.0 Phase 1.5 release and maintained for Phase 2.
-        *   **Status:** `Pending DevLead Update for v4.0.0 Phase 1.5 content`
+    *   **`CHANGELOG.MD`:** Needs final entries for v4.0.0 release (if DevLead decides to maintain it).
+        *   **Status:** `Pending Update for v4.0.0 release content`
     *   **`CONTRIBUTING.MD`:** Deferred.
         *   **Status:** `Pending DevLead Enablement`
-    *   **Core Docs:** Established, updated iteratively. `ADR-008` guides v4.0.0. `AI_INSTRUCTIONS.MD` updated for v4.0.0 Phase 2. `TECHNICAL_DESIGN.MD`, Requirements, NFRs updated for v4.0.0 (Phase 1 & 1.5). Will require significant updates for Phase 2.
-*   **README.md (Project Root):** Needs updates for **v4.0.0 (Gemini)** features once stable.
+    *   **Core Docs:** `TECHNICAL_DESIGN.MD`, `FUNCTIONAL_REQUIREMENTS.MD`, `NON_FUNCTIONAL_REQUIREMENTS.MD`, `ADR-008`, `PROJECT_OVERVIEW.MD`, `AI_INSTRUCTIONS.MD`, `STATUS_LEGEND.MD` are considered final and accurate for v4.0.0.
+*   **README.md (Project Root):** Requires comprehensive update to reflect all v4.0.0 features.
+    *   **Status:** `Pending Update for v4.0.0 release content` (AI Collaborator will provide a draft).
 
 ## 7. Development Environment
 *   **Target OS for Bot Runtime:** **Windows** (Primary initial focus).

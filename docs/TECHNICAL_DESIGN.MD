@@ -1,6 +1,6 @@
 # Technical Design Document: Mark-I
 
-This document outlines the technical design and architectural considerations for the Mark-I visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status. As of the last update, v1.0.0, v2.0.0, v3.0.0, and v4.0.0 Phase 1/1.5 (Core Gemini Integration & Bounding Box Actions) are complete. Development for **v4.0.0 Phase 2 (Gemini-Informed Decision Making)** is now commencing with this design.
+This document outlines the technical design and architectural considerations for the Mark-I visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status. **Version 4.0.0 (Gemini-Powered Visual Intelligence), including all its sub-phases (Phase 1: Core Vision Query, Phase 1.5: Bounding Box Actions, Phase 2: Gemini-Informed Decision Making, and Phase 3: Natural Language Command Interface), is now considered functionally complete.**
 
 ## 1. Core Architecture
 
@@ -24,45 +24,50 @@ The tool is modular, comprising several key Python components, all residing with
     - OCR text extraction (`ocr_extract_text`) using `pytesseract`, returning a dictionary with extracted `text` and an `average_confidence` score.
     - Dominant color analysis (`analyze_dominant_colors`) using k-means clustering.
 - **`engines.gemini_analyzer.GeminiAnalyzer` Class (v4.0.0+):**
-  - Responsibility: Handles all communication with the Google Gemini API for advanced visual understanding (per ADR-008).
+  - Responsibility: Handles all direct communication with the Google Gemini API for advanced visual understanding (per ADR-008), supporting both vision and text model interactions as needed.
   - Initialization: Takes API key (from `.env` via `os.getenv`) and optional default model name (from profile settings via `ConfigManager`).
-  - Key Methods: Provides `query_vision_model(image_data, prompt, [model_name])` which sends image/prompt to the API and returns a structured response (including parsed text/JSON and status/error info).
+  - Key Methods: Provides `query_vision_model(image_data, prompt, [model_name])` which sends image/prompt to the API and returns a structured response (including parsed text/JSON and status/error info). Can also be used for text-only prompts by providing minimal/no image data if the underlying model supports it.
   - Configuration: API key loaded from `.env`. Default model configurable via profile settings (`settings.gemini_default_model_name`).
   - Logging: Comprehensive logging of API interactions, errors, and latency.
   - _Details in Section 10._
 - **`engines.rules_engine.RulesEngine` Class:**
   - Evaluates rules based on analysis results (from `AnalysisEngine` for local checks, or from `GeminiAnalyzer` for Gemini-powered `gemini_vision_query` conditions).
   - Supports single conditions, compound conditions (AND/OR logic per ADR-004), and rule-scoped variable capture and substitution.
-  - Instantiates `GeminiAnalyzer` (for v4.0.0+), passing API key from `os.getenv` and default model from `ConfigManager`.
-  - `gemini_vision_query` conditions are evaluated on-demand by `RulesEngine` during its evaluation cycle.
+  - Instantiates its own `GeminiAnalyzer` (for v4.0.0+) for handling `gemini_vision_query` conditions.
+  - For actions of type `gemini_perform_task`, it invokes the `GeminiDecisionModule` to handle NLU commands and goal-oriented task execution.
+  - _Details in Section 5._
 - **`engines.action_executor.ActionExecutor` Class:**
   - Simulates mouse and keyboard actions using `pyautogui` (per ADR-002).
   - Calculates target coordinates for actions, including those derived from Gemini bounding boxes (v4.0.0 Phase 1.5).
-- **`engines.gemini_decision_module.GeminiDecisionModule` Class (NEW - v4.0.0 Phase 2):**
-  - **Responsibility:** Enables Mark-I to use Gemini for more advanced decision-making. It takes a user-defined high-level goal and visual context, consults Gemini to suggest an action from a predefined set, validates the suggestion, and then instructs `ActionExecutor`.
-  - _Details in Section 14._
+  - Called by `RulesEngine` for standard actions (if `RulesEngine` directly executes them, or prepares specs for `MainController`) and by `GeminiDecisionModule` for executing primitive steps of an NLU-driven task.
+- **`engines.gemini_decision_module.GeminiDecisionModule` Class (v4.0.0 Phase 2 & 3):**
+  - **NLU Task Orchestrator:** Parses natural language user commands (received via the `gemini_perform_task` action's `natural_language_command` parameter).
+  - Decomposes these commands into a sequence of manageable steps/sub-goals using Gemini for NLU.
+  - For each decomposed step, uses `GeminiAnalyzer` for visual analysis (if needed) and action refinement (e.g., finding specific elements, getting bounding boxes for described targets).
+  - Manages basic state across steps of a single NLU task.
+  - Orchestrates execution of these steps by constructing specifications for and calling `ActionExecutor`.
+  - Implements safety measures like using a predefined set of allowed sub-actions and optional user confirmation per step.
+  - _Details extensively in Section 14._
 - **`main_controller.MainController` Class:**
-  - Orchestrates the main bot operation loop for runtime execution when using explicit rule-based profiles.
+  - Orchestrates the main bot operation loop for rule-based profile execution.
   - Runs the monitoring loop in a separate thread (per ADR-006).
+  - Instantiates all engine components: `CaptureEngine`, `AnalysisEngine`, `ActionExecutor`, a shared `GeminiAnalyzer` (primarily for `GeminiDecisionModule`), and `GeminiDecisionModule`. It then passes these to `RulesEngine` (which also instantiates its own `GeminiAnalyzer` for `gemini_vision_query` conditions, ensuring modularity).
   - For each monitored region in a profile:
     - Instructs `CaptureEngine` to capture the image.
     - Selectively instructs `AnalysisEngine` to perform required **local** general analyses based on `RulesEngine`'s pre-parsed dependencies.
-  - Passes collected region data to `RulesEngine.evaluate_rules()`.
-  - **(v4.0.0 Phase 2 Consideration):** May need modification or a new controller/mode to handle task-driven execution via `GeminiDecisionModule`. This module might operate within the existing loop (e.g., triggered by a special rule) or in a separate execution flow.
+  - Passes collected region data to `RulesEngine.evaluate_rules()`. The `RulesEngine` then handles dispatching actions to `ActionExecutor` or `GeminiDecisionModule`.
 - **`ui.cli` Module:**
   - Provides the Command-Line Interface using `argparse` (per ADR-005).
   - Handles subcommands: `run <profile>`, `add-region <profile>`, and `edit [profile]`.
-  - **(v4.0.0 Phase 2 Consideration):** May require a new CLI command or options to invoke task-driven mode using `GeminiDecisionModule`.
-- **`ui.gui.region_selector.RegionSelectorWindow` Class:**
-  - Provides GUI for visually selecting screen regions.
-- **`ui.gui.main_app_window.MainAppWindow` Class:**
-  - The main application window (`ctk.CTk`) for the full GUI profile editor.
-  - **(v4.0.0 Phase 2 Consideration):** Will need enhancements to allow users to define "goals" or "tasks" for the `GeminiDecisionModule`, and potentially to configure its behavior (e.g., confirmation steps).
-- **`ui.gui.panels.details_panel.DetailsPanel` Class:**
-  - Encapsulates the logic for displaying and editing details of selected items (Regions, Templates, Rules).
-  - Dynamically renders input widgets based on `gui_config.UI_PARAM_CONFIG`.
+  - **(v4.0.0 Phase 3):** A direct CLI command for NLU tasks (e.g., `mark_i nlu-task "command" --profile <p>`) is a future consideration but not part of the initial Phase 3 GUI-driven implementation. NLU tasks are invoked via profiles.
+- **`ui.gui.*` Modules (`MainAppWindow`, `DetailsPanel`, `RegionSelectorWindow`, `gui_config.py`, `gui_utils.py`):**
+  - Provide the comprehensive GUI editor using `CustomTkinter`.
+  - The GUI supports configuration of all features, including:
+    - `gemini_vision_query` conditions.
+    - `gemini_perform_task` actions, with parameters for `natural_language_command`, `context_region_names`, `allowed_actions_override`, `require_confirmation_per_step`, and `max_steps`.
+  - _Details in Section 9 and 11._
 - **`mark_i/__main__.py`:**
-  - Entry point for the application. Initializes core components (Env Vars, Logging, Config) and dispatches CLI commands.
+  - Application entry point. Initializes core components (Env Vars, Logging, Config) and dispatches CLI commands.
 
 ## 2. Key Libraries & Justifications (Summary from ADRs)
 
@@ -83,309 +88,329 @@ The tool is modular, comprising several key Python components, all residing with
 -   Regions are defined in the JSON profile with `name, x, y, width, height`.
 -   The GUI (`MainAppWindow` using `RegionSelectorWindow`) allows users to define/edit these graphically.
 -   `CaptureEngine.capture_region(region_spec)` uses `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` on Windows. The result (Pillow Image) is converted to an OpenCV BGR NumPy array.
--   This captured BGR image is then available for local analysis by `AnalysisEngine`, remote analysis by `GeminiAnalyzer` (for `gemini_vision_query` conditions), and as visual context for `GeminiDecisionModule`.
+-   This captured BGR image is then available for local analysis by `AnalysisEngine`, remote analysis by `GeminiAnalyzer` (for `gemini_vision_query` conditions), and as visual context for the `GeminiDecisionModule`'s NLU tasks.
 
 ## 4. "Reading" from the Region - Analysis Strategies
 
 1.  **Local Selective Pre-emptive Analysis (by `MainController` via `AnalysisEngine`):**
-    -   `RulesEngine.__init__` pre-parses rules, creating `_analysis_requirements_per_region` for **local** analysis types.
-    -   `MainController` selectively calls `AnalysisEngine` methods based on these requirements.
+    -   `RulesEngine.__init__` pre-parses rules, creating `_analysis_requirements_per_region` for **local** analysis types (OCR, dominant color, average color).
+    -   `MainController` selectively calls `AnalysisEngine` methods based on these requirements for specified regions.
 2.  **Local On-Demand Analysis (by `RulesEngine` via `AnalysisEngine`):**
-    -   Conditions like `pixel_color` and `template_match_found` are evaluated directly by `RulesEngine._evaluate_single_condition_logic` using the `captured_image`.
-3.  **Remote On-Demand Analysis (by `RulesEngine` via `GeminiAnalyzer` - v4.0.0 Phase 1+):**
-    -   `gemini_vision_query` conditions invoke `GeminiAnalyzer.query_vision_model()` on-demand.
-4.  **Remote Contextual Analysis for Decision Making (NEW - by `GeminiDecisionModule` via `GeminiAnalyzer` - v4.0.0 Phase 2):**
-    -   The `GeminiDecisionModule` will use `GeminiAnalyzer` to send images and goal-oriented prompts to Gemini, interpreting responses to suggest actions. This may involve one or more API calls per decision task.
+    -   Conditions like `pixel_color` and `template_match_found` are evaluated directly by `RulesEngine._evaluate_single_condition_logic` using the `captured_image` from the data packet passed by `MainController`.
+3.  **Remote On-Demand Analysis for Vision Queries (by `RulesEngine` via `GeminiAnalyzer` - v4.0.0 Phase 1+):**
+    -   When a `gemini_vision_query` condition is evaluated by `RulesEngine._evaluate_single_condition_logic`, it calls `GeminiAnalyzer.query_vision_model()` with the relevant image and prompt.
+4.  **Remote NLU Processing and Contextual Visual Analysis for Task Orchestration (by `GeminiDecisionModule` via `GeminiAnalyzer` - v4.0.0 Phase 3):**
+    -   The `GeminiDecisionModule`, when executing an NLU task:
+        *   First calls `GeminiAnalyzer` with a text-based prompt (and potentially an initial overview image) to parse the `natural_language_command` into a structured plan.
+        *   Then, for each decomposed step in the plan, it may call `GeminiAnalyzer` again with specific visual context (images of relevant regions for that step) and prompts to:
+            *   Suggest a primitive action (from `PREDEFINED_ALLOWED_SUB_ACTIONS`).
+            *   Refine a `target_description` into precise bounding box coordinates.
+            *   Evaluate a `CHECK_VISUAL_STATE` condition.
 
 ## 5. Rules Engine & Evaluation (`RulesEngine`)
 
 ### 5.1. Rule Structure in JSON Profiles
 
 -   **Condition Object:**
-    -   Supports single local conditions, compound local conditions (AND/OR).
-    -   Includes `gemini_vision_query` type (per ADR-008 Phase 1).
-        -   Parameters: `type`, `region` (optional override), `prompt`, `expected_response_contains`, `case_sensitive_response_check`, `expected_response_json_path`, `expected_json_value`, `capture_as`, `model_name` (optional override).
+    -   **Single Condition (Local Types):** `{"type": "local_condition_name", "param1": value1, ...}`. May include `"capture_as": "var_name"` and `"region": "override_region_name"`.
+    -   **Compound Condition (Local Types):** `{"logical_operator": "AND" | "OR", "sub_conditions": [list_of_single_local_condition_objects]}`. Each sub-condition can also have its own `"region"`.
+    -   **`gemini_vision_query` type (Single Condition Structure - v4.0.0 Phase 1+):**
+        ```json
+        {
+          "type": "gemini_vision_query",
+          "region": "optional_region_name_override",
+          "prompt": "Describe this image. Is there a red button?",
+          "expected_response_contains": "red button",
+          "capture_as": "gemini_description",
+          "model_name": "gemini-1.5-flash-latest" // Optional
+        }
+        ```
 -   **Action Object:**
-    -   Types: `click`, `type_text`, `press_key`, `log_message`.
-    -   `click` action supports `target_relation` including `center_of_gemini_element` and `top_left_of_gemini_element`, using `gemini_element_variable` parameter (v4.0.0 Phase 1.5).
--   **(v4.0.0 Phase 2 Consideration): New Rule Type for `GeminiDecisionModule` Invocation:**
-    -   A new condition or action type might be needed to trigger the `GeminiDecisionModule`.
-    -   Example "action" type:
+    *   Standard types: `click`, `type_text`, `press_key`, `log_message`.
+    *   The `click` action supports `target_relation` values like `center_of_gemini_element` and `top_left_of_gemini_element`, requiring a `gemini_element_variable` parameter that references a variable holding bounding box data (captured via `gemini_vision_query`). (v4.0.0 Phase 1.5).
+    *   **`gemini_perform_task` type (v4.0.0 Phase 2 & 3 - NLU Task Execution):**
         ```json
         {
           "type": "gemini_perform_task",
-          "goal_prompt": "User-defined goal, e.g., 'Find the login button and click it.'",
-          "context_region_names": ["main_screen_area", "maybe_a_specific_menu_area"], // Regions to provide as visual context
-          "allowed_actions_override": ["CLICK_DESCRIBED_ELEMENT"], // Optional: further restrict allowed actions for this task
-          "confirmation_required": true // Optional: override global setting
+          "natural_language_command": "Find the 'File' menu, click it, then click 'Open'.",
+          "context_region_names": ["main_app_area", "menu_bar_area"], // Optional, list of region names
+          "allowed_actions_override": ["CLICK_DESCRIBED_ELEMENT"], // Optional, list of allowed sub-action types
+          "require_confirmation_per_step": true, // Optional, boolean
+          "max_steps": 5, // Optional, integer
+          "pyautogui_pause_before": 0.2 // Standard action pause
         }
         ```
-    -   Alternatively, a new top-level "task" entry in the profile could define these goal-driven automations, separate from the explicit rule list. This needs further design decision in Phase 2.
+        *(Note: `goal_prompt` was the Phase 2 design name for the primary textual input; Phase 3 standardizes on `natural_language_command` for clarity. `RulesEngine` might handle both for backward compatibility if needed, but `gui_config.py` uses `natural_language_command` for new configurations.)*
 
 ### 5.2. `RulesEngine` Evaluation Logic
 
--   `_evaluate_single_condition_logic(...)` handles existing local and `gemini_vision_query` conditions.
--   `evaluate_rules(...)` iterates through rules, checks conditions, and if met, prepares and triggers actions via `ActionExecutor`.
+-   **`_parse_rule_analysis_dependencies()`:** Pre-parses rules at initialization to determine which **local** analyses (`ocr`, `dominant_color`, `average_color`) are required for each region, enabling `MainController` to perform them selectively once per cycle. `gemini_vision_query` and `gemini_perform_task` do not add to these *pre-emptive local* requirements as their Gemini calls are on-demand.
+-   **`_evaluate_single_condition_logic(...)`:** Handles evaluation of individual condition specifications (local types and `gemini_vision_query`). For `gemini_vision_query`, it invokes `self.gemini_analyzer`.
+-   **`_check_condition(...)`:** Handles single vs. compound condition logic, including short-circuiting for AND/OR.
+-   **`evaluate_rules(...)`:**
+    *   Iterates through all defined rules in the profile.
+    *   For each rule, calls `_check_condition()` to evaluate its conditional part, managing `rule_variable_context`.
+    *   If a rule's condition is met:
+        *   Substitutes variables into the rule's action specification.
+        *   **If action type is `gemini_perform_task`:**
+            *   Extracts `natural_language_command` and other task parameters.
+            *   Gathers current images for the specified `context_region_names` from `all_region_data`.
+            *   Calls `self.gemini_decision_module.execute_nlu_task()` with these inputs. The `GeminiDecisionModule` then handles the entire NLU task lifecycle.
+        *   **For other standard action types:**
+            *   Constructs a `full_action_to_execute` spec including context.
+            *   Calls `self.action_executor.execute_action()` directly to perform the action. (This implies `MainController` no longer queues actions from `RulesEngine` but `RulesEngine` executes them directly upon condition met).
 
 ### 5.3. Variable Handling (`RulesEngine`)
 
--   Rule-scoped variables captured via `capture_as` in conditions.
--   Supports `{"value": <actual_data>, "_source_region_for_capture_": "region_name"}` structure for Gemini captures, crucial for interpreting relative bounding boxes.
--   `_substitute_variables` method handles placeholder substitution in action parameters using dot notation.
+-   Rule-scoped variables are created during `evaluate_rules` for each rule via the `capture_as` parameter in conditions.
+-   Supported capture types include OCR text, template match details (dictionary with `x,y,width,height,confidence`), and Gemini responses (text, full JSON object, or specific JSON-extracted value).
+-   For Gemini captures (both `gemini_vision_query` and bounding boxes refined within `GeminiDecisionModule` steps), the captured variable is structured as `{"value": <actual_captured_data>, "_source_region_for_capture_": "region_name_of_query"}` to ensure relative coordinates from bounding boxes can be correctly translated to absolute screen coordinates by `ActionExecutor`.
+-   The `_substitute_variables` method uses regex (`\{([\w_]+)((\.[\w_]+)*)\}`) to find and replace placeholders (e.g., `{my_var}`, `{my_var.value.box.0}`) in action parameter strings with their corresponding values from the `rule_variable_context`.
 
-## 6. Data Flow Example (Continuous Loop - Rule-Based)
+## 6. Data Flow Example for NLU Task (`gemini_perform_task` - Phase 3)
 
-(Data flow for rule-based operation as described in previous `TECHNICAL_DESIGN.MD` version, including Gemini Bounding Box click, remains valid for that mode of operation.)
-
-**(v4.0.0 Phase 2 Consideration): A new data flow will be needed for task-driven execution via `GeminiDecisionModule`. This will be detailed in Section 14.3.**
+1.  **`MainController` Loop:**
+    a.  Captures images for all monitored regions (e.g., `full_app_window`, `dialog_area`) into `all_region_data`.
+    b.  Calls `RulesEngine.evaluate_rules(all_region_data)`.
+2.  **`RulesEngine.evaluate_rules()`:**
+    a.  A rule "AutomateLoginViaNLU" has its condition met.
+    b.  Action spec is: `{"type": "gemini_perform_task", "natural_language_command": "Enter username 'dev' and password 'secret', then click login", "context_region_names": ["full_app_window"]}`.
+    c.  `RulesEngine` calls `self.gemini_decision_module.execute_nlu_task("Enter username...", {"full_app_window": image_data}, task_params)`.
+3.  **`GeminiDecisionModule.execute_nlu_task()`:**
+    a.  **NLU Parse:** Sends "Enter username..." and the `full_app_window` image (as general context) to `GeminiAnalyzer` with an NLU parsing prompt.
+    b.  Gemini (text/multimodal model) returns JSON like:
+        ```json
+        { "parsed_task": { "command_type": "SEQUENTIAL_INSTRUCTIONS", "steps": [
+            {"step_number": 1, "instruction_details": {"intent_verb": "TYPE", "target_description": "the username field", "parameters": {"text_to_type": "dev"}}},
+            {"step_number": 2, "instruction_details": {"intent_verb": "TYPE", "target_description": "the password field", "parameters": {"text_to_type": "secret"}}},
+            {"step_number": 3, "instruction_details": {"intent_verb": "CLICK", "target_description": "the login button", "parameters": {}}}
+        ]}}
+        ```
+    c.  **Loop through steps:**
+        i.  **Step 1 (Type username):**
+            *   `GeminiDecisionModule` takes "Type 'dev' in 'the username field'". `current_image` is `full_app_window` image.
+            *   It maps "TYPE" to `TYPE_IN_DESCRIBED_FIELD`.
+            *   Calls `_refine_target_description_to_bbox("the username field", current_image, "full_app_window", ...)`. `GeminiAnalyzer` (vision) returns `{"value": {"box": [x1,y1,w1,h1], "found": true}, "_source_region_for_capture_": "full_app_window"}`.
+            *   If confirmation enabled, prompts user.
+            *   Calls `ActionExecutor` to first click `[x1,y1,w1,h1]` center, then type "dev".
+            *   (Future: re-capture screen for next step's context).
+        ii. **Step 2 (Type password):** Similar flow for password field.
+        iii. **Step 3 (Click login):** Similar flow for login button.
+    d.  Returns overall task status (success/failure) to `RulesEngine`.
+4.  `RulesEngine` logs result. Loop continues.
 
 ## 7. Logging System (per ADR-007)
 
--   Uses Python's built-in `logging`, configured by `core.logging_setup`. Root logger: `mark_i`.
+-   Uses Python's built-in `logging`, configured by `core.logging_setup`. Root logger for Mark-I is `mark_i`.
+-   Format includes timestamp, logger name, level, module:func:lineno, and message for files.
 -   **v4.0.0+ Specifics:**
-    -   `GeminiAnalyzer` logs API requests, responses, errors, latency.
-    -   `RulesEngine` logs `gemini_vision_query` invocations and outcomes.
-    -   `ActionExecutor` logs details for Gemini-element-targeted actions.
-    -   **(NEW - v4.0.0 Phase 2): `GeminiDecisionModule` will log user goals, prompts to Gemini for decision-making, Gemini's suggested actions, validation steps, any refinement queries, and final executed actions or failures.**
+    -   `GeminiAnalyzer` logs API requests (prompt summary, model used), API responses (status, success/error, latency), and any errors.
+    -   `RulesEngine` logs when it's invoking `GeminiAnalyzer` for `gemini_vision_query`, the prompt used, and the outcome. It also logs invocation of `GeminiDecisionModule`.
+    -   `ActionExecutor` logs details when targeting Gemini-identified elements, including variable name, relative box, base region, and final absolute coordinates.
+    -   **`GeminiDecisionModule` (Phase 3 NLU):** Logs received natural language command, NLU parsing prompts/responses, decomposed plan steps, sub-step visual refinement prompts/responses, user confirmations (if enabled), final actions sent to `ActionExecutor`, and overall task/step success/failure.
 
 ## 8. Error Handling
 
--   Extensive `try-except` blocks. User-facing errors via `messagebox` or `stderr`. Detailed exceptions logged.
+-   Extensive `try-except` blocks. User-facing errors via `messagebox` or stderr. Detailed exceptions logged.
 -   **v4.0.0+ Specifics:**
-    -   `GeminiAnalyzer` robustly handles API errors.
-    -   `RulesEngine` gracefully handles `GeminiAnalyzer` failures for `gemini_vision_query`.
-    -   `ActionExecutor` handles malformed/missing bounding box data for Gemini element clicks.
-    -   **(NEW - v4.0.0 Phase 2): `GeminiDecisionModule` must robustly handle invalid or unsafe suggestions from Gemini, API errors during its consultations, and failures in refining targets or executing actions. It should provide clear error states/messages.**
+    -   `GeminiAnalyzer` robustly handles API errors (authentication, rate limits, invalid requests, network issues, content blocking) and returns structured error info.
+    -   `RulesEngine` gracefully handles failures from `GeminiAnalyzer` for `gemini_vision_query` conditions (evaluates to `False`).
+    -   `ActionExecutor` gracefully handles malformed or missing bounding box data from Gemini variables for targeted clicks (action skipped, error logged).
+    -   **`GeminiDecisionModule` (Phase 3 NLU):**
+        *   Handles NLU parsing failures (e.g., Gemini returns non-JSON or unparseable plan). Task fails with error.
+        *   Handles task decomposition failures (e.g., NLU step intent doesn't map to an allowed sub-action). Task fails.
+        *   Handles sub-step target refinement failures (e.g., Gemini can't find the described element for a bounding box). Current sub-step fails, potentially halting the overall NLU task.
+        *   Handles `ActionExecutor` errors during sub-step execution. Halts task.
+        *   Uses `max_steps` to prevent infinite loops if task decomposition is flawed.
 
 ## 9. Full GUI Architecture (`MainAppWindow` using `CustomTkinter`)
 
-(Existing GUI architecture for profile settings, regions, templates, and rule editing (including `gemini_vision_query` conditions and Phase 1.5 bounding box actions) remains as previously defined.)
+### 9.1. Overall Structure
+(Main window with Left Panel for settings/regions/templates, Center Panel for rules list, Right Panel (`DetailsPanel`) for editing selected item – as previously defined.)
 
-### 9.x. (NEW - v4.0.0 Phase 2 Consideration): GUI Enhancements for `GeminiDecisionModule`
+### 9.2. File Operations (Menu)
+(New, Open, Save, Save As – as previously defined.)
 
--   **Task/Goal Definition:**
-    *   A new section in the GUI might be needed to define "Gemini Tasks" if they are stored separately from rules.
-    *   If invoked via a rule, the `DetailsPanel` will need to render parameters for the `gemini_perform_task` action/condition type (e.g., `CTkTextbox` for `goal_prompt`, a multi-selection mechanism for `context_region_names`).
--   **Runtime Feedback:** If Mark-I is operating in a task-driven mode, the GUI might need to display the current goal, Gemini's suggested step, and status.
--   **Configuration:** Settings for `GeminiDecisionModule` (e.g., global "confirm Gemini actions" flag).
+### 9.3. Core Data Model (`self.profile_data` in `MainAppWindow`)
+(Mirrors the JSON profile structure. Changes in UI update this dictionary.)
+
+### 9.4. Core Functionality Logic (`MainAppWindow` and `DetailsPanel`)
+
+-   **Settings Panel:** Includes fields for `gemini_default_model_name` and read-only status of `GEMINI_API_KEY`.
+-   **Rule Editor (`DetailsPanel`):**
+    *   Dynamically renders parameters for selected condition types (including `gemini_vision_query`) and action types (including `gemini_perform_task`).
+    *   For `gemini_vision_query`: `CTkTextbox` for `prompt`, entries for expectations, etc.
+    *   For `gemini_perform_task` (Phase 3):
+        *   `CTkTextbox` for `natural_language_command`.
+        *   `CTkEntry` for `context_region_names` (expects CSV, parsed by `_get_parameters_from_ui`).
+        *   `CTkEntry` for `allowed_actions_override` (expects CSV of valid `PREDEFINED_ALLOWED_SUB_ACTIONS` keys, parsed).
+        *   `CTkCheckBox` for `require_confirmation_per_step`.
+        *   `CTkEntry` for `max_steps`.
+    *   Handles conditional visibility of parameters (e.g., `gemini_element_variable` for click actions).
+-   Input validation via `gui_utils.validate_and_get_widget_value`.
+-   `DetailsPanel._get_parameters_from_ui` parses CSV string inputs for `list_str_csv` types into Python lists.
+
+### 9.5. Item Lists (Regions, Templates, Rules, Sub-Conditions)
+(Managed via `_populate_specific_list_frame` and `_highlight_selected_list_item` – as previously defined.)
+
+### 9.6. Dynamic Parameter Rendering (`DetailsPanel._render_dynamic_parameters`)
+(Reads `UI_PARAM_CONFIG` to create widgets. Handles `condition_show` for dynamic visibility. Stores a list of currently rendered dynamic widgets (`self.param_widgets_and_defs_for_current_view`) to allow `_update_conditional_visibility` to function correctly when controller widgets change.)
+
+### 9.7. Data Persistence (Saving/Loading)
+(Handled by `MainAppWindow` calling `ConfigManager`.)
+
+### 9.8. Component Refactoring (v3.0.x - Done)
+(Refactoring of `MainAppWindow` and `DetailsPanel` into smaller components is complete.)
 
 ## 10. Gemini API Interaction (`GeminiAnalyzer` - v4.0.0 Phase 1+)
 
-(Structure and methods as previously defined: `__init__`, `query_vision_model`. Handles image prep, API calls, response parsing (text/JSON), error handling, and logging for direct vision queries.)
+### 10.1. Class Structure and Initialization
+-   `mark_i.engines.gemini_analyzer.GeminiAnalyzer`
+-   `__init__(self, api_key: str, default_model_name: str)`: Configures `genai` client.
 
-### 10.3. Prompting for Bounding Boxes (v4.0.0 Phase 1.5)
+### 10.2. Core Method: `query_vision_model`
+-   `query_vision_model(self, image_data: np.ndarray, prompt: str, model_name: Optional[str] = None) -> Dict[str, Any]`
+-   Handles BGR to PIL Image conversion, constructs request, calls `genai.GenerativeModel().generate_content()`.
+-   Parses response text, attempts JSON parsing, handles API errors, content blocking, and returns a structured dictionary: `{"status": ..., "text_content": ..., "json_content": ..., "error_message": ..., "model_used": ..., "latency_ms": ...}`.
+-   Can be used for text-only NLU prompts by `GeminiDecisionModule` if `image_data` is minimal/None and the model endpoint supports it (e.g., "gemini-pro" for text, or multimodal models can also take text-only prompts).
 
-(Strategy for prompting Gemini to return JSON with `box: [x,y,w,h]` and `found: true/false` as previously defined, used by `RulesEngine` for `gemini_vision_query` and `ActionExecutor`.)
+### 10.3. Prompting for Bounding Boxes (v4.0.0 Phase 1.5+)
+-   Used by `RulesEngine` (for `gemini_vision_query` `capture_as` a box) and `GeminiDecisionModule` (for refining `target_description` from NLU steps).
+-   Strategy: Prompt Gemini to return JSON with `box: [x_rel, y_rel, width, height]` and `found: true/false` for a described element within a given image.
+-   The `_source_region_for_capture_` key is added by the calling module (`RulesEngine` or `GeminiDecisionModule`) to the captured/refined data to ensure correct interpretation of relative box coordinates.
 
-## 11. GUI Configuration for Gemini (v4.0.0 Phase 1 & 1.5)
+## 11. GUI Configuration for Gemini (v4.0.0+)
 
-(`gui_config.py` and `DetailsPanel` support for `gemini_vision_query` condition parameters and action parameters for Gemini element targeting, including conditional visibility, as previously defined.)
+-   **`gui_config.py` (`UI_PARAM_CONFIG`):**
+    *   Defines all parameters for `gemini_vision_query` condition.
+    *   Defines parameters for `gemini_perform_task` action:
+        *   `natural_language_command` (textbox, required).
+        *   `context_region_names` (entry, `type: "list_str_csv"`).
+        *   `allowed_actions_override` (entry, `type: "list_str_csv"`).
+        *   `require_confirmation_per_step` (checkbox).
+        *   `max_steps` (entry, int).
+    *   `CLICK_TARGET_RELATIONS` includes `center_of_gemini_element`, `top_left_of_gemini_element`.
+    *   `click` action has `gemini_element_variable` parameter with `condition_show` logic.
+-   **`DetailsPanel._render_dynamic_parameters`:** Creates UI elements based on `UI_PARAM_CONFIG`.
+-   **`DetailsPanel._get_parameters_from_ui`:** Retrieves and validates values, parsing `list_str_csv` input from `CTkEntry` into Python lists of strings.
 
-## 12. `ActionExecutor` - Handling Gemini Element Clicks (v4.0.0 Phase 1.5)
+## 12. `ActionExecutor` - Handling Actions
 
-(`_get_target_coords` method extended to parse wrapped Gemini bounding box data and calculate absolute click coordinates, as previously defined.)
+-   `_get_target_coords()`: Calculates click coordinates. Extended in Phase 1.5 to handle `gemini_element_variable` by parsing the wrapped bounding box data ( `{"value": {"box": [...]}, "_source_region_for_capture_": "..."}` ) and using `_source_region_for_capture_` to get the base screen coordinates of the region the Gemini query was performed on.
+-   `execute_action()`: Takes a full action specification (including context with variables) and performs the PyAutoGUI simulation.
+-   It is called by `RulesEngine` for standard rule actions and by `GeminiDecisionModule` for primitive sub-steps of NLU tasks.
 
-## 13. Testing Strategy
+## 13. Testing Strategy (v4.0.0 Overall)
 
-(Existing testing strategies for Phase 1 and 1.5 remain relevant.)
-
-### 13.x. (NEW - v4.0.0 Phase 2): Testing `GeminiDecisionModule`
-
--   **Unit Tests:**
-    *   Mock `GeminiAnalyzer` to simulate various Gemini responses (valid action suggestions, invalid suggestions, errors, requests for clarification).
-    *   Verify `GeminiDecisionModule` correctly parses responses, validates actions against the predefined set, and forms correct specifications for `ActionExecutor`.
-    *   Test parameter validation logic.
-    *   Test target refinement logic (mocking the secondary call to `GeminiAnalyzer` for bounding boxes).
--   **Integration Tests:**
-    *   Manual testing with real Gemini API calls.
-    *   Define various user goals and provide different screen contexts.
-    *   Observe Mark-I's behavior: Does it correctly interpret the goal? Does Gemini suggest a sensible action? Is the action executed correctly and safely?
-    *   Test scenarios where Gemini might be ambiguous or suggest unsafe actions to ensure safety overrides work.
-    *   Test different `context_region_names` configurations.
--   **Focus Areas:** Prompt effectiveness, reliability of Gemini's suggestions, robustness of validation logic, safety mechanisms.
+-   **Manual Integration Testing (Primary for Gemini Features):**
+    *   Test `gemini_vision_query` with diverse prompts and image conditions.
+    *   Test actions on Gemini-identified bounding boxes: accuracy, error handling.
+    *   Test `gemini_perform_task` (goal-driven single actions - Phase 2): various goals, visual contexts, validation of `PREDEFINED_ALLOWED_ACTIONS`.
+    *   Test `gemini_perform_task` (NLU-driven multi-step tasks - Phase 3):
+        *   Variety of natural language commands (simple, sequential, basic conditional).
+        *   NLU parsing accuracy and task decomposition logic.
+        *   Execution of multi-step plans, including target refinement for each step.
+        *   State management (basic).
+        *   Error handling at NLU, decomposition, and step execution stages.
+        *   User confirmation flows (`require_confirmation_per_step`).
+        *   `max_steps` enforcement.
+    *   Verify GUI configuration for all Gemini-related features.
+    *   Extensive log review for all Gemini interactions and decision processes.
+-   **Automated Testing (Future Enhancement - `pytest`):**
+    *   Unit tests for non-Gemini components.
+    *   Mock `GeminiAnalyzer` to test `RulesEngine` (`gemini_vision_query`), `GeminiDecisionModule` (NLU parsing, step logic, refinement calls), and `ActionExecutor` (bounding box coordinate calculation) without actual API calls. Mock responses should cover success, failure, various JSON structures, and content blocking scenarios.
 
 ---
-## 14. Gemini Decision Module (`GeminiDecisionModule` - v4.0.0 Phase 2)
+## 14. Gemini Decision Module & NLU Task Orchestration (v4.0.0 Phase 2 & 3 - Final)
 
-This section details the architecture and operation of the `GeminiDecisionModule`, which enables Mark-I to use Google Gemini for more advanced decision-making based on user goals and visual context.
+This section details the architecture and operation of the `GeminiDecisionModule`.
+For Phase 2, it handled single goal-to-action translations.
+**For Phase 3 (and the final v4.0.0 state), it is enhanced into an NLU Task Orchestrator, responsible for understanding natural language commands, decomposing them into steps, and managing their execution.**
 
-### 14.1. Overview and Purpose
+### 14.1. Overview and Purpose (Final v4.0.0)
 
-*   **Goal:** To allow users to specify higher-level tasks or goals (e.g., "Click the 'Next' button," "Respond to the latest email with 'Got it'"), and have Mark-I, with Gemini's assistance, determine and execute appropriate simple actions from a predefined, limited set. This module aims to bridge the gap between specific visual conditions and broader user intent.
-*   **Differentiation from `RulesEngine`:**
-    *   **`RulesEngine`:** Executes user-defined, explicit "IF `condition` THEN `action`" logic. It is deterministic based on the configured rules. `gemini_vision_query` conditions within the `RulesEngine` ask specific questions about the visual scene to feed into this explicit logic.
-    *   **`GeminiDecisionModule`:** Takes a user's *goal*. It uses Gemini to interpret the visual scene *in the context of that goal* and then *suggests an action* to help achieve it. This introduces a layer of AI-driven reasoning for action selection, rather than just visual state evaluation.
-*   **Core Principle:** Enhance automation capabilities for scenarios where defining exhaustive explicit rules is difficult, too brittle, or where a degree of intelligent interpretation of the scene relative to a goal is desired. It operates within controlled boundaries defined by a limited set of allowed actions.
+*   **Goal:** To enable users to issue high-level commands in natural language (via the `gemini_perform_task` action's `natural_language_command` parameter). The `GeminiDecisionModule` parses these commands, decomposes them into a sequence of executable sub-steps, and orchestrates their execution. Each sub-step typically involves using Gemini for precise visual targeting and action selection from a predefined set of primitive capabilities.
+*   **Operation:** It acts as an intermediary between a high-level natural language instruction and a sequence of concrete, low-level UI interactions performed by `ActionExecutor`. It leverages `GeminiAnalyzer` for NLU and for visual analysis/refinement during step execution.
 
-### 14.2. Module Architecture and Components
+### 14.2. Module Architecture and Components (Final v4.0.0)
 
 *   **`mark_i.engines.gemini_decision_module.GeminiDecisionModule` Class:**
-    *   **Responsibilities:**
-        1.  Receive a user goal (string) and visual context (images of relevant screen regions).
-        2.  Interact with `GeminiAnalyzer` to consult the Gemini API, providing the goal and visual data to request an action suggestion.
-        3.  Parse the structured response (expected JSON) from Gemini, which should contain a suggested action type and necessary parameters.
-        4.  Validate the suggested action against a predefined list of allowed actions and ensure its parameters are sensible and safe.
-        5.  If the suggested action involves targeting a vaguely described element (e.g., "the blue button"), use `GeminiAnalyzer` again (similar to `gemini_vision_query`) to obtain precise bounding box coordinates for that element.
-        6.  Construct a full action specification and instruct `ActionExecutor` to perform the validated and refined action.
-        7.  (Future iterations of Phase 2) Potentially manage state for simple multi-step tasks if a single action isn't sufficient and Gemini suggests a sequence.
-        8.  Provide status feedback (success, failure, reason) for the decision-making and execution process.
-    *   **Key Dependencies:** `GeminiAnalyzer` (for all communication with Gemini), `ActionExecutor` (to perform the final chosen action), `ConfigManager` (for access to profile settings or region definitions if needed for context).
-*   **User Goal Input Mechanism:**
-    *   **Initial Implementation (via a new "Task" rule type or action type):** A new way to define a "task" within the existing profile JSON structure.
-        *   Example "action" type in a rule:
-          ```json
-          {
-            "name": "PerformLoginTask",
-            "condition": { "type": "always_true" }, // Or a more specific trigger
-            "action": {
-              "type": "gemini_perform_task",
-              "goal_prompt": "Log into the application using username 'testuser' and password 'password123'. Find the username field, then the password field, then the login button.",
-              "context_region_names": ["login_form_area"], // Region(s) containing the relevant UI
-              "allowed_actions_override": ["CLICK_DESCRIBED_ELEMENT", "TYPE_IN_DESCRIBED_FIELD"], // Optional
-              "max_steps": 3, // Optional: limit for simple sequences
-              "require_confirmation_before_each_step": false // Optional
-            }
-          }
-          ```
-    *   **Future GUI:** A dedicated UI section for defining and triggering these Gemini-driven tasks, perhaps with more structured input for goals and parameters.
-*   **Predefined Allowed Actions (`ALLOWED_GEMINI_ACTIONS`):**
-    *   A hardcoded constant or enum within `GeminiDecisionModule` defining the simple actions Gemini is permitted to suggest. This is a critical safety boundary.
-    *   Examples:
-        *   `CLICK_DESCRIBED_ELEMENT`: Requires `target_description` (string).
-        *   `TYPE_IN_DESCRIBED_FIELD`: Requires `text_to_type` (string) and `target_description` (string for field).
-        *   `PRESS_KEY_SIMPLE`: Requires `key_name` (string, e.g., "enter", "tab").
-        *   `WAIT_SHORT`: Requires `duration_seconds` (float, e.g., 1.0).
-        *   (Potentially) `CHECK_ELEMENT_PROPERTY`: Requires `target_description` and `property_to_check` (e.g., "is_enabled", "text_content_is"), returning a boolean for internal decision loops.
-    *   Each allowed action will map to a more detailed action specification that `ActionExecutor` can understand, possibly after refinement (e.g., `target_description` becomes specific coordinates).
+    *   **Core Responsibilities (Phase 3 Enhancements):**
+        1.  **Natural Language Command Parsing (`execute_nlu_task` primary entry point):** Receives `natural_language_command` string. Calls `_construct_nlu_parse_prompt()` and uses `GeminiAnalyzer` to parse the command into a structured JSON plan (intents, steps, parameters).
+        2.  **Task Decomposition & Planning:** Converts the structured NLU JSON output into an internal executable plan (e.g., a list of step dictionaries). Validates that decomposed step intents can map to `PREDEFINED_ALLOWED_SUB_ACTIONS`.
+        3.  **Step Execution Orchestration (`execute_nlu_task` loop, calling `_execute_single_parsed_instruction`):** Iterates through the planned steps. For each step:
+            *   Gathers/updates visual context from provided `context_images`.
+            *   The `instruction_details` from the NLU plan (intent, target description, parameters) form the sub-goal for the current step.
+            *   Calls `_map_nlu_intent_to_allowed_action()` to determine the primitive action type.
+            *   If the primitive action requires visual target refinement (e.g., `CLICK_DESCRIBED_ELEMENT`), calls `_refine_target_description_to_bbox()` using `GeminiAnalyzer` to get precise coordinates.
+            *   Handles `require_confirmation_per_step` by logging (actual GUI dialog is a UI concern if this module needs to signal).
+            *   Constructs the final specification for `ActionExecutor` and invokes `self.action_executor.execute_action()`.
+        4.  **State Management (Basic for v4.0.0):** Manages progression through the decomposed step list. Does not carry complex data payloads between steps beyond what's implicit in sequential execution on the same UI.
+        5.  **Error Handling & Reporting:** Manages errors from NLU parsing, decomposition, Gemini API calls for sub-steps, target refinement, and action execution. Halts the NLU task on critical errors and returns a failure status.
+*   **`PREDEFINED_ALLOWED_SUB_ACTIONS` Constant:** Defines primitive actions Gemini can be guided to use for decomposed steps (e.g., `CLICK_DESCRIBED_ELEMENT`, `TYPE_IN_DESCRIBED_FIELD`, `PRESS_KEY_SIMPLE`, `CHECK_VISUAL_STATE`). Each maps to an `ActionExecutor` type or internal logic.
+*   **Internal Task Plan:** Generated from NLU, typically a list of step objects, each specifying an `intent_verb`, `target_description`, and `parameters`.
 
-### 14.3. Data Flow and Interaction Diagram
+### 14.3. Data Flow and Interaction for NLU Task (Final v4.0.0)
 
-1.  **Invocation:**
-    *   `MainController`'s loop encounters a rule with the `gemini_perform_task` action.
-    *   `MainController` gathers current images for specified `context_region_names`.
-    *   `MainController` calls `GeminiDecisionModule.execute_task(goal_prompt, context_images, task_parameters)`.
-2.  **`GeminiDecisionModule.execute_task()`:**
-    *   **Step 1: Initial Action Suggestion.**
-        *   Constructs a detailed prompt for `GeminiAnalyzer` including:
-            *   System role (e.g., "You are a helpful assistant. Suggest the best single action from the allowed list to progress towards the user's goal.").
-            *   The `user_goal_prompt`.
-            *   The list of `PREDEFINED_ALLOWED_ACTIONS` and their expected parameters.
-            *   Instructions for Gemini to respond with a JSON object: `{"action_type": "ACTION_NAME", "parameters": {"param1": "value1", ...}, "reasoning": "..."}`.
-        *   Sends this prompt and `context_images` via `GeminiAnalyzer.query_vision_model()`.
-    *   **Step 2: Parse and Validate Suggestion.**
-        *   Receives response (hopefully JSON) from `GeminiAnalyzer`.
-        *   If API error or blocked content, log and return failure.
-        *   Parse JSON. Validate `action_type` against `PREDEFINED_ALLOWED_ACTIONS`.
-        *   Validate presence and basic types of expected `parameters` for the chosen `action_type`. If invalid, log and return failure or attempt clarification (future).
-    *   **Step 3: Target Refinement (If Action Requires It).**
-        *   If `action_type` is `CLICK_DESCRIBED_ELEMENT` or `TYPE_IN_DESCRIBED_FIELD`, the `parameters` will contain a `target_description` (e.g., "the submit button," "the username text field").
-        *   `GeminiDecisionModule` constructs a *new, focused prompt* for `GeminiAnalyzer` using the relevant `context_image` and the `target_description`:
-            `"Visually locate the element described as '${target_description}'. Respond ONLY with JSON: {\"element_label\":\"${target_description}\", \"box\":[x,y,w,h], \"found\":true/false}"`
-        *   Sends this refinement query via `GeminiAnalyzer.query_vision_model()`.
-        *   If `found` is true and `box` is valid, these coordinates (relative to the context image) are stored. If not found, the task step may fail or Gemini might be re-prompted.
-    *   **Step 4: Construct `ActionExecutor` Specification.**
-        *   Translate the validated (and refined) Gemini suggestion into a concrete action spec that `ActionExecutor` understands.
-            *   For `CLICK_DESCRIBED_ELEMENT`: Use the refined bounding `box` and the `_source_region_for_capture_` (from the refinement query's context image) to set up a click action similar to Phase 1.5 (e.g., `target_relation: center_of_gemini_element`, `gemini_element_variable` would effectively point to this internally resolved box data).
-            *   For `TYPE_IN_DESCRIBED_FIELD`: First click the field (using refined box), then type.
-    *   **(Optional) Step 5: User Confirmation.**
-        *   If `require_confirmation_before_each_step` is true, show a dialog: "Gemini proposes to: [describe action and target]. Proceed?"
-    *   **Step 6: Execute Action.**
-        *   Call `self.action_executor.execute_action(final_action_spec, context_for_action_executor)`.
-    *   **(Future) Step 7: Loop for Multi-Step Tasks.**
-        *   If `max_steps > 1` and Gemini suggests a sequence or indicates more steps are needed, the module could loop, re-capturing visual context and re-invoking Gemini with updated state/prompt. This is a more advanced feature for later iterations of Phase 2.
-    *   **Step 8: Return Status.**
+*(The Mermaid diagram and textual flow description from the "Design for Phase 3" proposal accurately represent this section and are considered part of this final design.)*
 
-**Diagram: GeminiDecisionModule High-Level Sequence**
+**Simplified Flow:**
+`Rule Trigger` -> `RulesEngine` (detects `gemini_perform_task`) -> `RulesEngine` calls `GeminiDecisionModule.execute_nlu_task(natural_language_command, initial_context_images, task_params)` ->
+`GDM` uses `GeminiAnalyzer` (text prompt for NLU) -> `GDM` gets NLU JSON plan (sequence of steps) ->
+`GDM` loops through steps:
+  For each step:
+    `GDM` forms sub-goal from step plan.
+    If step involves visual target (e.g., "click 'button X'"):
+      `GDM` uses `GeminiAnalyzer` (vision prompt with current screen image + sub-goal's `target_description`) to call `_refine_target_description_to_bbox()`.
+      Gets `box` coordinates.
+    `GDM` (optionally logs confirmation intent).
+    `GDM` constructs final primitive action spec.
+    `GDM` calls `ActionExecutor.execute_action()`.
+    If step fails, GDM halts NLU task.
+`GDM` returns overall task status to `RulesEngine`.
 
-```mermaid
-sequenceDiagram
-    participant User/ProfileRule
-    participant MainController
-    participant GeminiDecisionModule as GDM
-    participant GeminiAnalyzer as GA
-    participant ActionExecutor as AE
+### 14.4. Prompt Engineering Strategies (Final v4.0.0)
 
-    User/ProfileRule->>MainController: Trigger "gemini_perform_task" (goal, context_regions)
-    MainController->>GDM: execute_task(goal, images, params)
-    GDM->>GA: query_vision_model(images, initial_prompt_for_action_suggestion)
-    GA-->>GDM: GeminiResponse (JSON: {action_type, parameters, reasoning})
-    GDM->>GDM: Parse & Validate Suggestion
-    alt Action needs target refinement (e.g., CLICK_DESCRIBED_ELEMENT)
-        GDM->>GA: query_vision_model(image, refinement_prompt_for_bbox)
-        GA-->>GDM: GeminiResponse (JSON: {box, found})
-        GDM->>GDM: Store refined coordinates
-    end
-    alt User confirmation enabled
-        GDM->>User/ProfileRule: Show "Confirm Action?" dialog
-        User/ProfileRule-->>GDM: Confirmation (Yes/No)
-        GDM->>GDM: If No, stop.
-    end
-    GDM->>AE: execute_action(concrete_action_spec)
-    AE-->>GDM: ActionStatus
-    GDM-->>MainController: TaskStatus (success/failure)
-```
+#### 14.4.1. Prompts for NLU & Task Decomposition (`_construct_nlu_parse_prompt`)
 
-### 14.4. Prompt Engineering Strategies
+*   **Strategy:** Provide Gemini with the raw natural language command and a detailed JSON schema it must adhere to for its output. The schema defines how to represent single actions, sequences, and basic conditionals (if supported), including intents, target descriptions, and parameters.
+*   **Key elements of the prompt:**
+    *   System role: "You are an NLU parser for a desktop automation tool..."
+    *   User's raw command.
+    *   Detailed instructions on the desired JSON output structure (`parsed_task` with `command_type`, `instruction_details` or `steps`, parameters for each step like `intent_verb`, `target_description`, `text_to_type`, `key_name`).
+    *   Few-shot examples demonstrating command-to-JSON mapping.
+*   **Model Choice:** A capable text model (e.g., Gemini Pro) or a multimodal model if initial screen context aids NLU. `GeminiAnalyzer` handles the call.
 
-*   **System Role Prompting:** Clearly define Mark-I's role and Gemini's task: "You are an AI assistant controlling a desktop automation tool. Your goal is to achieve the user's stated task by selecting the most appropriate *single action* from the following allowed list: `[...]`. You MUST respond with a JSON object formatted as `{\"action_type\": \"CHOSEN_ACTION_TYPE\", \"parameters\": {\"param_name\": \"value\"}, \"reasoning\": \"Your brief reasoning\"}`. Only use actions from the provided list."
-*   **Action List and Parameterization:** Provide the exact list of `PREDEFINED_ALLOWED_ACTIONS` and what parameters each expects (e.g., "`CLICK_DESCRIBED_ELEMENT` requires `target_description`; `TYPE_IN_DESCRIBED_FIELD` requires `text_to_type` and `target_description`)."
-*   **User Goal Presentation:** Clearly embed the `user_goal_prompt` within Gemini's prompt.
-*   **Visual Context Handling:** Pass images clearly. For multiple regions, consider sending them distinctly or as a composite if the model handles it well. The prompt should guide Gemini on how to interpret multiple images if necessary (e.g., "Image 1 is 'main_screen', Image 2 is 'dialog_box'").
-*   **Few-Shot Examples (Crucial):** Include 2-3 examples in the prompt demonstrating the user goal, visual context (even if just described textually in the prompt if images are separate), and the *exact desired JSON output* from Gemini. This heavily guides the model to produce the correct format.
-    *   Example: `User goal: "Click the login button." Image description: "A login form with a blue button labeled 'Login'." Expected JSON output: {"action_type": "CLICK_DESCRIBED_ELEMENT", "parameters": {"target_description": "the blue button labeled 'Login'"}, "reasoning": "User wants to log in, this is the login button."}`
-*   **Refinement Prompts for Bounding Boxes:** These will be similar to those in Phase 1.5: concise, asking for JSON with `box` and `found` keys for a *specific described element*.
-*   **Iterative Refinement:** Prompt engineering will be an iterative process. Start simple, test, and refine prompts based on Gemini's actual responses.
+#### 14.4.2. Prompts for Per-Step Visual Target Refinement (`_refine_target_description_to_bbox`)
 
-### 14.5. Safety, Control, and Limitations (Phase 2 Initial)
+*   **Strategy:** Given a textual `target_description` for a UI element (derived from an NLU step) and an image of the relevant screen region, prompt Gemini Vision to locate this element and return its bounding box.
+*   **Key elements of the prompt:**
+    *   Role: "You are a precise visual element locator."
+    *   Instruction: "Identify the element best described as: `'{target_description}'`. Respond ONLY with JSON: `{\"found\": true/false, \"box\": [x,y,w,h_or_null]}`."
+    *   Few-shot examples of image descriptions and expected JSON output for `box`.
 
-*   **Restricted Action Space:** Gemini can *only* choose from `PREDEFINED_ALLOWED_ACTIONS`. Any other suggestion is an error.
-*   **Parameter Validation & Sanitization:**
-    *   `GeminiDecisionModule` validates that Gemini provides the *expected parameters* for the chosen action type.
-    *   Values for parameters (e.g., `text_to_type`, `key_name`) must be checked. E.g., disallow overly long text, ensure `key_name` is a known valid key for PyAutoGUI.
-*   **No Arbitrary Code/Command Execution:** Gemini cannot make Mark-I run arbitrary scripts or shell commands.
-*   **Limited Scope (Initial Phase 2):**
-    *   Focus on single-step or very simple, explicitly linked two-step actions (e.g., click field then type).
-    *   Complex multi-step planning or long-term memory is out of scope initially.
-*   **User Confirmation:** A profile-level or task-level setting `require_confirmation_before_each_step` (defaulting to `True` initially for safety) should be implemented. If true, Mark-I will show a dialog to the user with Gemini's proposed action before executing it.
-*   **Clear Logging:** All stages of the decision process, including Gemini's raw suggestion (if parseable), reasoning, validation results, and any executed action, must be logged at appropriate levels.
-*   **Error Handling:**
-    *   If Gemini's response is not valid JSON or doesn't conform to the expected action structure, the task fails with a clear log message.
-    *   If a refinement query for a bounding box fails (element not found by Gemini), the step fails.
-    *   If `ActionExecutor` fails, the error is propagated.
+### 14.5. Safety, Control, and Limitations (Final v4.0.0)
 
-### 14.6. GUI Integration Considerations
+*   **Restricted Sub-Action Space:** The NLU-decomposed steps are mapped to and executed as one of the `PREDEFINED_ALLOWED_SUB_ACTIONS`. This list is intentionally small and simple.
+*   **Validation:** `GeminiDecisionModule` validates that NLU outputs and sub-step suggestions conform to expected structures and action types.
+*   **`max_steps` Parameter:** Enforced for `gemini_perform_task` to prevent runaway NLU-driven sequences.
+*   **`require_confirmation_per_step` Parameter:** Provides user oversight for each AI-decided sub-step in an NLU task. Default is `True` for safety.
+*   **NLU Accuracy & Ambiguity:** The system's ability to correctly interpret and execute complex or ambiguous natural language commands is limited by Gemini's NLU capabilities and the robustness of the prompt engineering. Failures in NLU or decomposition will result in task failure. Advanced clarification dialogs are not part of v4.0.0.
+*   **State Management:** Basic sequential step progression. No complex memory of past interactions or data passing between NLU task steps is explicitly designed in v4.0.0, beyond what Gemini might infer from sequential prompting for sub-steps (if implemented that way).
+*   **Error Recovery:** Basic: halt overall NLU task on sub-step failure. No automated error recovery or re-planning by Gemini within a single `gemini_perform_task` invocation.
 
-*   **Task Definition in Profile:**
-    *   The `MainAppWindow` and `DetailsPanel` will need to be extended to support adding/editing the new `gemini_perform_task` action type (or a new "Tasks" list if separated from rules).
-    *   This includes UI elements for:
-        *   `goal_prompt` (likely `CTkTextbox`).
-        *   `context_region_names` (multi-select list of defined regions).
-        *   `allowed_actions_override` (multi-select checklist of `PREDEFINED_ALLOWED_ACTIONS`).
-        *   `max_steps` (entry).
-        *   `require_confirmation_before_each_step` (checkbox).
-*   **Runtime UI (Future - Low Priority for Initial Phase 2):**
-    *   A non-intrusive overlay or status bar message could indicate: "Mark-I is thinking (via Gemini)..." or "Gemini proposes: [action]. Confirm?".
-*   **Configuration:** Global setting in profile for `require_confirmation_before_each_step` default.
+### 14.6. GUI Integration (Final v4.0.0)
 
-### 14.7. Relationship to `RulesEngine` and Other Components
+*   The `gemini_perform_task` action type in the `DetailsPanel` is configured via `gui_config.py` to accept:
+    *   `natural_language_command` (multi-line `CTkTextbox`).
+    *   `context_region_names` (`CTkEntry` for CSV, parsed to list).
+    *   `allowed_actions_override` (`CTkEntry` for CSV of `PREDEFINED_ALLOWED_SUB_ACTIONS` keys, parsed to list).
+    *   `require_confirmation_per_step` (`CTkCheckBox`).
+    *   `max_steps` (`CTkEntry` for integer).
+*   Runtime feedback primarily relies on detailed logs. If `require_confirmation_per_step` is true, the current implementation relies on logging the intent to confirm, as direct GUI dialog invocation from `GeminiDecisionModule` is complex; a production system would need a callback or event mechanism to the GUI.
 
-*   **Invocation:** The `GeminiDecisionModule` will likely be invoked as an "action" from within a standard rule processed by the `RulesEngine`. This allows users to use existing condition types to decide *when* to delegate a task to Gemini.
-    ```json
-    // Example rule:
-    {
-        "name": "IfUserWindowActive_ThenAIDoLogin",
-        "region": "main_app_window_region",
-        "condition": { 
-            "type": "template_match_found", // e.g., check if the app window is active
-            "template_filename": "app_login_screen_indicator.png"
-        },
-        "action": {
-            "type": "gemini_perform_task", // This new action type invokes GeminiDecisionModule
-            "goal_prompt": "Complete the login process on this screen.",
-            "context_region_names": ["main_app_window_region", "login_button_area"],
-            // other task parameters...
-        }
-    }
-    ```
-*   **Shared `GeminiAnalyzer`:** Both `RulesEngine` (for `gemini_vision_query`) and `GeminiDecisionModule` will use the same `GeminiAnalyzer` instance for API communication, ensuring consistent API key and default model usage.
-*   **Shared `ActionExecutor`:** The `GeminiDecisionModule` will ultimately use the existing `ActionExecutor` to perform the actions it decides upon, ensuring consistency in how actions are physically carried out.
+### 14.7. Invocation from `RulesEngine` (Final v4.0.0)
+
+*   When a rule action `type: "gemini_perform_task"` is triggered, `RulesEngine` extracts its parameters.
+*   It calls `self.gemini_decision_module.execute_nlu_task()` with the `natural_language_command`, relevant `initial_context_images` (gathered by `MainController` and passed to `RulesEngine`), and other task parameters (`max_steps`, `require_confirmation_per_step`, etc.).
+*   The `GeminiDecisionModule` then manages the entire lifecycle of that NLU task.
