@@ -4,14 +4,14 @@ This document outlines the technical design and architectural considerations for
 
 ## 1. Core Architecture
 
-The tool is modular, comprising several key Python components, all residing within the main `py_pixel_bot` package located at the project root: (Note: Python package name remains `py_pixel_bot`)
+The tool is modular, comprising several key Python components, all residing within the main `mark_i` package located at the project root: (Note: Python package name remains `mark_i`)
 
 - **`core.config_manager` Module:**
   - `load_environment_variables()` function: Called at application startup to load `.env` (containing `APP_ENV` and **`GEMINI_API_KEY` for v4.0.0+**) using `python-dotenv` (per ADR-007, ADR-008).
   - `ConfigManager` class: Responsible for loading, validating (basic structure), providing access to, and saving bot profiles (JSON files from the `profiles/` directory, per ADR-003). It also provides the base path for profile-related assets like templates.
   - **Utilized by the `MainAppWindow` (GUI) for loading, saving, and path resolution for profiles and associated template images.**
 - **`core.logging_setup` Module:**
-  - `setup_logging()` function: Called after environment variables are loaded. Initializes Python's `logging` system based on `APP_ENV`, configuring handlers (console, date-stamped rotating file), formatters, and log levels (per ADR-007). CLI flags can override console log level. The `APP_ROOT_LOGGER_NAME` is "py_pixel_bot".
+  - `setup_logging()` function: Called after environment variables are loaded. Initializes Python's `logging` system based on `APP_ENV`, configuring handlers (console, date-stamped rotating file), formatters, and log levels (per ADR-007). CLI flags can override console log level. The `APP_ROOT_LOGGER_NAME` is "mark_i".
 - **`engines.capture_engine.CaptureEngine` Class:**
   - Responsible for capturing image data from specified screen regions using `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` for Windows capture (per ADR-001).
   - Converts captured Pillow Image objects to OpenCV BGR NumPy arrays for consistent use by the `AnalysisEngine` and `GeminiAnalyzer`.
@@ -51,7 +51,7 @@ The tool is modular, comprising several key Python components, all residing with
     - Modified to handle new `target_relation` values like `center_of_gemini_element` and `top_left_of_gemini_element`.
     - Requires an associated parameter `gemini_element_variable` referencing a variable that holds element details including a `box` field (e.g., `{"value": {"box": [x_rel, y_rel, w, h], "label": "element_label", "found": true}, "_source_region_for_capture_": "region_name"}`).
     - `_get_target_coords` method updated to parse this variable and calculate absolute screen coordinates based on the bounding box relative to the region where the Gemini query was performed.
-- **`main_controller.MainController` Class:** (Located in `py_pixel_bot/main_controller.py`)
+- **`main_controller.MainController` Class:** (Located in `mark_i/main_controller.py`)
   - Orchestrates the main bot operation loop for runtime execution.
   - Runs the monitoring loop in a separate thread (per ADR-006).
   - For each monitored region in a profile:
@@ -73,7 +73,7 @@ The tool is modular, comprising several key Python components, all residing with
   - Encapsulates the logic for displaying and editing details of selected items (Regions, Templates, Rules).
   - Dynamically renders input widgets based on `gui_config.UI_PARAM_CONFIG`.
   - **Updates for v4.0.0 Phase 1.5:** Will render specific widgets for the new action parameters related to Gemini bounding boxes, as defined in `gui_config.py`. This includes conditional visibility for the `gemini_element_variable` field based on the selected `target_relation`.
-- **`py_pixel_bot/__main__.py`:**
+- **`mark_i/__main__.py`:**
   - Entry point for the application. Initializes core components (Env Vars, Logging, Config) and dispatches CLI commands.
 
 ## 2. Key Libraries & Justifications (Summary from ADRs)
@@ -247,7 +247,7 @@ The tool is modular, comprising several key Python components, all residing with
 
 ## 7. Logging System (per ADR-007)
 
--   Uses Python's built-in `logging`, configured by `core.logging_setup`. Root logger for Mark-I is `py_pixel_bot`.
+-   Uses Python's built-in `logging`, configured by `core.logging_setup`. Root logger for Mark-I is `mark_i`.
 -   Format includes timestamp, logger name, level, module:func:lineno, and message for files.
 -   **v4.0.0+ Specifics:**
     -   **`GeminiAnalyzer` MUST** log API requests (prompt summary, model used), API responses (status, success/error, latency), and **any errors** encountered.
@@ -317,7 +317,7 @@ The tool is modular, comprising several key Python components, all residing with
 
 ### 10.1. Class Structure and Initialization
 
--   **Class:** `py_pixel_bot.engines.gemini_analyzer.GeminiAnalyzer`
+-   **Class:** `mark_i.engines.gemini_analyzer.GeminiAnalyzer`
 -   **`__init__(self, api_key: str, default_model_name: str = "gemini-1.5-flash-latest")`:**
     -   Stores `api_key` and `default_model_name`.
     -   Initializes `google-generativeai` client (`genai.configure(api_key=...)`). Logs status.

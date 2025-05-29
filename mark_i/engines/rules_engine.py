@@ -7,11 +7,11 @@ from collections import defaultdict
 import cv2
 import numpy as np
 
-from py_pixel_bot.core.config_manager import ConfigManager
-from py_pixel_bot.core.logging_setup import APP_ROOT_LOGGER_NAME
-from py_pixel_bot.engines.analysis_engine import AnalysisEngine
-from py_pixel_bot.engines.action_executor import ActionExecutor
-from py_pixel_bot.engines.gemini_analyzer import GeminiAnalyzer # New Import
+from mark_i.core.config_manager import ConfigManager
+from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
+from mark_i.engines.analysis_engine import AnalysisEngine
+from mark_i.engines.action_executor import ActionExecutor
+from mark_i.engines.gemini_analyzer import GeminiAnalyzer # New Import
 
 logger = logging.getLogger(__name__)
 

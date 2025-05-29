@@ -5,8 +5,8 @@ from typing import Dict, Any, Optional, List, Union
 
 from tkinter import messagebox  # For showing errors directly to user during runtime if GUI is implied
 
-from py_pixel_bot.core.config_manager import ConfigManager
-from py_pixel_bot.core.logging_setup import APP_ROOT_LOGGER_NAME  # <--- IMPORT HERE
+from mark_i.core.config_manager import ConfigManager
+from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME  # <--- IMPORT HERE
 
 logger = logging.getLogger(__name__)
 

@@ -73,16 +73,16 @@ PyPixelBot is a Python-based desktop automation tool designed to capture and ana
 
 *   **Open the Profile Editor GUI:**
     ```bash
-    python -m py_pixel_bot edit [optional_profile_path.json]
+    python -m mark_i edit [optional_profile_path.json]
     ```
     If no profile path is provided, a new, unsaved profile editor will open.
 *   **Run a Bot Profile (CLI):**
     ```bash
-    python -m py_pixel_bot run path/to/your/profile.json
+    python -m mark_i run path/to/your/profile.json
     ```
 *   **Get Help:**
     ```bash
-    python -m py_pixel_bot --help
+    python -m mark_i --help
     ```
 
 ## Configuration Profiles

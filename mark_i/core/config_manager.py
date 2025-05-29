@@ -19,7 +19,7 @@ def load_environment_variables():
     Key variable expected: APP_ENV (e.g., development, production).
     """
     # Simpler way to get project root assuming this file is two levels down from project root
-    # py-pixel-bot/py_pixel_bot/core/config_manager.py
+    # py-pixel-bot/mark_i/core/config_manager.py
     current_file_dir = os.path.dirname(os.path.abspath(__file__))
     package_dir = os.path.dirname(current_file_dir)
     project_root = os.path.dirname(package_dir)
@@ -66,7 +66,7 @@ class ConfigManager:
         elif create_if_missing:
             # Ensure this import path is correct or DEFAULT_PROFILE_STRUCTURE is defined here
             try:
-                from py_pixel_bot.ui.gui.main_app_window import DEFAULT_PROFILE_STRUCTURE
+                from mark_i.ui.gui.main_app_window import DEFAULT_PROFILE_STRUCTURE
             except ImportError:
                 # Fallback if GUI components are not always available (e.g. pure CLI run)
                 logger.warning("Could not import DEFAULT_PROFILE_STRUCTURE from main_app_window. Using internal default.")
@@ -97,13 +97,13 @@ class ConfigManager:
 
     def _find_project_root(self) -> str:
         """Determines the project root directory (py-pixel-bot)."""
-        # Assumes this file is: py-pixel-bot/py_pixel_bot/core/config_manager.py
-        current_file_dir = os.path.dirname(os.path.abspath(__file__))  # .../py_pixel_bot/core
-        package_dir = os.path.dirname(current_file_dir)  # .../py_pixel_bot (package directory)
+        # Assumes this file is: py-pixel-bot/mark_i/core/config_manager.py
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))  # .../mark_i/core
+        package_dir = os.path.dirname(current_file_dir)  # .../mark_i (package directory)
         project_root_dir = os.path.dirname(package_dir)  # .../py-pixel-bot (project folder)
 
         # Basic heuristic check
-        expected_package_dirname = "py_pixel_bot"
+        expected_package_dirname = "mark_i"
         profiles_dirname_check = "profiles"
         if (
             os.path.basename(project_root_dir) == "py-pixel-bot"

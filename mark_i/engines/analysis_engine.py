@@ -11,7 +11,7 @@ from pytesseract import Output
 
 logger = logging.getLogger(__name__)
 # Ensure APP_ROOT_LOGGER_NAME is defined if used for hierarchical logging (e.g. in main or logging_setup)
-# For now, assume __name__ resolves correctly under py_pixel_bot.engines
+# For now, assume __name__ resolves correctly under mark_i.engines
 
 
 class AnalysisEngine:

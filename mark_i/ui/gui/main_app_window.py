@@ -11,11 +11,11 @@ import customtkinter as ctk
 from PIL import Image
 
 # Standardized Absolute Imports
-from py_pixel_bot.core.config_manager import ConfigManager
-from py_pixel_bot.ui.gui.region_selector import RegionSelectorWindow
-from py_pixel_bot.ui.gui.gui_config import DEFAULT_PROFILE_STRUCTURE, CONDITION_TYPES, ACTION_TYPES, UI_PARAM_CONFIG, OPTIONS_CONST_MAP
-from py_pixel_bot.ui.gui.gui_utils import validate_and_get_widget_value, parse_bgr_string, create_clickable_list_item
-from py_pixel_bot.ui.gui.panels.details_panel import DetailsPanel
+from mark_i.core.config_manager import ConfigManager
+from mark_i.ui.gui.region_selector import RegionSelectorWindow
+from mark_i.ui.gui.gui_config import DEFAULT_PROFILE_STRUCTURE, CONDITION_TYPES, ACTION_TYPES, UI_PARAM_CONFIG, OPTIONS_CONST_MAP
+from mark_i.ui.gui.gui_utils import validate_and_get_widget_value, parse_bgr_string, create_clickable_list_item
+from mark_i.ui.gui.panels.details_panel import DetailsPanel
 
 
 logger = logging.getLogger(__name__)

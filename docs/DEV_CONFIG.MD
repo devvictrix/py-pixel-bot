@@ -1,12 +1,10 @@
-// File: docs/DEV_CONFIG.MD
-
 # Development Configuration & Choices
 
 This document outlines key development choices, current phase settings, and environment setup for the **Mark-I** project. **It reflects the shift towards v4.0.0 (Gemini-Powered Visual Intelligence).**
 
 ## 1. Core Project Setup
 *   **Project Name (Informal):** Mark-I
-*   **Python Package Name:** `py_pixel_bot` (Remains unchanged)
+*   **Python Package Name:** `mark_i`
 *   **Language:** Python
 *   **Python Version (Target):** 3.9+ (or as specified by dependencies like CustomTkinter or OpenCV)
 *   **Package Manager:** pip

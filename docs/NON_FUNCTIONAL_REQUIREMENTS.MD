@@ -49,7 +49,7 @@ This document outlines the non-functional requirements for the Mark-I visual aut
 
 ## NFR-MAINT: Maintainability
 
-*   **NFR-MAINT-001: Modular Code:** The codebase MUST be organized into clearly defined, modular Python packages and modules. **v4.0.0 (Gemini): The `GeminiAnalyzer` module encapsulates Gemini API interactions.** (Python package name remains `py_pixel_bot`)
+*   **NFR-MAINT-001: Modular Code:** The codebase MUST be organized into clearly defined, modular Python packages and modules. **v4.0.0 (Gemini): The `GeminiAnalyzer` module encapsulates Gemini API interactions.** (Python package name remains `mark_i`)
 *   **NFR-MAINT-002: Code Clarity & Documentation:** Code MUST be well-commented with comprehensive docstrings. Design decisions MUST be documented (ADRs, `TECHNICAL_DESIGN.MD`). **v4.0.0 (Gemini): `ADR-008` and `TECHNICAL_DESIGN.MD` updates cover Gemini integration details.**
 *   **NFR-MAINT-003: Testability:** Core logic SHOULD be designed for testability. **v4.0.0 (Gemini): `GeminiAnalyzer` interactions require mocking the external API for effective unit/integration testing (mocking strategy outlined in `TECHNICAL_DESIGN.MD`). `ActionExecutor` logic for Gemini element targeting must be unit testable.**
 *   **NFR-MAINT-004: Diagnosability:** The application MUST be highly diagnosable via comprehensive logging. **v4.0.0 (Gemini): Logging for `GeminiAnalyzer` and `RulesEngine`'s use of Gemini, and `ActionExecutor`'s handling of Gemini-derived coordinates is critical (see `TECHNICAL_DESIGN.MD` Section 7).**

@@ -5,7 +5,7 @@ import logging
 try:
     from .core.config_manager import load_environment_variables
     from .core.logging_setup import setup_logging
-    from .ui import cli  # Imports py_pixel_bot.ui.cli
+    from .ui import cli  # Imports mark_i.ui.cli
 except ImportError as e:
     sys.stderr.write(
         f"Fatal Error: Failed to import core modules. Please check installation and file structure.\n"
@@ -38,7 +38,7 @@ def main():
         parser = cli.create_parser()  # The problematic line
     except AttributeError:
         sys.stderr.write(
-            f"Failed to create CLI parser: module 'py_pixel_bot.ui.cli' ({cli}) does not appear to have 'create_parser'.\n"
+            f"Failed to create CLI parser: module 'mark_i.ui.cli' ({cli}) does not appear to have 'create_parser'.\n"
         )
         sys.stderr.write(
             f"Check the debug prints above from cli.py to see if it loaded correctly and defined create_parser.\n"

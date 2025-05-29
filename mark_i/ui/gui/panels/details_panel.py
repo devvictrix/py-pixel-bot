@@ -9,8 +9,8 @@ from typing import Optional, Dict, Any, List, Union
 import customtkinter as ctk
 from PIL import Image
 
-from py_pixel_bot.ui.gui.gui_config import UI_PARAM_CONFIG, OPTIONS_CONST_MAP, MAX_PREVIEW_WIDTH, MAX_PREVIEW_HEIGHT, CONDITION_TYPES, LOGICAL_OPERATORS, ACTION_TYPES
-from py_pixel_bot.ui.gui.gui_utils import validate_and_get_widget_value, parse_bgr_string, create_clickable_list_item
+from mark_i.ui.gui.gui_config import UI_PARAM_CONFIG, OPTIONS_CONST_MAP, MAX_PREVIEW_WIDTH, MAX_PREVIEW_HEIGHT, CONDITION_TYPES, LOGICAL_OPERATORS, ACTION_TYPES
+from mark_i.ui.gui.gui_utils import validate_and_get_widget_value, parse_bgr_string, create_clickable_list_item
 
 
 logger = logging.getLogger(__name__)

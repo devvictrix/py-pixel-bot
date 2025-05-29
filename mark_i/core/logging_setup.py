@@ -4,9 +4,9 @@ import sys
 from datetime import date  # For daily filename
 
 # (Keep print statements for debugging)
-print("DEBUG: py_pixel_bot.core.logging_setup module IS BEING LOADED AND EXECUTED.")
+print("DEBUG: mark_i.core.logging_setup module IS BEING LOADED AND EXECUTED.")
 
-APP_ROOT_LOGGER_NAME = "py_pixel_bot"  # Define the root logger name here
+APP_ROOT_LOGGER_NAME = "mark_i"  # Define the root logger name here
 
 
 def setup_logging(console_log_level=logging.INFO, log_file_path=None, enable_file_logging=True):  # Parameter name changed back to log_file_path
@@ -43,8 +43,8 @@ def setup_logging(console_log_level=logging.INFO, log_file_path=None, enable_fil
         console_formatter_str = "%(asctime)s - %(name)s - %(levelname)s - " "[%(module)s:%(funcName)s:%(lineno)d] - %(message)s"
 
     log = logging.getLogger()  # Get the root logger to clear its handlers
-    # If we want hierarchical logging like "py_pixel_bot.module_name",
-    # we should configure the "py_pixel_bot" logger primarily.
+    # If we want hierarchical logging like "mark_i.module_name",
+    # we should configure the "mark_i" logger primarily.
     # log = logging.getLogger(APP_ROOT_LOGGER_NAME) # This would be the base for all app logs
     log.setLevel(logging.DEBUG)  # Set root/base logger to DEBUG, handlers control output
 

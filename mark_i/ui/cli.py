@@ -7,7 +7,7 @@ import sys
 logger = logging.getLogger(__name__)
 
 print(
-    "DEBUG: py_pixel_bot.ui.cli module IS BEING LOADED AND EXECUTED."
+    "DEBUG: mark_i.ui.cli module IS BEING LOADED AND EXECUTED."
 )  # Add this at the very top
 
 
@@ -31,8 +31,8 @@ def handle_run(args):
         sys.exit(1)
     try:
         # Adjusted import paths based on typical project structure
-        from py_pixel_bot.core.config_manager import ConfigManager
-        from py_pixel_bot.main_controller import MainController
+        from mark_i.core.config_manager import ConfigManager
+        from mark_i.main_controller import MainController
 
         logger.debug(
             "Successfully imported ConfigManager and MainController for run command."
@@ -95,7 +95,7 @@ def handle_edit(args):
         print(f"Error: Profile '{args.profile}' not found or invalid.", file=sys.stderr)
         sys.exit(1)
     try:
-        from py_pixel_bot.ui.gui.main_app_window import MainAppWindow # Adjusted import
+        from mark_i.ui.gui.main_app_window import MainAppWindow # Adjusted import
 
         logger.debug("Successfully imported MainAppWindow for edit command.")
     except ImportError as e:
@@ -131,8 +131,8 @@ def handle_add_region(args):
     if not _validate_profile_path(args.profile):
         sys.exit(1)
     try:
-        from py_pixel_bot.ui.gui.region_selector import RegionSelectorWindow # Adjusted import
-        from py_pixel_bot.core.config_manager import ConfigManager # Adjusted import
+        from mark_i.ui.gui.region_selector import RegionSelectorWindow # Adjusted import
+        from mark_i.core.config_manager import ConfigManager # Adjusted import
 
         logger.debug(
             "Successfully imported RegionSelectorWindow and ConfigManager for add-region."
@@ -183,7 +183,7 @@ def handle_add_region(args):
 
 def create_parser():
     print(
-        "DEBUG: create_parser() function in py_pixel_bot.ui.cli IS CALLED."
+        "DEBUG: create_parser() function in mark_i.ui.cli IS CALLED."
     )  # Add this
     parser = argparse.ArgumentParser(
         description="PyPixelBot: Visual Desktop Automation Tool."
@@ -232,5 +232,5 @@ def create_parser():
 
 
 print(
-    "DEBUG: py_pixel_bot.ui.cli module finished loading. create_parser IS DEFINED."
+    "DEBUG: mark_i.ui.cli module finished loading. create_parser IS DEFINED."
 )  # Add this at the end

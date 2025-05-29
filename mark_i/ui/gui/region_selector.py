@@ -7,7 +7,7 @@ import copy # Added for deepcopy
 import customtkinter as ctk
 from PIL import ImageGrab, ImageTk
 
-from py_pixel_bot.core.config_manager import ConfigManager
+from mark_i.core.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 

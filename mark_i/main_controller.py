@@ -2,17 +2,17 @@ import logging
 import threading
 import time
 from typing import Dict, Any, Optional, Set
-import os  # <--- IMPORT OS MODULE HERE
+import os
 
-from py_pixel_bot.core.config_manager import ConfigManager
-from py_pixel_bot.engines.capture_engine import CaptureEngine
-from py_pixel_bot.engines.analysis_engine import AnalysisEngine
-from py_pixel_bot.engines.rules_engine import RulesEngine
-from py_pixel_bot.engines.action_executor import ActionExecutor
+from mark_i.core.config_manager import ConfigManager
+from mark_i.engines.capture_engine import CaptureEngine
+from mark_i.engines.analysis_engine import AnalysisEngine
+from mark_i.engines.rules_engine import RulesEngine
+from mark_i.engines.action_executor import ActionExecutor
 
 logger = logging.getLogger(__name__)
 # Ensure APP_ROOT_LOGGER_NAME is defined if used for hierarchical logging (e.g. in main or logging_setup)
-# For now, assume __name__ resolves correctly under py_pixel_bot
+# For now, assume __name__ resolves correctly under mark_i
 
 
 class MainController:
