@@ -1,6 +1,8 @@
+// File: docs/adrs/ADR-001-Choice-Screen-Capture-Analysis-Tech.md
+
 # ADR-001: Choice of Core Technologies for Screen Capture and Region Analysis
 
-*   **Status:** Approved
+*   **Status:** Approved (v4.0.0: Decision remains valid; image data also consumed by AI analysis modules)
 *   **Date:** 2025-05-11
 *   **Deciders:** DevLead
 
@@ -10,6 +12,7 @@ The visual automation tool (Mark-I) requires the ability to:
 1.  Capture image data from specific rectangular regions of the screen across different operating systems (Windows, macOS, Linux).
 2.  Perform analysis on this captured image data, including pixel-level inspection, basic template matching, and eventually Optical Character Recognition (OCR).
 3.  The capture and analysis need to be performant enough for potential real-time applications.
+4.  **(Added for v4.0.0 context)** The captured image data also serves as input for advanced AI-powered visual analysis via external APIs (e.g., Google Gemini).
 
 We need to select foundational Python libraries for these core tasks.
 
@@ -38,13 +41,13 @@ We need to select foundational Python libraries for these core tasks.
 
 ## Decision Outcome
 
-**Chosen Option:** `Pillow` (specifically `ImageGrab.grab()` on Windows) for primary screen capture due to its simplicity and good performance on the initial target OS (Windows), `OpenCV-Python` for image processing and analysis (including template matching), supplemented by `pytesseract` for OCR capabilities. `mss` and OpenCV's direct capture methods are kept in consideration for future performance optimization or cross-platform capture enhancements if needed.
+**Chosen Option:** `Pillow` (specifically `ImageGrab.grab()` on Windows) for primary screen capture due to its simplicity and good performance on the initial target OS (Windows), `OpenCV-Python` for image processing and analysis (including template matching and format conversion), supplemented by `pytesseract` for OCR capabilities. `mss` and OpenCV's direct capture methods are kept in consideration for future performance optimization or cross-platform capture enhancements if needed.
 
 **Justification:**
 *   **Simplicity & Performance on Target OS (Pillow for Windows Capture):** `ImageGrab.grab()` is straightforward and performs well on Windows for capturing screen regions.
-*   **Comprehensive Analysis (OpenCV):** OpenCV provides a vast range of functionalities needed for image manipulation, filtering, and template matching.
+*   **Comprehensive Analysis (OpenCV):** OpenCV provides a vast range of functionalities needed for image manipulation, filtering, template matching, and converting image data into a standardized format (NumPy BGR array) suitable for all subsequent analysis engines.
 *   **Standard OCR (pytesseract):** `pytesseract` is the de facto standard Python wrapper for Tesseract.
-*   **Power and Flexibility:** The combination offers the depth required for current and future complex analysis features.
+*   **Power and Flexibility:** The combination offers the depth required for current and future complex analysis features, including preparing image data for external AI model consumption.
 *   **Industry Standard:** OpenCV, Pillow, and Tesseract are well-known in their domains.
 *   **Performance Path:** If Pillow's `ImageGrab` shows limitations or for broader cross-platform capture, direct OpenCV capture or `mss` can be integrated, feeding data into the OpenCV pipeline for analysis.
 
@@ -52,7 +55,7 @@ We need to select foundational Python libraries for these core tasks.
 
 *   The project has dependencies on `Pillow`, `opencv-python`, `numpy` (usually comes with OpenCV), and `pytesseract`.
 *   Users will need to install the Tesseract OCR engine separately for OCR features to work. This is documented in `README.md`.
-*   Initial development of `CaptureEngine` focuses on `Pillow.ImageGrab.grab()` for Windows, converting to OpenCV format for analysis.
-*   Developers need familiarity with Pillow for capture, OpenCV for image processing, and `pytesseract` for OCR.
+*   Initial development of `CaptureEngine` focuses on `Pillow.ImageGrab.grab()` for Windows, converting to OpenCV format (BGR NumPy array). This standardized format is then used by `AnalysisEngine` (for local analysis) and `GeminiAnalyzer` (for AI-powered analysis, which internally converts to PIL RGB as needed by the Gemini SDK).
+*   Developers need familiarity with Pillow for capture, OpenCV for image processing and format conversion, and `pytesseract` for OCR.
 
 ---

@@ -1,144 +1,95 @@
 // File: docs/adrs/ADR-008-Integrating-Gemini-API-for-Enhanced-Visual-Understanding.md
 
-# ADR-008: Integrating Gemini API for Enhanced Visual Understanding and Decision Making
+# ADR-008: Integrating Gemini API for Enhanced Visual Understanding, Decision Making, and NLU
 
-*   **Status:** Approved <!-- Assuming DevLead approves based on roadmap -->
-*   **Date:** 2025-05-12 <!-- Date decision was finalized -->
+*   **Status:** Implemented and Evolved through v4.0.0 (Initial Vision Query, Bounding Box Actions, Goal-Driven Decisions, NLU Command Interface)
+*   **Date Decision Initially Made:** 2025-05-12
+*   **Date Last Updated (to reflect v4.0.0 completion):** Current Date
 *   **Deciders:** DevLead
 
 ## Context and Problem Statement
 
-Mark-I currently operates based on deterministic visual analysis techniques (pixel color matching, template image searching, Optical Character Recognition) and a rule engine that triggers predefined actions based on explicit, user-configured conditions. While effective for well-defined, stable automation tasks, this approach faces limitations:
+Mark-I initially operated on deterministic visual analysis (pixels, templates, OCR) and a rule engine with explicit user-configured conditions. This faced limitations in:
+1.  **Limited Scene Comprehension:** Lacked deeper, semantic understanding beyond exact matches.
+2.  **Brittleness to UI Changes:** Fragile to minor UI redesigns.
+3.  **Inflexible Decision Making:** Current rules engine, though supporting compound conditions, remained deterministic.
+4.  **Goal: Enhance AI Capabilities ("AI Moving More Freely"):** Strategic goal to evolve Mark-I to interpret visual information more intelligently and act with greater flexibility, adaptability, and understanding, including responding to natural language commands.
 
-1.  **Limited Scene Comprehension:** The bot lacks a deeper, semantic understanding of the visual scene. It cannot infer context, recognize objects or UI elements beyond exact templates/text patterns, or understand relationships between elements without explicit rules.
-2.  **Brittleness to UI Changes:** Reliance on pixel-perfect color matches or exact template images makes automations fragile. Minor UI redesigns, changes in resolution, themes, or font rendering can easily break existing rules.
-3.  **Inflexible Decision Making:** The current rules engine, even with compound conditions, is fundamentally deterministic. It cannot make nuanced decisions based on a holistic interpretation of the visual environment or handle ambiguity effectively.
-4.  **Goal: Enhance AI Capabilities ("AI Moving More Freely"):** There is a strategic goal to evolve Mark-I towards incorporating more sophisticated AI, enabling it to interpret visual information more intelligently and act with greater flexibility, adaptability, and understanding – moving beyond rigid, pre-programmed responses.
+This ADR originally proposed integrating Google Gemini API for its multimodal capabilities as a step to enhance visual understanding. Its scope and realization have expanded through Mark-I v4.0.0.
 
-This ADR proposes integrating the Google Gemini API, specifically its multimodal capabilities (understanding images and text), as a concrete step to enhance the bot's visual understanding and pave the way for more intelligent decision-making.
+## Original Considered Options (Summary)
 
-## Considered Options
+1.  **Gemini for Visual Scene Description & Question Answering (Original Chosen Path - Realized as `gemini_vision_query` in v4.0.0 Phase 1):** Send images to Gemini with prompts for description, element identification, or Q&A. Output used in `RulesEngine`.
+2.  **Gemini for Rule/Action Generation from Natural Language (Deferred/Future):** User describes task in NL, Gemini generates Mark-I JSON profile. Considered complex and high-risk for initial integration.
+3.  **Gemini for End-to-End Visual Task Execution (Agent-like Behavior - Evolved into `GeminiDecisionModule` for v4.0.0 Phase 2 & 3):** Gemini directly decides next actions based on visual context and high-level goals. Originally seen as technologically immature for full autonomy but realized in a controlled manner.
+4.  **No Gemini Integration (Rejected):** Fails to address stated problems or strategic AI goals.
 
-1.  **Gemini for Visual Scene Description & Question Answering (Chosen Path - v4.0.0 Phase 1):**
-    *   *Description:* Mark-I captures screen regions as usual. For specific rules, these images (or designated sub-regions) are sent to a Gemini Vision model (e.g., Gemini Pro Vision, Gemini Flash) via API call, along with a carefully crafted text prompt. The prompt instructs Gemini to perform tasks like:
-        *   Describe the scene/region content.
-        *   Identify specific types of elements (buttons, text fields, icons with certain characteristics).
-        *   Answer questions about the visual content ("Is the status 'Complete'?", "What text is on the red button?").
-        *   Extract structured information (e.g., return identified elements and their approximate locations as JSON).
-    *   *Integration:* Gemini's response (text or structured JSON) is received by Mark-I. This output can then be used:
-        *   Within the existing `RulesEngine` via new condition types (e.g., `gemini_vision_query` checking if the response contains keywords, matches expected JSON values, etc.).
-        *   Potentially by a new "GeminiDecisionModule" in later phases to influence action selection based on the richer context provided by Gemini.
-    *   *Pros:*
-        *   **Semantic Understanding:** Directly addresses the limitation of current analysis by leveraging a powerful foundation model for higher-level visual comprehension.
-        *   **Increased Robustness:** Can make automations more resilient to minor UI changes by focusing on semantic meaning ("find the login button") rather than exact pixels/templates.
-        *   **Handles Ambiguity/Novelty:** Potential to interpret unexpected UI states or recognize elements without pre-defined templates, guided by the prompt.
-        *   **Incremental Integration:** Provides a clear, phased approach to integrating advanced AI into the existing architecture. New condition types or modules can be added without replacing the entire system initially.
-        *   **Foundation for Future AI:** Builds essential infrastructure (API client, prompt handling, response parsing) for more advanced AI features later.
-    *   *Cons:*
-        *   **API Latency:** Introduces network latency for API calls, making it unsuitable for very high-frequency (<1-2 second) real-time loops without careful design.
-        *   **API Costs:** Gemini API usage incurs costs based on input/output tokens and potentially image analysis.
-        *   **API Key Management:** Requires secure handling and user configuration of API keys.
-        *   **Prompt Engineering:** The effectiveness heavily relies on designing good prompts, which is a skill in itself. Poor prompts yield poor results.
-        *   **Data Privacy/Security:** Screen content (images of selected regions) is sent to Google's servers. User awareness and consent are crucial. API key security is paramount.
-        *   **Internet Dependency:** Requires an active internet connection for features utilizing Gemini.
-        *   **Determinism Reduction:** Introduces non-determinism from the AI model's responses.
+## Decision Outcome and Evolution through v4.0.0
 
-2.  **Gemini for Rule/Action Generation from Natural Language:**
-    *   *Description:* User describes an automation task in natural language (e.g., "If I see an error message, click the OK button"). A Gemini text model attempts to parse this description and generate the corresponding Mark-I JSON profile structure.
-    *   *Pros:* Potentially offers a very user-friendly way to configure simple automations.
-    *   *Cons:*
-        *   **High Complexity & Risk:** Extremely challenging to implement reliably and safely. High risk of misinterpreting instructions and generating incorrect or even harmful automation rules. Requires sophisticated parsing and mapping to the specific profile schema.
-        *   **Focus on Configuration, Not Runtime:** This enhances the configuration experience but does not directly improve the bot's *runtime* visual understanding or decision-making freedom.
-        *   **Ambiguity:** Natural language is inherently ambiguous; translating it accurately to formal rules is difficult.
+**Initial Chosen Option:** Option 1 (Gemini for Visual Scene Description & Q&A) was the starting point for v4.0.0 Phase 1.
 
-3.  **Gemini for End-to-End Visual Task Execution (Agent-like Behavior):**
-    *   *Description:* Mark-I provides visual context (full screen or relevant regions) to a Gemini model (likely a hypothetical future Vision-Language-Action model or a complex prompting strategy with current models). The model directly decides the *next* action (e.g., "click coordinates (x,y)", "type 'text'") needed to achieve a high-level user goal (e.g., "Respond to the latest message"). Mark-I executes the action, captures the new visual state, and feeds it back to the model in a loop.
-    *   *Pros:* Represents the ultimate vision of an AI "moving freely" and performing complex tasks autonomously based on visual input.
-    *   *Cons:*
-        *   **Technologically Immature/Complex:** Currently at the edge of research and practical reliability for general, unconstrained desktop automation. Requires sophisticated prompting, state management, and potentially fine-tuning.
-        *   **Safety & Control:** Major concerns regarding safety, predictability, and ensuring the agent doesn't perform unintended or harmful actions. Defining boundaries and overrides is critical and difficult.
-        *   **Very High Latency:** Each step in the sequence requires an API call, making it potentially very slow.
-        *   **Massive Scope:** Implementing such an agent is a large research and engineering undertaking, far beyond the scope of the initial Gemini integration.
+**Evolution across v4.0.0 Phases:** The integration of Gemini evolved significantly:
 
-4.  **No Gemini Integration (Maintain Status Quo):**
-    *   *Pros:* Avoids the complexities, costs, latency, and security considerations associated with external API calls. Maintains the current deterministic behavior.
-    *   *Cons:* Fails to address the stated problem of limited visual understanding and brittleness. Does not advance the strategic goal of enhancing AI capabilities. Leaves the bot constrained by its current analysis methods.
+*   **v4.0.0 Phase 1: Core Visual Querying:**
+    *   Implemented `GeminiAnalyzer` for robust API interaction.
+    *   Added the `gemini_vision_query` condition type to `RulesEngine`, allowing rules to directly ask Gemini questions about visual regions.
+    *   Established API key management and basic GUI support.
+*   **v4.0.0 Phase 1.5: Bounding Box Actions:**
+    *   Extended `gemini_vision_query` and `ActionExecutor` to allow actions (e.g., clicks) to target precise coordinates derived from bounding boxes returned by Gemini for identified elements.
+*   **v4.0.0 Phase 2: Gemini-Informed Decision Making (Single Goal):**
+    *   Introduced the `GeminiDecisionModule`.
+    *   Added a `gemini_perform_task` action type where users provide a simple goal. The `GeminiDecisionModule` uses Gemini to understand the goal in visual context and suggest/execute a single primitive action from a predefined safe set (e.g., click a described button).
+*   **v4.0.0 Phase 3: Natural Language Command Interface:**
+    *   Enhanced `GeminiDecisionModule` to parse complex natural language commands (provided via the `gemini_perform_task` action's `natural_language_command` parameter).
+    *   Gemini is used for NLU to decompose the command into a sequence of sub-steps.
+    *   The `GeminiDecisionModule` orchestrates the execution of these sub-steps, using Gemini for visual analysis and action refinement for each step, drawing upon the capabilities developed in earlier phases.
 
-## Decision Outcome
+This phased approach allowed for incremental integration of increasingly sophisticated AI capabilities, moving from simple visual Q&A to NLU-driven task execution.
 
-**Chosen Option:** **Option 1: Gemini for Visual Scene Description & Question Answering.**
+**Justification for the Evolved Approach:**
+*   **Direct Enhancement of Perception & Action:** Directly addressed the core weaknesses of limited understanding and brittleness.
+*   **Feasible and Incremental Path:** Allowed for delivering value incrementally, building foundational components first.
+*   **Achieving "Freer Movement":** Each phase provided more "freedom" and intelligence to the bot:
+    *   Semantic understanding over pixel matching.
+    *   Robustness to UI tweaks.
+    *   Goal-oriented action selection.
+    *   Interpretation of natural language commands for multi-step tasks.
+*   **Balanced Power and Control:** While leveraging powerful LMMs, the system retains control through predefined allowed sub-actions for the `GeminiDecisionModule` and user-configurable safety parameters (e.g., confirmation steps).
 
-**Justification:**
-*   **Direct Enhancement of Perception:** This option directly targets the core weakness of the current system – its limited ability to understand visual content semantically. It leverages Gemini's powerful multimodal capabilities to provide richer interpretations.
-*   **Feasible and Incremental Path:** It offers a practical and phased approach to integrating advanced AI. New condition types (`gemini_vision_query`) can be added to the existing `RulesEngine` without requiring an immediate, complete architectural overhaul. This allows for delivering value incrementally.
-*   **Foundation for Growth:** Successfully implementing this phase builds crucial infrastructure and experience (API client, prompt management, response handling) that can be leveraged for more sophisticated AI features in subsequent phases (e.g., Gemini-informed action selection).
-*   **Achieving "Freer Movement" (Phase 1):** While not full autonomy, the enhanced understanding grants the AI more "freedom" by:
-    *   Allowing rules based on semantic meaning rather than brittle pixel/template matches.
-    *   Enabling reactions to a wider range of visual states, including novel ones if prompts are well-designed.
-    *   Reducing the need for constant profile updates due to minor UI tweaks.
-*   **Balanced Approach:** Strikes a reasonable balance between the transformative potential of using a large foundation model and the practical implementation challenges (latency, cost, complexity) compared to the more ambitious Options 2 and 3.
+## Realization Details (Summary - Full details in `TECHNICAL_DESIGN.MD`)
 
-## Clearest Path to Achieve This Goal (High-Level Steps for Initial Integration - v4.0.0 Phase 1)
+*   **`GeminiAnalyzer` (`mark_i.engines.gemini_analyzer.GeminiAnalyzer`):** Core module for all Gemini API interactions (vision and text models).
+*   **`RulesEngine` (`mark_i.engines.rules_engine.RulesEngine`):**
+    *   Integrates `gemini_vision_query` condition type (calls `GeminiAnalyzer`).
+    *   Handles `gemini_perform_task` action type by invoking `GeminiDecisionModule`.
+*   **`GeminiDecisionModule` (`mark_i.engines.gemini_decision_module.GeminiDecisionModule`):**
+    *   Parses natural language commands using `GeminiAnalyzer`.
+    *   Decomposes commands into sequences of sub-steps.
+    *   For each sub-step, uses `GeminiAnalyzer` to determine the primitive action and refine targets (e.g., get bounding boxes).
+    *   Orchestrates execution via `ActionExecutor`.
+    *   Manages a predefined set of allowed primitive sub-actions (`PREDEFINED_ALLOWED_SUB_ACTIONS`).
+*   **Configuration:**
+    *   `GEMINI_API_KEY` in `.env`.
+    *   Profile settings for `gemini_default_model_name`.
+    *   JSON parameters for `gemini_vision_query` (prompt, expectations, etc.).
+    *   JSON parameters for `gemini_perform_task` (natural_language_command, context_regions, allowed_actions_override, require_confirmation_per_step, max_steps).
+*   **GUI Support (`MainAppWindow` / `DetailsPanel`):**
+    *   Configuration for all Gemini-related condition and action parameters.
 
-1.  **Core `GeminiAnalyzer` Module (`mark_i.engines.gemini_analyzer.GeminiAnalyzer`):**
-    *   Implement robust interaction using the `google-generativeai` Python SDK.
-    *   Include methods like `query_vision_model(image_data: np.ndarray, prompt: str, model_name: Optional[str] = None) -> Dict[str, Any]`.
-    *   Handle image preparation (NumPy BGR to PIL RGB suitable for the SDK).
-    *   Handle API responses: parse text/JSON, manage errors (API errors, network issues, rate limits, content filtering), log interactions thoroughly.
-    *   Initialize with API key and default model name.
-2.  **API Key Management & Configuration:**
-    *   Add `GEMINI_API_KEY` to `.env` file specification.
-    *   `ConfigManager` loads the key from `.env`.
-    *   `MainAppWindow` settings UI should indicate if the key is configured (read-only status).
-    *   Add a profile setting (`settings.gemini_default_model_name`) to allow users to specify a preferred Gemini model (e.g., "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"). Default to a sensible choice like Flash for cost/latency balance initially.
-3.  **New Condition Type in `RulesEngine` (`gemini_vision_query`):**
-    *   Define schema in JSON (see `TECHNICAL_DESIGN.MD` Section 5.1 for details):
-        *   `type`: "gemini_vision_query"
-        *   `region`: Optional override for rule's default region.
-        *   `prompt` (str, required): Text prompt for Gemini.
-        *   `expected_response_contains` (Optional, str or list[str]): Checks if Gemini's text response contains substring(s).
-        *   `case_sensitive_response_check` (Optional, bool, default `False`): For `expected_response_contains`.
-        *   `expected_response_json_path` (Optional, str): JSONPath expression to query if Gemini returns JSON.
-        *   `expected_json_value` (Optional, any): Value expected at the JSONPath. Comparison needs type flexibility.
-        *   `capture_as` (Optional, str): Variable name to store Gemini's full text response or the extracted JSON value.
-        *   `model_name` (Optional, str): Override profile's default Gemini model for this specific query.
-4.  **`RulesEngine` Integration:**
-    *   Update `_parse_rule_analysis_dependencies`: `gemini_vision_query` does *not* add requirements for *local* pre-emptive analysis.
-    *   Modify `_evaluate_single_condition_logic`:
-        *   If type is `gemini_vision_query`:
-            *   Get captured image for the target region.
-            *   Instantiate/get `GeminiAnalyzer` instance (needs API key).
-            *   Call `gemini_analyzer.query_vision_model()`.
-            *   Evaluate the returned dictionary (`status`, `text_content`, `json_content`, `error_message`) based on the condition's `expected_*` parameters.
-            *   Handle API call errors gracefully (condition evaluates to `False`, log error).
-            *   If `capture_as` defined and condition met, store relevant response part in `rule_variable_context`.
-5.  **GUI Support (`MainAppWindow` / `DetailsPanel`):**
-    *   Add `gemini_vision_query` to `CONDITION_TYPES` in `gui_config.py`.
-    *   Update `UI_PARAM_CONFIG` to define widgets for all `gemini_vision_query` parameters (e.g., `CTkTextbox` for multi-line `prompt`, entries for expectations, checkbox for case sensitivity, entry for `capture_as`, entry for `model_name`).
-    *   Ensure `DetailsPanel._render_dynamic_parameters` correctly creates these widgets when the type is selected.
-    *   Implement validation for these new fields using `gui_utils.validate_and_get_widget_value`.
-6.  **Action Parameterization using Gemini-derived Bounding Boxes (Stretch Goal for Phase 1 / Target for Phase 2):**
-    *   Requires prompting Gemini to reliably return bounding boxes for identified elements (likely within a JSON structure).
-    *   Requires adding a new `target_relation` (e.g., `center_of_gemini_identified_element`) for click actions.
-    *   Requires action parameters like `gemini_element_variable` (referencing a variable captured from a `gemini_vision_query` holding element details including bounding box).
-    *   Requires `ActionExecutor` to parse this variable and calculate coordinates.
-7.  **Documentation and User Guidance:**
-    *   Update `README.md`, `TECHNICAL_DESIGN.MD`, `FUNCTIONAL_REQUIREMENTS.MD` (add FR for Gemini condition type), `NON_FUNCTIONAL_REQUIREMENTS.MD` (add NFRs for latency, cost, privacy, internet dependency).
-    *   Provide clear instructions on setting up the Gemini API key.
-    *   Explain potential costs and data privacy implications explicitly.
-    *   Offer guidance and examples on effective prompt engineering for visual automation tasks.
+## Consequences (Reflecting Full v4.0.0 Implementation)
 
-## Consequences
+*   **New Core Dependencies:** `google-generativeai` library.
+*   **External Service Dependency:** Core functionalities now rely on Google's Gemini API availability and performance.
+*   **Cost:** Users must manage Gemini API usage costs.
+*   **Latency:** Gemini API calls (for vision queries, NLU parsing, decision making, target refinement) introduce noticeable latency (seconds per call). This impacts achievable `monitoring_interval_seconds` and overall task completion times for AI-heavy profiles/commands.
+*   **Internet Requirement:** Mandatory for all Gemini-powered features.
+*   **API Key Security:** Critical (handled via `.env` and `.gitignore`).
+*   **Privacy:** Users explicitly informed that image data (for vision queries/context) and natural language command text are sent to Google servers.
+*   **Prompt Engineering Skill:** Effectiveness of all Gemini features (queries, goal-driven tasks, NLU commands) heavily hinges on user-written prompts and commands. This introduces a new layer of complexity and skill for advanced configuration and usage.
+*   **Increased Code Complexity:** Added `GeminiAnalyzer` and `GeminiDecisionModule`; modified `RulesEngine`, `MainController`, GUI components, profile schema, and all documentation.
+*   **Non-Determinism:** Introduces variability in outcomes based on LMM responses. Robust error handling, clear feedback, and user confirmation options are crucial mitigations.
+*   **New Capabilities:** Mark-I can now understand visual scenes more deeply, interact with elements semantically, make simple goal-oriented decisions, and interpret/execute natural language commands for multi-step tasks, significantly enhancing its automation power and user interaction paradigm.
 
-*   **New Core Dependencies:** `google-generativeai` library (or chosen SDK).
-*   **External Service Dependency:** Core functionality for rules using Gemini now depends on Google's API availability and performance.
-*   **Cost:** Users need to manage Gemini API usage costs. Clear documentation and potentially usage warnings/limits (future feature) are important.
-*   **Latency:** Gemini API calls will introduce noticeable latency (potentially seconds) into rule evaluation cycles where used. This impacts the achievable `monitoring_interval_seconds` for profiles heavily reliant on Gemini.
-*   **Internet Requirement:** An active internet connection is mandatory for Gemini-powered features.
-*   **API Key Security:** Secure management of the `GEMINI_API_KEY` (via `.env` and `.gitignore`) is critical.
-*   **Privacy:** Users must be explicitly informed that image data from regions analyzed by Gemini conditions is sent to Google servers.
-*   **Prompt Engineering Skill:** The effectiveness of Gemini conditions hinges heavily on user-written prompts. This introduces a new layer of complexity and skill requirement for configuration.
-*   **Increased Code Complexity:** Adds a new engine (`GeminiAnalyzer`), modifies `RulesEngine`, `ConfigManager`, GUI components (`MainAppWindow`, `DetailsPanel`), profile schema, and requires updates across all documentation.
-*   **Non-Determinism:** Introduces variability in outcomes based on the foundation model's responses.
+This integration has successfully laid the foundation for future AI-driven enhancements, moving Mark-I closer to its vision as a truly intelligent visual assistant.
 
-This foundational integration sets the stage for future ADRs exploring more advanced AI-driven capabilities, such as dynamic action selection or planning based on Gemini's insights.
+---

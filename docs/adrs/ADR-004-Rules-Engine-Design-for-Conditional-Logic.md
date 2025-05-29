@@ -1,6 +1,8 @@
+// File: docs/adrs/ADR-004-Rules-Engine-Design-for-Conditional-Logic.md
+
 # ADR-004: Rules Engine Design for Conditional Logic
 
-*   **Status:** Approved (and implemented, including evolution to Option 2)
+*   **Status:** Approved (Implemented and Evolved; v4.0.0 additions like `gemini_vision_query` fit this structure)
 *   **Date:** 2025-05-11
 *   **Deciders:** DevLead
 
@@ -9,11 +11,11 @@
 The tool's (Mark-I) core functionality relies on a "Rules Engine" that evaluates conditions based on visual analysis and triggers actions ("IF `visual_condition(s)` MET for `region(s)`, THEN PERFORM `action_sequence`."). We need a clear, extensible, and configurable way to define these rules.
 
 The design should consider:
-*   How conditions are expressed (e.g., color match, template found, text present, dominant color).
+*   How conditions are expressed (e.g., color match, template found, text present, dominant color, **AI vision query (v4.0.0)**).
 *   The ability to combine multiple conditions using logical operators (AND/OR).
-*   Linking specific actions to these conditions.
+*   Linking specific actions to these conditions (including standard actions and **AI-driven task actions (v4.0.0)**).
 *   How these rules are stored within the configuration profile (JSON, as per ADR-003).
-*   The potential for capturing data from a condition (e.g., OCR text, template coordinates) for use in actions.
+*   The potential for capturing data from a condition (e.g., OCR text, template coordinates, **Gemini API responses**) for use in actions.
 
 ## Considered Options
 
@@ -41,24 +43,24 @@ The design should consider:
 
 **Chosen Option:** Start with **Option 1 (Simple List of Single-Condition Rule Objects)** for initial development (v0.x versions) and then **evolve to Option 2 (Structured Rule Objects with Compound Conditions)** as the project matured and the need for more complex logic became evident.
 
-*   **Status:** The evolution to **Option 2 has been fully implemented** as part of the v2.0.0 feature set. The `RulesEngine` now supports rules with a `condition` block containing a `logical_operator` ("AND" or "OR") and a list of `sub_conditions`. Each sub-condition has its own `type` and parameters. The GUI (`MainAppWindow`) also supports creating and editing this compound structure.
+*   **Status:** The evolution to **Option 2 has been fully implemented** as part of the v2.0.0 feature set and remains the current standard. The `RulesEngine` supports rules with a `condition` block containing a `logical_operator` ("AND" or "OR") and a list of `sub_conditions`. Each sub-condition has its own `type` (e.g., `pixel_color`, `gemini_vision_query`) and parameters. The GUI (`MainAppWindow`) also supports creating and editing this compound structure.
 *   Backwards compatibility for the Option 1 (single condition) format is maintained: if a rule's `condition` object directly contains a `type` field and no `logical_operator`, it's treated as a single condition.
 
 **Justification for the Evolutionary Approach:**
-*   **Initial Simplicity (Option 1):** Allowed for rapid development of core "IF visual_event THEN action" functionality, delivering value quickly.
-*   **Meeting Evolving Needs (Option 2):** As more analysis types were added and more complex automation scenarios were considered (like your "Hello my wife!" example which requires a sequence of checks), the limitations of Option 1 became clear. Option 2 provides the necessary expressiveness by allowing multiple, potentially different, types of conditions (on same or different regions) to be combined logically within one rule.
-*   **Manageable Complexity:** Option 2, while more complex than Option 1, is still significantly simpler to implement and manage within a JSON configuration and a Python-based `RulesEngine` than Options 3 or 4. The GUI helps abstract this complexity from the end-user.
+*   **Initial Simplicity (Option 1):** Allowed for rapid development of core "IF visual_event THEN action" functionality.
+*   **Meeting Evolving Needs (Option 2):** As more analysis types were added (including AI-driven ones in v4.0.0) and more complex automation scenarios were considered, Option 2 provided the necessary expressiveness.
+*   **Manageable Complexity:** Option 2, while more complex than Option 1, is still significantly simpler to implement and manage within a JSON configuration and a Python-based `RulesEngine` than Options 3 or 4. The GUI helps abstract this complexity.
 
 ## Consequences
 
 *   **`RulesEngine` Implementation:**
-    *   Initially handled a simple list of rules with single conditions.
-    *   Was refactored (as part of v2.0.0) to parse the new compound condition structure. This involved recursive or iterative evaluation of `sub_conditions` based on the `logical_operator`, including short-circuiting.
+    *   Handles both simple single conditions and compound conditions with recursive/iterative evaluation of `sub_conditions` based on the `logical_operator`.
+    *   Integrates various condition evaluation logics, including calls to `AnalysisEngine` for local checks and `GeminiAnalyzer` for `gemini_vision_query` conditions.
 *   **JSON Profile Schema:**
-    *   The `condition` object within a rule in the JSON profile was extended. It can now either be a simple object with a `type` (for single conditions) OR an object with `logical_operator` and `sub_conditions` (an array of simple condition objects). This schema is documented in `TECHNICAL_DESIGN.MD`.
+    *   The `condition` object within a rule in the JSON profile supports both single and compound structures. This schema is documented in `TECHNICAL_DESIGN.MD`.
+    *   The action object within a rule supports various types, including standard UI interactions and the AI-driven `gemini_perform_task`.
 *   **GUI Development (`MainAppWindow`):**
-    *   The GUI needed to be designed to allow users to create and edit both single and compound conditions, including adding/removing sub-conditions and selecting the logical operator. This has been a significant part of the v3.0.0 GUI effort.
-    *   The "Convert Condition Structure" button was added to easily switch a rule's condition between single and compound forms.
-*   **Variable Capture & Usage:** The design of sub-conditions also needed to accommodate variable capture (`capture_as`) within a sub-condition and the use of those variables in subsequent sub-conditions or the rule's action, which has also been implemented.
+    *   The GUI allows users to create and edit both single and compound conditions, and various action types with their specific parameters.
+*   **Variable Capture & Usage:** The design of conditions (including `gemini_vision_query`) accommodates variable capture (`capture_as`) and the use of those variables in subsequent conditions or the rule's action.
 
 ---

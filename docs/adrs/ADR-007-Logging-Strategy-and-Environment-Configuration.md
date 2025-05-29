@@ -1,86 +1,69 @@
+// File: docs/adrs/ADR-007-Logging-Strategy-and-Environment-Configuration.md
+
 # ADR-007: Logging Strategy and Environment Configuration
 
-*   **Status:** Approved (and implemented)
+*   **Status:** Approved (Implemented; v4.0.0 includes `GEMINI_API_KEY` in .env and specific logging for AI interactions)
 *   **Date:** 2025-05-11
 *   **Deciders:** DevLead
 
 ## Context and Problem Statement
 
-The visual automation tool (Mark-I), encompassing both its bot runtime and GUI editor, requires robust and configurable logging for multiple purposes:
-*   **Development:** Detailed tracing of execution paths, variable states, and component interactions.
-*   **Debugging:** Identifying issues and understanding error contexts.
-*   **User Support/Troubleshooting (UAT/Production):** Allowing users or support personnel to gather information about bot behavior or GUI issues.
-*   **Operational Monitoring (Bot Runtime):** Recording key events, decisions, and actions taken by the bot.
+The visual automation tool (Mark-I), encompassing its bot runtime, AI interactions, and GUI editor, requires robust and configurable logging for:
+*   Development: Detailed tracing, variable states, component interactions.
+*   Debugging: Identifying issues, error contexts.
+*   User Support/Troubleshooting: Gathering information.
+*   Operational Monitoring (Bot Runtime): Recording key events, decisions, actions, **including AI model interactions (v4.0.0)**.
 
-Logs need to be:
-*   **Comprehensive:** Covering all significant operations.
-*   **Persistent:** Saved to files for later review.
-*   **Configurable:** Log verbosity (level) and output destinations (console, file) should be adjustable based on the application environment (e.g., `development`, `uat`, `production`) or user preference (e.g., CLI flags).
-
-We also need a standard method for managing environment-specific settings, primarily the `APP_ENV` variable that drives logging configuration.
+Logs need to be comprehensive, persistent, and configurable (level, destinations). We also need a standard for managing environment-specific settings, primarily `APP_ENV` and sensitive keys like `GEMINI_API_KEY`.
 
 ## Considered Options for Environment Configuration
 
 1.  **`.env` files with `python-dotenv` library:**
-    *   Pros: Common, well-understood practice in Python projects. Keeps environment-specific variables (like API keys, or `APP_ENV` in our case) out of version control. Simple to use.
-    *   Cons: Requires the `python-dotenv` external dependency.
-2.  **Separate JSON/YAML config files per environment (e.g., `config_dev.json`, `config_prod.json`):**
-    *   Pros: Explicit and structured. Can hold more complex configurations than simple key-value pairs if needed.
-    *   Cons: Requires application logic to determine and load the correct file based on some external indicator (e.g., another environment variable). Can lead to file proliferation if many environments or settings.
-3.  **Direct Environment Variables:** Relying solely on OS-level environment variables.
-    *   Pros: Standard OS feature. No application-level dependencies.
-    *   Cons: Less convenient for local development setup across different machines or for developers to manage. `.env` files provide a project-local way to define these.
-4.  **Hardcoding:** Not a viable or professional option for configurable settings.
+    *   Pros: Common practice. Keeps environment-specific variables (like `APP_ENV`, **`GEMINI_API_KEY`**) out of version control. Simple.
+    *   Cons: Requires `python-dotenv` external dependency.
+2.  Separate JSON/YAML config files per environment.
+3.  Direct OS Environment Variables.
+4.  Hardcoding (Not viable).
 
 ## Considered Options for Logging
 
 1.  **Python's built-in `logging` module:**
-    *   Pros: Part of the standard library (no external dependency for logging itself). Highly flexible and configurable with levels, handlers (console, file, network, etc.), formatters, and filters. Thread-safe. Supports hierarchical loggers, allowing fine-grained control over logging from different parts of the application.
-    *   Cons: Initial setup can be slightly verbose compared to some third-party libraries, but this is a one-time effort for a reusable logging setup module.
-2.  **Third-party logging libraries (e.g., Loguru, structlog):**
-    *   Pros: Often provide simpler APIs for common logging tasks, more aesthetically pleasing default outputs, and advanced features like easier exception formatting or structured logging out-of-the-box.
-    *   Cons: Introduce external dependencies. May be overkill if the standard `logging` module's capabilities are sufficient after proper configuration.
-3.  **`print()` statements:** Not viable for robust, configurable, or production-grade logging due to lack of levels, timestamps, formatting control, and easy redirection.
+    *   Pros: Standard library. Highly flexible (levels, handlers, formatters, filters). Thread-safe. Hierarchical.
+    *   Cons: Initial setup can be slightly verbose (one-time effort).
+2.  Third-party logging libraries (e.g., Loguru, structlog).
+3.  `print()` statements (Not viable).
 
 ## Decision Outcome
 
 **Chosen Options:**
 
-*   **Environment Configuration:** Use **`.env` files** at the project root, loaded by the **`python-dotenv` library**, to manage the `APP_ENV` variable.
-    *   The primary variable will be `APP_ENV`, with possible values: `development`, `uat` (or `testing`), `production`.
-*   **Logging:** Utilize **Python's built-in `logging` module**, configured by a dedicated setup module (`core/logging_setup.py`).
+*   **Environment Configuration:** Use **`.env` files** at the project root, loaded by the **`python-dotenv` library**, to manage `APP_ENV` and **`GEMINI_API_KEY` (for v4.0.0+)**.
+*   **Logging:** Utilize **Python's built-in `logging` module**, configured by `core/logging_setup.py`.
 
 **Justification:**
-*   **`.env` files with `python-dotenv`:** This is a standard and developer-friendly pattern for managing environment-specific configurations without hardcoding or relying solely on OS environment variables which can be cumbersome for local development. It allows each developer to have their local `APP_ENV` without committing it.
-*   **`logging` module:** Its power, flexibility, and status as a standard library module make it the most suitable choice for a project aiming for robustness and maintainability. While third-party libraries can offer convenience, the standard module provides all necessary features (levels, multiple handlers, customizable formatting, hierarchical loggers) with careful setup. This avoids an extra dependency just for logging.
+*   **`.env` files with `python-dotenv`:** Standard, developer-friendly for managing environment-specific configurations (like API keys) without hardcoding or relying solely on OS variables.
+*   **`logging` module:** Power, flexibility, and standard library status make it suitable. Provides all necessary features with careful setup, avoiding an extra dependency.
 
-## Logging Strategy Details (Implemented in `core/logging_setup.py`)
+## Logging Strategy Details (Implemented in `core/logging_setup.py` and adhered to by modules)
 
-*   **Logger Naming:** Modules use `logging.getLogger(__name__)` to leverage the hierarchical nature of loggers. The root logger for the application (e.g., `mark_i`) is configured.
-*   **Log Levels:** Standard levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) are used.
-*   **Log Format:** A consistent, detailed format is used for file logs:
-    `%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s`
-    Console log format might be slightly more concise depending on `APP_ENV`.
+*   **Logger Naming:** Modules use `logging.getLogger(__name__)`. Root application logger: `mark_i`.
+*   **Log Levels:** Standard levels (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).
+*   **Log Format:**
+    *   File logs: `%(asctime)s - %(name)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s`
+    *   Console logs: More concise, but detailed in `development` `APP_ENV`.
 *   **Handlers & Configuration by `APP_ENV`:**
-    *   A `logs/` directory is created at the project root if it doesn't exist (and is in `.gitignore`).
-    *   **Console Handler (`StreamHandler`):**
-        *   `development`: `DEBUG` level.
-        *   `uat`/`production`: `INFO` level (or `WARNING` for production console if desired).
-        *   CLI verbosity flags (`-v`, `-vv` in `__main__.py`) can further adjust the console handler's level at runtime.
-    *   **File Handler (`TimedRotatingFileHandler`):**
-        *   Rotates daily (e.g., `YYYY-MM-DD.log` inside `logs/`), keeping a configurable number of backup files.
-        *   `development`: `DEBUG` level.
-        *   `uat`/`production`: `INFO` level.
-        *   Includes `APP_ENV` in the log file message format for context.
-*   **Initialization:** Logging is configured once at application startup by `core.logging_setup.setup_logging()`, which reads `APP_ENV` (loaded by `core.config_manager.load_environment_variables()`).
-*   **Critical Principle:** All significant operations, decisions, state changes, errors, and user interactions (both backend and GUI) MUST include appropriate and informative logging statements.
+    *   `logs/` directory created (and gitignored).
+    *   **Console Handler (`StreamHandler`):** `DEBUG` for `development`, `INFO` for `uat`/`production`. CLI flags can override.
+    *   **File Handler (`TimedRotatingFileHandler`):** Rotates daily, `DEBUG` for `development`, `INFO` for `uat`/`production`.
+*   **Initialization:** `core.logging_setup.setup_logging()` at startup.
+*   **Critical Principle:** All significant operations, decisions, state changes, errors, user interactions (backend and GUI), **and especially all interactions with external APIs like Google Gemini (requests, summarized prompts, model used, responses, errors, latency, NLU parsing steps, decision outcomes from `GeminiDecisionModule`) MUST include appropriate and informative logging statements, as detailed in `TECHNICAL_DESIGN.MD` Section 7 and 14.**
 
 ## Consequences
 
-*   A `.env` file (e.g., containing `APP_ENV=development`) is expected in the project root for local development. This file **MUST** be added to `.gitignore`.
-*   The `python-dotenv` library is a project dependency (listed in `requirements.txt`).
-*   A dedicated module, `mark_i/core/logging_setup.py`, encapsulates all logging initialization logic.
-*   Developers must be diligent in adding comprehensive logging statements throughout their code, using appropriate log levels.
-*   The `logs/` directory needs to be created by the application if it doesn't exist and **MUST** be added to `.gitignore`.
+*   A `.env` file (e.g., containing `APP_ENV=development` and `GEMINI_API_KEY=your_key_here`) is expected in the project root for local development. This file **MUST** be added to `.gitignore`.
+*   The `python-dotenv` library is a project dependency.
+*   `mark_i/core/logging_setup.py` encapsulates logging initialization.
+*   Developers must be diligent in adding comprehensive logging statements, using appropriate levels, especially for all AI-related operations.
+*   The `logs/` directory created by the application **MUST** be added to `.gitignore`.
 
 ---
