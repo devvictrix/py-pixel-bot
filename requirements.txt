@@ -1,17 +1,9 @@
-# Core Dependencies from ADRs and Project Setup
 python-dotenv
-Pillow
 opencv-python
-numpy
+Pillow
 pytesseract
 pyautogui
-CustomTkinter
 google-generativeai
-
-# Testing Dependencies (New for v5.0.2+)
+customtkinter
 pytest
 pytest-cov
-
-# Linting/Formatting (usually installed in dev environment, not strictly runtime)
-# flake8
-# black

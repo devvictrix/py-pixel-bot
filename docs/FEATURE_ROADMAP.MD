@@ -1,6 +1,5 @@
 # Feature Roadmap & Status for Mark-I
 
-This document tracks planned features and their status for the Mark-I visual automation tool. Version 4.0.0 (Gemini-Powered Visual Intelligence) is COMPLETE.
 **Version 5.0.0 (AI-Driven Profile Generation) is now considered COMPLETE.**
 
 **Key Supporting Documents:**
@@ -89,7 +88,7 @@ This document tracks planned features and their status for the Mark-I visual aut
 | v5.0.0 (Phase 4 Documentation)                                                          | Done        | High     | AI Profile Generation                 | **Final Documentation for v5.0.0**                                | Update README, User Guides, Technical Design, and other relevant documents for the AI Profile Creator feature.                                                                                                                                              | Markdown, Code Docstrings.                                                                                                                              |
 | **v5.0.x (Post-Release Refinement & Testing)**                                          |
 | v5.0.1                                                                                  | Done        | High     | Code Quality & Maintainability        | Codebase Refactoring (Modularity, Maintainability, Readability)     | Systematic refactoring. **`RulesEngine`, `MainAppWindow`, `DetailsPanel`, `GeminiAnalyzer`, `GeminiDecisionModule` refactored (method decomposition, Strategy Pattern).** Refactoring for v5.0.1 is complete.                                                 | Focus on SRP, file/class sizes, logging, error handling, readability. `REFACTORING_GUIDELINES.MD`.                                                        |
-| v5.0.2                                                                                  | Planning    | High     | Testing & DX                          | **Implement Unit Test Infrastructure & Initial Coverage**           | Set up `pytest` framework. Write initial unit tests for core logic, utility functions, and key engine components (e.g., `ConfigManager`, `AnalysisEngine` methods, `RulesEngine` condition evaluation). Aim for coverage of refactored areas.                 | `pytest`, `pytest-cov`. Mocking external dependencies (Gemini, PyAutoGUI). Refer to `TECHNICAL_DESIGN.MD` Section 13.                                    |
+| v5.0.2                                                                                  | In Progress | High     | Testing & DX                          | **Implement Unit Test Infrastructure & Initial Coverage**           | Set up `pytest` framework. Write initial unit tests for core logic, utility functions, and key engine components (e.g., `ConfigManager`, `AnalysisEngine` methods, `RulesEngine` condition evaluation). Aim for coverage of refactored areas. **Initial setup and `ConfigManager` tests added.** | `pytest`, `pytest-cov`. Mocking external dependencies (Gemini, PyAutoGUI). Refer to `TECHNICAL_DESIGN.MD` Section 13.                                    |
 | v5.0.3                                                                                  | Planning    | Critical | Testing                               | **v5.0.0 Manual End-to-End (E2E) Testing**                        | Perform comprehensive manual testing of all v5.0.0 features, including the AI-Driven Profile Generator workflow (goal input, plan generation, interactive element definition with AI-assist, profile saving) and execution of AI-generated profiles. | This is a form of End-to-End (E2E) testing, verifying the entire system flow. Focus on stability, usability, and correctness of generated profiles. |
 | **vFuture (Other Enhancements - Post v5.0.0 or Parallel if scope allows)**              |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis                     | Fuzzy Template Matching & Tolerance                               | Allow template matching with varying degrees of tolerance for slight changes in color, rotation, or scale.                                                                                                                                                  | Advanced `OpenCV-Python` techniques.                                                                                                                    |
@@ -106,23 +105,20 @@ This document tracks planned features and their status for the Mark-I visual aut
 
 - **v4.0.0 (Gemini-Powered Visual Intelligence): COMPLETE.**
 - **v5.0.0 (AI-Driven Profile Generation): COMPLETE.**
-  - **Overall Goal for v5.0.0:** Enable Mark-I to generate automation profiles from high-level user goals. **ACHIEVED.**
-  - **Status of Phase 1 (Backend Core):** `Done`.
-  - **Status of Phase 2 (AI-Assist Logic & GUI):** `Done`.
-  - **Status of Phase 3 (Integration & Refinement):** `Done`.
-  - **Status of Phase 4 (Documentation):** `Done`.
 
 **Mark-I v5.0.0, featuring the AI-Driven Profile Generator, is now functionally complete and documented.**
+**Refactoring for v5.0.1 is COMPLETE.**
 
 **Current Focus (v5.0.x):**
 - **v5.0.1 Codebase Refactoring:** **DONE.**
-    - `RulesEngine` (Strategy Pattern for condition evaluation).
-    - `MainAppWindow` (UI population/update decomposition).
-    - `DetailsPanel` (rendering/data retrieval decomposition).
-    - `GeminiAnalyzer` (`query_vision_model` method decomposition).
-    - `GeminiDecisionModule` (`_execute_primitive_sub_action` refactored with Strategy Pattern; `execute_nlu_task`'s recursive helper decomposed).
-    - This completes the planned refactoring for the major engine and UI components for v5.0.1.
-- **v5.0.2 Implement Unit Test Infrastructure & Initial Coverage:** (Status: `Planning`) The next logical step is to begin implementing the unit testing infrastructure and writing tests for the refactored and core components.
+- **v5.0.2 Implement Unit Test Infrastructure & Initial Coverage:** **IN PROGRESS.**
+    - `pytest` framework and `pytest-cov` added to `requirements.txt`.
+    - `tests/` directory structure created.
+    - Initial unit tests for `ConfigManager` (default init, `_resolve_profile_path` with mocking) added to `tests/core/test_config_manager.py`.
+    - `.gitignore` updated for test artifacts.
+    - `TECHNICAL_DESIGN.MD` (Section 13) updated with unit testing strategy.
+    - `DEV_CONFIG.MD` updated.
+    - **Next for v5.0.2:** Write unit tests for `mark_i.ui.gui.gui_utils.parse_bgr_string` and then move to testing the refactored `ConditionEvaluator` classes (mocking their dependencies).
 - **v5.0.3 Manual End-to-End (E2E) Testing:** (Status: `Planning`) After refactoring and initial unit test implementation, this phase involves comprehensive manual testing of all v5.0.0 functionalities to ensure stability, usability, and correctness.
 
 **Future Considerations (Post v5.0.x):**
@@ -131,4 +127,4 @@ This document tracks planned features and their status for the Mark-I visual aut
 - Explore items listed under "vFuture" on the roadmap based on user feedback and project priorities.
 - Continuous performance optimization and expansion of unit test coverage.
 
-The refactoring of `GeminiDecisionModule.execute_nlu_task` and its helper `_recursive_execute_plan_node` is complete. This concludes the planned refactoring efforts for v5.0.1.
+The initial setup for unit testing (v5.0.2) is complete, along with the first tests for `ConfigManager`.
