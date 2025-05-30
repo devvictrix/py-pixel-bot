@@ -6,10 +6,8 @@ import numpy as np
 import abc
 
 from mark_i.engines.action_executor import ActionExecutor
-# Corrected import: DEFAULT_VISUAL_REFINE_MODEL is in gemini_decision_module
-from mark_i.engines.gemini_analyzer import GeminiAnalyzer
-from mark_i.engines.gemini_decision_module import DEFAULT_VISUAL_REFINE_MODEL
-
+# Corrected import: Constants are now in gemini_analyzer
+from mark_i.engines.gemini_analyzer import GeminiAnalyzer, DEFAULT_VISUAL_REFINE_MODEL
 
 from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
 
@@ -199,7 +197,6 @@ class CheckVisualStateExecutor(PrimitiveSubActionExecutorBase):
         if current_step_image_np is None: logger.error(f"{log_prefix}: Primary context image for region '{primary_context_region_name}' is missing."); return PrimitiveSubActionExecuteResult(success=False, boolean_eval_result=False)
         check_prompt = f"Based on the provided image of region '{primary_context_region_name}', is the following condition true or false? Condition: \"{condition_desc}\". Respond with only the single word 'true' or 'false'."
         logger.info(f"{log_prefix}: Evaluating visual state: '{condition_desc}' in region '{primary_context_region_name}'")
-        # DEFAULT_VISUAL_REFINE_MODEL is now imported from this module
         gemini_eval_response = self.gemini_analyzer.query_vision_model(prompt=check_prompt, image_data=current_step_image_np, model_name_override=task_parameters_from_rule.get("visual_refine_model_override", DEFAULT_VISUAL_REFINE_MODEL))
         if gemini_eval_response["status"] == "success" and gemini_eval_response["text_content"]:
             response_text = gemini_eval_response["text_content"].strip().lower()

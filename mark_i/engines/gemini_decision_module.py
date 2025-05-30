@@ -6,8 +6,8 @@ import os
 
 import numpy as np
 
-# DEFAULT_NLU_PLANNING_MODEL and DEFAULT_VISUAL_REFINE_MODEL are defined here
-from mark_i.engines.gemini_analyzer import GeminiAnalyzer # No need to import constants from here
+# Constants are now imported from gemini_analyzer
+from mark_i.engines.gemini_analyzer import GeminiAnalyzer, DEFAULT_NLU_PLANNING_MODEL, DEFAULT_VISUAL_REFINE_MODEL
 from mark_i.engines.action_executor import ActionExecutor
 from mark_i.core.config_manager import ConfigManager
 
@@ -23,10 +23,6 @@ from mark_i.engines.primitive_executors import (
 from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
 
 logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_decision_module")
-
-# Constants moved here as they are specific to GDM's logic
-DEFAULT_NLU_PLANNING_MODEL = "gemini-1.5-flash-latest"
-DEFAULT_VISUAL_REFINE_MODEL = "gemini-1.5-flash-latest"
 
 PREDEFINED_ALLOWED_SUB_ACTIONS: Dict[str, Dict[str, Any]] = {
     "CLICK_DESCRIBED_ELEMENT": {"description": "Clicks an element described textually.", "executor_class": ClickDescribedElementExecutor},
@@ -147,7 +143,6 @@ Expected "parsed_task" for example:
             f'If found, respond ONLY with JSON: {{"found": true, "box": [x,y,w,h], "element_label": "{target_description}", "confidence_score": 0.0_to_1.0}}. The box coordinates [x,y,w,h] must be integers relative to the top-left of the provided image. Ensure width and height are positive.\n'
             f'If not found or ambiguous, respond ONLY with JSON: {{"found": false, "box": null, "element_label": "{target_description}", "reasoning": "why_not_found_or_ambiguous"}}.'
         )
-        # DEFAULT_VISUAL_REFINE_MODEL is now defined in this module
         response = self.gemini_analyzer.query_vision_model(prompt=prompt, image_data=context_image_np, model_name_override=DEFAULT_VISUAL_REFINE_MODEL)
         if response["status"] == "success" and response["json_content"]:
             data = response["json_content"]
@@ -271,7 +266,6 @@ Expected "parsed_task" for example:
             overall_task_result["message"] = "GeminiAnalyzer not available."; logger.error(f"{log_prefix_task}: {overall_task_result['message']}"); return overall_task_result
         nlu_parse_prompt = self._construct_nlu_parse_prompt(natural_language_command)
         nlu_context_image_for_parsing = next(iter(initial_context_images.values()), None) if initial_context_images else None
-        # DEFAULT_NLU_PLANNING_MODEL is now defined in this module
         nlu_response = self.gemini_analyzer.query_vision_model(prompt=nlu_parse_prompt, image_data=nlu_context_image_for_parsing, model_name_override=task_parameters.get("nlu_model_override", DEFAULT_NLU_PLANNING_MODEL))
         if nlu_response["status"] != "success" or not nlu_response["json_content"]:
             overall_task_result["message"] = f"NLU parsing query failed. Status: {nlu_response['status']}, Err: {nlu_response.get('error_message', 'No JSON')}"

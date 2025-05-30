@@ -7,36 +7,28 @@ import os
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig, HarmCategory, HarmBlockThreshold
 from google.generativeai.types import BlockedPromptException, StopCandidateException
-# Removed direct import of Content from google.generativeai.types as it was causing issues.
-# Will use Any or rely on SDK's internal typing for Content where possible for responses.
 from google.api_core import exceptions as google_api_exceptions
 
 from PIL import Image
 import cv2
 import numpy as np
 
-# IMPORTANT: Ensure APP_ROOT_LOGGER_NAME is imported *before* it's used.
 from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
 logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_analyzer")
 
-
-# Fallback for Part type if specific import paths change or fail
+# Fallback for SDK types if specific import paths change or fail
 try:
-    from google.generativeai.types import Part
-    logger.debug("Imported 'Part' from 'google.generativeai.types'")
+    from google.generativeai.types import Content, Part
+    logger.debug("Imported 'Content' and 'Part' from 'google.generativeai.types'")
 except ImportError:
     try:
-        from google.generativeai import Part # Try from top level of the package
-        logger.debug("Imported 'Part' from 'google.generativeai'")
+        from google.generativeai import Content, Part # Try from top level
+        logger.debug("Imported 'Content' and 'Part' from 'google.generativeai'")
     except ImportError:
-        logger.warning("'Part' type not found. Using 'Any' for type hints involving 'Part'.")
-        Part = Any # Fallback
+        logger.warning("'Content' and/or 'Part' types not found. Using 'Any' for type hints.")
+        Content = Any
+        Part = Any
 
-# Fallback for Content type
-# The Content type is mainly for type hinting the response from generate_content.
-# If it's not easily importable, using 'Any' for the hint is acceptable for now,
-# as the code primarily interacts with its attributes (candidates, parts, text).
-Content = Any # Using Any as a robust fallback for Content type
 
 DEFAULT_SAFETY_SETTINGS_DATA: List[Dict[str, Any]] = [
     {"category": HarmCategory.HARM_CATEGORY_HARASSMENT, "threshold": HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE},
@@ -46,10 +38,16 @@ DEFAULT_SAFETY_SETTINGS_DATA: List[Dict[str, Any]] = [
 ]
 DEFAULT_GENERATION_CONFIG = GenerationConfig()
 
+# Default model names, now housed here as GeminiAnalyzer is the direct user.
+DEFAULT_NLU_PLANNING_MODEL = "gemini-1.5-flash-latest"
+DEFAULT_VISUAL_REFINE_MODEL = "gemini-1.5-flash-latest"
+
 
 class GeminiAnalyzer:
-    def __init__(self, api_key: str, default_model_name: str = "gemini-1.5-flash-latest"):
+    def __init__(self, api_key: str, default_model_name: str = "gemini-1.5-flash-latest"): # This default_model_name is for generic queries
         self.api_key = api_key
+        # default_model_name passed to __init__ is for general vision queries by RulesEngine.
+        # Specific tasks like NLU planning or visual refinement might use their own defaults defined above.
         self.default_model_name = default_model_name
         self.client_initialized = False
         self.safety_settings_data = DEFAULT_SAFETY_SETTINGS_DATA
@@ -72,10 +70,16 @@ class GeminiAnalyzer:
             else:
                 logger.error("'SafetySetting' class not found. Safety settings may not be applied.")
             self.client_initialized = True
-            logger.info(f"GeminiAnalyzer initialized. Default model: '{self.default_model_name}'. Client configured.")
-            if self.safety_settings and hasattr(self.safety_settings[0], 'harm_category') and hasattr(self.safety_settings[0].harm_category, 'name'): # Check if valid
-                 logger.debug(f"Using safety settings: {[(s.harm_category.name, s.threshold.name) for s in self.safety_settings]}") # type: ignore
-            else: logger.warning("Default safety settings list is empty, None or malformed.")
+            logger.info(f"GeminiAnalyzer initialized. Default query model: '{self.default_model_name}'. Client configured.")
+            if self.safety_settings:
+                # Make safety settings logging more robust
+                log_ss = []
+                for s_obj in self.safety_settings:
+                    cat_name = getattr(getattr(s_obj, 'harm_category', None), 'name', str(getattr(s_obj, 'harm_category', 'UnknownCategory')))
+                    thr_name = getattr(getattr(s_obj, 'threshold', None), 'name', str(getattr(s_obj, 'threshold', 'UnknownThreshold')))
+                    log_ss.append((cat_name, thr_name))
+                logger.debug(f"Using safety settings: {log_ss}")
+            else: logger.warning("Default safety settings list is empty or None.")
             logger.debug(f"Using default generation config: {self.generation_config}")
         except Exception as e:
             self.client_initialized = False
