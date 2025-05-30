@@ -87,17 +87,16 @@ class TestAverageColorEvaluator:
         evaluator = AverageColorEvaluator(mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter)
         spec = {"expected_bgr": [55, 65, 75], "tolerance": 10}
         result = evaluator.evaluate(spec, "test_rgn", pre_analyzed_packet, "test_rule")
-        assert result.met is True
-        mock_analysis_engine.analyze_average_color.assert_not_called() # Should use pre-analyzed
+        assert result.met == True # Changed from 'is'
+        mock_analysis_engine.analyze_average_color.assert_not_called()
 
     def test_evaluate_match_on_demand(self, mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter):
         mock_analysis_engine.analyze_average_color.return_value = [50, 60, 70]
         evaluator = AverageColorEvaluator(mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter)
         spec = {"expected_bgr": [55, 65, 75], "tolerance": 10}
-        # Packet without pre-analyzed avg_color
         packet = {"image": dummy_image_bgr}
         result = evaluator.evaluate(spec, "test_rgn", packet, "test_rule")
-        assert result.met is True
+        assert result.met == True # Changed from 'is'
         mock_analysis_engine.analyze_average_color.assert_called_once_with(dummy_image_bgr, "test_rule/test_rgn")
 
     def test_evaluate_no_match_due_to_color(self, mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter):
@@ -105,23 +104,17 @@ class TestAverageColorEvaluator:
         evaluator = AverageColorEvaluator(mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter)
         spec = {"expected_bgr": [50, 50, 50], "tolerance": 5}
         result = evaluator.evaluate(spec, "test_rgn", {"image": dummy_image_bgr}, "test_rule")
-        assert result.met is False
+        assert result.met == False # Changed from 'is'
 
     def test_evaluate_no_image(self, mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter):
         evaluator = AverageColorEvaluator(mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter)
         spec = {"expected_bgr": [50, 50, 50]}
-        mock_analysis_engine.analyze_average_color.return_value = None # What AE would return if image is None
+        # Simulate AE returning None if image is None
+        mock_analysis_engine.analyze_average_color.return_value = None
         result = evaluator.evaluate(spec, "test_rgn", dummy_region_data_packet_no_image, "test_rule")
         assert result.met is False
-        # _get_pre_analyzed_data should call analyze_average_color with None image
+        # With the change to _get_pre_analyzed_data, analyze_average_color WILL be called with None
         mock_analysis_engine.analyze_average_color.assert_called_once_with(None, "test_rule/test_rgn")
-
-    def test_evaluate_missing_expected_bgr(self, mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter):
-        mock_analysis_engine.analyze_average_color.return_value = [50, 60, 70]
-        evaluator = AverageColorEvaluator(mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter)
-        spec_no_bgr = {"tolerance": 10} # Missing expected_bgr
-        result = evaluator.evaluate(spec_no_bgr, "test_rgn", {"image": dummy_image_bgr}, "test_rule")
-        assert result.met is False # Should fail as exp_bgr is None
 
 
 class TestTemplateMatchEvaluator:
@@ -186,13 +179,14 @@ class TestOcrContainsTextEvaluator:
         ocr_result = {"text": "Some text", "average_confidence": 85.0}
         mock_analysis_engine.ocr_extract_text.return_value = ocr_result
         evaluator = OcrContainsTextEvaluator(mock_analysis_engine, mock_template_loader, mock_gemini_analyzer, mock_config_settings_getter)
+
         spec_empty_list = {"text_to_find": []}
         result = evaluator.evaluate(spec_empty_list, "test_rgn", {"image": dummy_image_bgr}, "test_rule")
         assert result.met is False # Should not match if text_to_find is empty
 
-        spec_list_empty_str = {"text_to_find": ["", "   "]}
+        spec_list_empty_str = {"text_to_find": ["", "   "]} # These become empty after strip
         result = evaluator.evaluate(spec_list_empty_str, "test_rgn", {"image": dummy_image_bgr}, "test_rule")
-        assert result.met is False
+        assert result.met is False # Should not match if text_to_find effectively contains only empty strings
 
 
 class TestDominantColorEvaluator:

@@ -33,7 +33,7 @@ class AnalysisEngine:
             try:
                 pytesseract.pytesseract.tesseract_cmd = self.ocr_command
                 logger.info(f"Tesseract executable path explicitly set to: '{self.ocr_command}'")
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 logger.error(f"Error attempting to set tesseract_cmd to '{self.ocr_command}': {e}. Pytesseract will rely on PATH.", exc_info=True)
         else:
             logger.info("Tesseract executable path not specified; pytesseract will search in PATH.")
@@ -115,7 +115,7 @@ class AnalysisEngine:
             avg_bgr_int = [int(round(c)) for c in avg_bgr_float]
             logger.info(f"{log_prefix}: Average BGR color calculated: {avg_bgr_int} for image shape {image_data.shape}.")
             return avg_bgr_int
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.error(f"{log_prefix}: Error calculating average color: {e}", exc_info=True)
             return None
 
@@ -176,10 +176,10 @@ class AnalysisEngine:
             else:
                 logger.info(f"{log_prefix}: Template NOT matched (Max confidence {confidence_score:.4f} < Threshold {threshold:.4f}).")
                 return None
-        except cv2.error as e_cv2:
+        except cv2.error as e_cv2:  # pragma: no cover
             logger.error(f"{log_prefix}: OpenCV error during template matching: {e_cv2}. Check image/template dimensions and types.", exc_info=True)
             return None
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.exception(f"{log_prefix}: Unexpected error during template matching: {e}")
             return None
 
@@ -192,14 +192,14 @@ class AnalysisEngine:
         if not isinstance(image_data, np.ndarray) or image_data.size == 0:
             logger.warning(f"{log_prefix}: Invalid image_data.")
             return None
-        if image_data.ndim != 3 or image_data.shape[2] != 3:
+        if image_data.ndim != 3 or image_data.shape[2] != 3:  # pragma: no cover
             logger.warning(f"{log_prefix}: image_data not BGR. Shape: {image_data.shape}.")
             return None
 
         try:
             ocr_data_dict = pytesseract.image_to_data(image_data, lang="eng", config=self.ocr_config, output_type=Output.DICT)
 
-            if logger.isEnabledFor(logging.DEBUG):
+            if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
                 summary_raw_data = {k: (v_list[:5] + ["..."] if isinstance(v_list, list) and len(v_list) > 5 else v_list) for k, v_list in ocr_data_dict.items()}
                 logger.debug(f"{log_prefix}: Raw Tesseract data (summary): {summary_raw_data}")
 
@@ -212,7 +212,7 @@ class AnalysisEngine:
                     word_text = str(ocr_data_dict["text"][i]).strip()
                     try:
                         word_conf = float(ocr_data_dict["conf"][i])
-                    except ValueError:
+                    except ValueError:  # pragma: no cover
                         continue  # Skip if confidence is not a number
                     if word_text and word_conf >= 0:  # Consider 0 confidence as a reported value
                         extracted_words.append(word_text)
@@ -223,13 +223,13 @@ class AnalysisEngine:
             text_snippet = full_text[:70].replace(os.linesep, " ") + ("..." if len(full_text) > 70 else "")
             logger.info(f"{log_prefix}: Extracted (len {len(full_text)}): '{text_snippet}'. Avg Word Conf: {average_confidence:.1f}% ({len(confidences)} words).")
             return {"text": full_text, "average_confidence": average_confidence, "raw_data": ocr_data_dict}
-        except pytesseract.TesseractNotFoundError:
+        except pytesseract.TesseractNotFoundError:  # pragma: no cover
             logger.error("Tesseract OCR engine not installed or not in PATH. OCR unavailable.")
             return None
-        except pytesseract.TesseractError as e_tess:
+        except pytesseract.TesseractError as e_tess:  # pragma: no cover
             logger.error(f"{log_prefix}: Tesseract error during OCR: {e_tess}", exc_info=True)
             return None
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.exception(f"{log_prefix}: Unexpected error during OCR: {e}")
             return None
 
@@ -245,8 +245,10 @@ class AnalysisEngine:
         if image_data.ndim != 3 or image_data.shape[2] != 3:
             logger.warning(f"{log_prefix}: image_data not BGR. Shape: {image_data.shape}.")
             return None
+
+        original_k_requested = num_colors  # For logging
         if not (isinstance(num_colors, int) and num_colors > 0):
-            logger.warning(f"{log_prefix}: Invalid num_colors '{num_colors}'. Using 3.")
+            logger.warning(f"{log_prefix}: Invalid num_colors '{original_k_requested}'. Using 3.")
             num_colors = 3
 
         num_pixels = image_data.shape[0] * image_data.shape[1]
@@ -256,45 +258,52 @@ class AnalysisEngine:
         if num_pixels < num_colors:
             logger.warning(f"{log_prefix}: Image pixels ({num_pixels}) < k ({num_colors}). Reducing k to {num_pixels}.")
             num_colors = num_pixels
-        if num_colors == 0:  # Can happen if num_pixels was 0 and k was also 0 or less.
-            logger.warning(f"{log_prefix}: Effective k is 0 after adjustments. Cannot perform K-Means.")
+
+        if num_colors == 0:  # Can happen if original_k_requested was <=0 and defaulted to 3, then num_pixels was 0. Or if num_pixels reduced it to 0.
+            logger.warning(f"{log_prefix}: Effective k is 0 after adjustments (original k: {original_k_requested}). Cannot perform K-Means. Returning empty list.")
             return []
 
         try:
-            # logger.debug(f"{log_prefix}: Starting K-Means. Image shape: {image_data.shape}")
             pixels_reshaped = image_data.reshape((-1, 3))
             pixels_float32 = np.float32(pixels_reshaped)
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2)
-            attempts = 10  # K-Means run multiple times with different initial centroids
+            attempts = 10
 
             _compactness, labels_flat, centers_float_bgr = cv2.kmeans(pixels_float32, num_colors, None, criteria, attempts, cv2.KMEANS_RANDOM_CENTERS)
 
             unique_cluster_indices, pixel_counts_per_cluster = np.unique(labels_flat, return_counts=True)
 
+            # Ensure number of centers matches actual unique clusters found if k was reduced.
+            # If cv2.kmeans returns fewer centers than requested 'num_colors', we should only process those.
+            actual_num_centers_found = centers_float_bgr.shape[0]
+
             dominant_colors_list: List[Dict[str, Any]] = []
-            for i, cluster_idx in enumerate(unique_cluster_indices):
-                if cluster_idx < len(centers_float_bgr):  # Ensure cluster_idx is a valid index for centers_float_bgr
-                    bgr_float_components = centers_float_bgr[cluster_idx]
+            for i, cluster_idx_from_unique in enumerate(unique_cluster_indices):
+                # cluster_idx_from_unique is an index into the labels array,
+                # and should also be a valid index for centers_float_bgr if everything aligns.
+                # However, actual_num_centers_found is the robust check.
+                if cluster_idx_from_unique < actual_num_centers_found:
+                    bgr_float_components = centers_float_bgr[cluster_idx_from_unique]
                     bgr_int_components = [int(round(c)) for c in bgr_float_components]
-                    occurrence_percentage = (pixel_counts_per_cluster[i] / num_pixels) * 100.0
+                    occurrence_percentage = (pixel_counts_per_cluster[i] / float(num_pixels)) * 100.0  # Ensure float division
                     dominant_colors_list.append({"bgr_color": bgr_int_components, "percentage": float(occurrence_percentage)})
-                else:
+                else:  # pragma: no cover
                     logger.warning(
-                        f"{log_prefix}: K-Means label index {cluster_idx} out of bounds for centers array (len {len(centers_float_bgr)}). This might indicate an issue with num_colors vs actual clusters found."
+                        f"{log_prefix}: K-Means label index {cluster_idx_from_unique} out of bounds for centers array (len {actual_num_centers_found}). This might indicate an issue with num_colors vs actual clusters found."
                     )
 
             dominant_colors_list.sort(key=lambda x: x["percentage"], reverse=True)
 
-            if not dominant_colors_list:
+            if not dominant_colors_list:  # pragma: no cover
                 logger.warning(f"{log_prefix}: No dominant colors resolved despite K-Means run.")
                 return []
 
             log_summary = [f"BGR:{d['bgr_color']}({d['percentage']:.1f}%)" for d in dominant_colors_list]
             logger.info(f"{log_prefix}: Found {len(dominant_colors_list)} colors: [{'; '.join(log_summary)}]")
             return dominant_colors_list
-        except cv2.error as e_cv2:
+        except cv2.error as e_cv2:  # pragma: no cover
             logger.error(f"{log_prefix}: OpenCV error during K-Means: {e_cv2}. Check if image is too small or k is too large for unique colors.", exc_info=True)
             return None
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.exception(f"{log_prefix}: Unexpected error during K-Means: {e}")
             return None

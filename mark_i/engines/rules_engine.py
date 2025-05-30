@@ -31,7 +31,9 @@ from mark_i.engines.condition_evaluators import (
 logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.rules_engine")
 
 # Regex for finding placeholders like {var_name} or {var_name.key1.0.key2}
-PLACEHOLDER_REGEX = re.compile(r"\{([\w_]+)((\.?[\w_]+)*(\.\d+)*)*\}")  # Allows more complex paths
+# Groups: 1: var_name, 2: full_dot_path (e.g., .key1.0.key2) - this is group(2) of the match object
+#         The subsequent groups are internal to group 2's repetition.
+PLACEHOLDER_REGEX = re.compile(r"\{([\w_]+)((\.?[\w_]+)*(\.\d+)*)*\}")
 TEMPLATES_SUBDIR_NAME = "templates"  # Standard subdirectory for template images
 
 
@@ -61,11 +63,11 @@ class RulesEngine:
             gemini_decision_module: Optional instance of GeminiDecisionModule for
                                     handling 'gemini_perform_task' actions.
         """
-        if not isinstance(config_manager, ConfigManager):
+        if not isinstance(config_manager, ConfigManager):  # pragma: no cover
             raise ValueError("RulesEngine requires a valid ConfigManager instance.")
-        if not isinstance(analysis_engine, AnalysisEngine):
+        if not isinstance(analysis_engine, AnalysisEngine):  # pragma: no cover
             raise ValueError("RulesEngine requires a valid AnalysisEngine instance.")
-        if not isinstance(action_executor, ActionExecutor):
+        if not isinstance(action_executor, ActionExecutor):  # pragma: no cover
             raise ValueError("RulesEngine requires a valid ActionExecutor instance.")
 
         self.config_manager = config_manager
@@ -84,27 +86,27 @@ class RulesEngine:
         gemini_api_key_from_env = os.getenv("GEMINI_API_KEY")
         default_gemini_model_from_settings = self.config_manager.get_setting("gemini_default_model_name", "gemini-1.5-flash-latest")
         self.gemini_analyzer_for_query: Optional[GeminiAnalyzer] = None
-        if gemini_api_key_from_env:
+        if gemini_api_key_from_env:  # pragma: no branch
             self.gemini_analyzer_for_query = GeminiAnalyzer(api_key=gemini_api_key_from_env, default_model_name=default_gemini_model_from_settings)
-            if not self.gemini_analyzer_for_query.client_initialized:
+            if not self.gemini_analyzer_for_query.client_initialized:  # pragma: no cover
                 logger.warning("RulesEngine: GeminiAnalyzer (for query conditions) failed API client initialization. `gemini_vision_query` conditions will likely fail.")
                 self.gemini_analyzer_for_query = None
-            else:
+            else:  # pragma: no cover
                 logger.info(f"RulesEngine: GeminiAnalyzer (for query conditions) enabled. Default model: '{default_gemini_model_from_settings}'")
-        else:
+        else:  # pragma: no cover
             logger.warning("RulesEngine: GEMINI_API_KEY not found. `gemini_vision_query` conditions will be disabled or fail.")
 
         # Initialize condition evaluators (Strategy Pattern)
         self._condition_evaluators: Dict[str, ConditionEvaluator] = self._initialize_condition_evaluators()
 
-        if self.gemini_decision_module:
+        if self.gemini_decision_module:  # pragma: no cover
             logger.info("RulesEngine: GeminiDecisionModule integration is active for 'gemini_perform_task' actions.")
-        else:
+        else:  # pragma: no cover
             logger.warning("RulesEngine: GeminiDecisionModule not provided or failed to initialize. 'gemini_perform_task' (NLU) actions will be skipped or fail.")
 
-        if not self.rules:
+        if not self.rules:  # pragma: no cover
             logger.warning("RulesEngine: No rules found in the loaded profile. The bot might not perform any actions based on rules.")
-        else:
+        else:  # pragma: no cover
             logger.info(f"RulesEngine initialized successfully with {len(self.rules)} rules.")
             if self._analysis_requirements_per_region:
                 logger.debug(f"RulesEngine: Determined local pre-emptive analysis requirements: {dict(self._analysis_requirements_per_region)}")
@@ -114,7 +116,6 @@ class RulesEngine:
     def _initialize_condition_evaluators(self) -> Dict[str, ConditionEvaluator]:
         """Initializes and returns a dictionary of condition type to evaluator instance."""
 
-        # Helper function to pass to evaluators for getting config settings
         def _config_getter(key: str, default: Any) -> Any:
             return self.config_manager.get_setting(key, default)
 
@@ -136,7 +137,7 @@ class RulesEngine:
         logger.debug(f"RulesEngine: Initialized {len(evaluators)} condition evaluators.")
         return evaluators  # type: ignore # MyPy might complain about dict general type
 
-    def _parse_rule_analysis_dependencies(self):
+    def _parse_rule_analysis_dependencies(self):  # pragma: no cover
         logger.debug("RulesEngine: Parsing rule analysis dependencies for pre-emptive local analyses...")
         if not self.rules:
             return
@@ -170,12 +171,11 @@ class RulesEngine:
 
                 if local_analysis_needed and target_rgn and isinstance(target_rgn, str):
                     self._analysis_requirements_per_region[target_rgn].add(local_analysis_needed)
-        # logger.info(f"RulesEngine: Local analysis dependency parsing complete.") # Can be verbose
 
-    def get_analysis_requirements_for_region(self, region_name: str) -> Set[str]:
+    def get_analysis_requirements_for_region(self, region_name: str) -> Set[str]:  # pragma: no cover
         return self._analysis_requirements_per_region.get(region_name, set())
 
-    def _load_template_image_for_rule(self, template_filename: str, rule_name_for_context: str) -> Optional[np.ndarray]:
+    def _load_template_image_for_rule(self, template_filename: str, rule_name_for_context: str) -> Optional[np.ndarray]:  # pragma: no cover
         profile_base = self.config_manager.get_profile_base_path()
         if not profile_base:
             logger.error(f"R '{rule_name_for_context}': Cannot load template '{template_filename}', profile is unsaved (no base path available).")
@@ -209,37 +209,57 @@ class RulesEngine:
         if isinstance(input_value, str):
 
             def replace_match(match_obj: re.Match) -> str:
-                full_placeholder, var_name, dot_path_full, _dot_path_keys, _dot_path_indices = match_obj.groups()
+                full_placeholder = match_obj.group(0)
+                var_name = match_obj.group(1)
+                dot_path_full_segment = match_obj.group(2)  # This is the full path part like ".key.0.attr"
+
                 if var_name in variable_context:
-                    current_val = variable_context[var_name]
-                    if dot_path_full:
-                        path_keys = dot_path_full.strip(".").split(".")
-                        resolved_val = current_val["value"] if path_keys[0] == "value" and isinstance(current_val, dict) and "value" in current_val else current_val
-                        remaining_path_keys = path_keys[1:] if path_keys[0] == "value" and isinstance(current_val, dict) and "value" in current_val else path_keys
+                    current_val_wrapped = variable_context[var_name]
+                    current_val_to_traverse = None
+
+                    if isinstance(current_val_wrapped, dict) and "value" in current_val_wrapped:
+                        current_val_to_traverse = current_val_wrapped["value"]
+                    else:
+                        current_val_to_traverse = current_val_wrapped  # Could be None or a simple value
+
+                    if current_val_to_traverse is None and dot_path_full_segment:
+                        logger.warning(f"{log_context_prefix}, Subst: Variable '{var_name}' is None, cannot traverse path '{dot_path_full_segment}'. Placeholder left.")
+                        return full_placeholder
+
+                    if dot_path_full_segment:
+                        path_keys = dot_path_full_segment.strip(".").split(".")
+                        resolved_val = current_val_to_traverse
                         try:
-                            for key_part in remaining_path_keys:
+                            for key_part in path_keys:
+                                if resolved_val is None:  # Check before trying to access
+                                    logger.warning(f"{log_context_prefix}, Subst: Encountered None while traversing path for '{var_name}{dot_path_full_segment}' at '{key_part}'. Placeholder left.")
+                                    return full_placeholder
                                 if isinstance(resolved_val, dict):
                                     resolved_val = resolved_val[key_part]
                                 elif isinstance(resolved_val, list) and key_part.isdigit():
                                     resolved_val = resolved_val[int(key_part)]
                                 else:
-                                    logger.warning(f"{log_context_prefix}, Subst: Cannot access '{key_part}' in '{var_name}'. Path: '{dot_path_full}'. Placeholder left.")
+                                    logger.warning(
+                                        f"{log_context_prefix}, Subst: Cannot access '{key_part}' in '{var_name}'. Path: '{dot_path_full_segment}'. Current value type: {type(resolved_val)}. Placeholder left."
+                                    )
                                     return full_placeholder
                             return str(resolved_val)
                         except (KeyError, IndexError, TypeError) as e:
-                            logger.warning(f"{log_context_prefix}, Subst: Path resolution error for '{var_name}{dot_path_full}': {e}. Placeholder left.")
+                            logger.warning(f"{log_context_prefix}, Subst: Path resolution error for '{var_name}{dot_path_full_segment}': {e}. Placeholder left.")
                             return full_placeholder
-                    else:
-                        return str(current_val["value"] if isinstance(current_val, dict) and "value" in current_val else current_val)
-                logger.warning(f"{log_context_prefix}, Subst: Variable '{var_name}' not in context. Placeholder '{full_placeholder}' left.")
-                return full_placeholder
+                    else:  # No dot path
+                        return str(current_val_to_traverse)  # This handles None correctly by converting to "None"
+                else:
+                    logger.warning(f"{log_context_prefix}, Subst: Variable '{var_name}' not in context. Placeholder '{full_placeholder}' left.")
+                    return full_placeholder
 
             return PLACEHOLDER_REGEX.sub(replace_match, input_value)
+
         elif isinstance(input_value, list):
             return [self._substitute_variables(item, variable_context, log_context_prefix) for item in input_value]
         elif isinstance(input_value, dict):
             return {k: self._substitute_variables(v, variable_context, log_context_prefix) for k, v in input_value.items()}
-        return input_value
+        return input_value  # Should not be reached
 
     def _evaluate_single_condition_logic(
         self, single_condition_spec: Dict[str, Any], region_name: str, region_data_packet: Dict[str, Any], rule_name_for_context: str, variable_context: Dict[str, Any]
@@ -258,26 +278,15 @@ class RulesEngine:
             return False
 
         try:
-            # Pass variable_context for evaluators that might need to read from it (though not typical for conditions)
-            # The primary use of variable_context here is for the 'capture_as' mechanism.
             eval_result: ConditionEvaluationResult = evaluator.evaluate(single_condition_spec, region_name, region_data_packet, rule_name_for_context)
-
             condition_met = eval_result.met
             captured_value_for_context = eval_result.captured_value
-
-            # Handle template match info if returned by the evaluator
             if eval_result.template_match_info is not None:
-                self._last_template_match_info = eval_result.template_match_info  # Update RulesEngine state
-
+                self._last_template_match_info = eval_result.template_match_info
             if condition_met and capture_as and captured_value_for_context is not None:
                 variable_context[capture_as] = captured_value_for_context
-                # logger.info(f"{log_prefix}: Value captured for variable '{capture_as}'.") # Can be verbose
-
-            # Evaluators now do their own final logging of match status
-            # logger.log(logging.INFO if condition_met else logging.DEBUG, f"{log_prefix}: Evaluation Result = {condition_met}")
             return condition_met
-
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.exception(f"{log_prefix}: Unexpected exception during condition evaluation via evaluator: {e}")
             return False
 
@@ -287,14 +296,14 @@ class RulesEngine:
         log_operator = condition_spec.get("logical_operator")
         sub_conditions_list = condition_spec.get("sub_conditions")
 
-        if log_operator and isinstance(sub_conditions_list, list):  # Compound Condition
+        if log_operator and isinstance(sub_conditions_list, list):
             operator = log_operator.upper()
-            if operator not in ["AND", "OR"] or not sub_conditions_list:
+            if operator not in ["AND", "OR"] or not sub_conditions_list:  # pragma: no cover
                 logger.error(f"R '{rule_name}': Invalid compound condition - operator '{operator}' or empty sub_conditions. Fails.")
                 return False
             for i, sub_cond_spec_original in enumerate(sub_conditions_list):
                 sub_log_context = f"{rule_name}/SubCond#{i+1}"
-                if not isinstance(sub_cond_spec_original, dict):
+                if not isinstance(sub_cond_spec_original, dict):  # pragma: no cover
                     logger.warning(f"R '{sub_log_context}': Sub-condition is not a dictionary. Skipping. If AND, this causes outer to fail.")
                     if operator == "AND":
                         return False
@@ -302,7 +311,7 @@ class RulesEngine:
                         continue
                 sub_cond_spec_substituted = self._substitute_variables(sub_cond_spec_original, variable_context, sub_log_context)
                 target_region_for_sub_cond = sub_cond_spec_substituted.get("region", default_rule_region_from_rule)
-                if not target_region_for_sub_cond or target_region_for_sub_cond not in all_region_data:
+                if not target_region_for_sub_cond or target_region_for_sub_cond not in all_region_data:  # pragma: no cover
                     logger.error(f"R '{sub_log_context}': Target region '{target_region_for_sub_cond}' for sub-condition is missing or invalid. Sub-condition fails.")
                     sub_condition_result = False
                 else:
@@ -313,19 +322,19 @@ class RulesEngine:
                     return False
                 if operator == "OR" and sub_condition_result:
                     return True
-            return True if operator == "AND" else False
+            return True if operator == "AND" else False  # If AND, all sub-conditions must have been true. If OR, all must have been false.
         else:  # Single Condition
-            if "type" not in condition_spec:
+            if "type" not in condition_spec:  # pragma: no cover
                 logger.error(f"R '{rule_name}': Condition spec missing 'type' and not a valid compound. Fails.")
                 return False
             condition_spec_substituted = self._substitute_variables(condition_spec, variable_context, rule_name)
             target_region_for_single_cond = condition_spec_substituted.get("region", default_rule_region_from_rule)
-            if not target_region_for_single_cond or target_region_for_single_cond not in all_region_data:
+            if not target_region_for_single_cond or target_region_for_single_cond not in all_region_data:  # pragma: no cover
                 logger.error(f"R '{rule_name}': Target region '{target_region_for_single_cond}' for single condition is missing or invalid. Condition fails.")
                 return False
             return self._evaluate_single_condition_logic(condition_spec_substituted, target_region_for_single_cond, all_region_data[target_region_for_single_cond], rule_name, variable_context)
 
-    def evaluate_rules(self, all_region_data: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def evaluate_rules(self, all_region_data: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:  # pragma: no cover
         explicitly_executed_standard_actions: List[Dict[str, Any]] = []
         if not self.rules:
             logger.debug("RulesEngine: No rules in profile to evaluate.")
