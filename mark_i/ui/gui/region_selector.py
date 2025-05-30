@@ -51,14 +51,13 @@ class RegionSelectorWindow(ctk.CTkToplevel):
 
         self._is_direct_image_input_mode = direct_image_input_pil is not None
 
-        # Wrap the setup in a try-except to ensure window can be closed on critical init failure
         try:
             self._setup_canvas_and_image(direct_image_input_pil)
             if hasattr(self, "canvas") and self.canvas:
                 self._setup_controls_and_bindings()
                 if self.is_editing_existing and self.original_existing_region_data:
                     self._pre_draw_existing_region()
-            else: # If canvas setup failed, ensure destruction
+            else:
                 raise RuntimeError("Canvas setup failed critically.")
 
             logger.info(f"RegionSelectorWindow initialized. Editing: {self.is_editing_existing}. Source: {'Provided Image' if direct_image_input_pil else 'Live Screen'}.")
@@ -66,9 +65,8 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             self.focus_force()
         except Exception as e_init:
             logger.critical(f"Critical error during RegionSelectorWindow __init__: {e_init}", exc_info=True)
-            messagebox.showerror("Region Selector Error", f"Failed to initialize Region Selector:\n{e_init}", parent=self.master)
-            self.after(10, self.destroy_selector_immediately) # Schedule destroy
-
+            messagebox.showerror("Region Selector Error", f"Failed to initialize Region Selector:\n{e_init}", parent=self.master if self.master else None)
+            self.after(10, self.destroy_selector_immediately)
 
     def _setup_canvas_and_image(self, direct_image_input_pil: Optional[Image.Image]):
         screen_interaction_alpha = 0.25
@@ -77,7 +75,6 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         if self._is_direct_image_input_mode:
             if not direct_image_input_pil:
                 logger.error("RegionSelector: Direct image input mode selected, but no PIL image provided.")
-                # This error should ideally be caught by the try-except in __init__
                 raise ValueError("Direct image input mode selected, but no PIL image provided.")
             logger.debug("RegionSelector: Using direct PIL image input.")
             self.image_source_pil = direct_image_input_pil.copy()
@@ -105,6 +102,9 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             raise RuntimeError("Could not obtain image for region selection.")
 
         img_orig_w, img_orig_h = self.image_source_pil.size
+        if img_orig_w <= 0 or img_orig_h <= 0:
+            logger.error(f"RegionSelector: Image source has invalid dimensions ({img_orig_w}x{img_orig_h}). Cannot proceed.")
+            raise RuntimeError(f"Image source has invalid dimensions ({img_orig_w}x{img_orig_h}).")
 
         if self._is_direct_image_input_mode:
             screen_w = self.winfo_screenwidth()
@@ -115,14 +115,12 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             self.image_display_scale_factor = 1.0
             if img_orig_w > max_win_w or img_orig_h > max_win_h:
                 self.image_display_scale_factor = min(max_win_w / img_orig_w, max_win_h / img_orig_h)
-            if self.image_display_scale_factor <= 0: self.image_display_scale_factor = 1.0 # Prevent zero/negative scale
+            if self.image_display_scale_factor <= 0:
+                self.image_display_scale_factor = 1.0
 
             self.canvas_display_width = int(img_orig_w * self.image_display_scale_factor)
             self.canvas_display_height = int(img_orig_h * self.image_display_scale_factor)
-            img_for_canvas_pil = self.image_source_pil.resize(
-                (max(1, self.canvas_display_width), max(1, self.canvas_display_height)),
-                Image.Resampling.LANCZOS
-            )
+            img_for_canvas_pil = self.image_source_pil.resize((max(1, self.canvas_display_width), max(1, self.canvas_display_height)), Image.Resampling.LANCZOS)
         else:
             self.image_display_scale_factor = 1.0
             self.canvas_display_width = img_orig_w
@@ -189,10 +187,9 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             self.btn_confirm_selection = ctk.CTkButton(controls_frame, text="Confirm Selection", command=self._trigger_confirmation_dialog, state="disabled")
             self.btn_confirm_selection.grid(row=0, column=2, padx=5)
             ctk.CTkButton(controls_frame, text="Cancel", command=self._cancel_selection).grid(row=0, column=1, padx=5)
-        
-        if not self.overrideredirect() and not hasattr(self, 'btn_confirm_selection'):
-             logger.error("Button 'btn_confirm_selection' was not initialized for non-overlay mode.")
 
+        if not self.overrideredirect() and not hasattr(self, "btn_confirm_selection"):
+            logger.error("Button 'btn_confirm_selection' was not initialized for non-overlay mode.")
 
     def _center_on_master_screen(self):
         self.update_idletasks()
@@ -216,6 +213,7 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         y_orig = self.original_existing_region_data.get("y", DEFAULT_NEW_REGION_Y)
         w_orig = self.original_existing_region_data.get("width", DEFAULT_NEW_REGION_WIDTH)
         h_orig = self.original_existing_region_data.get("height", DEFAULT_NEW_REGION_HEIGHT)
+
         if not all(isinstance(v, int) for v in [x_orig, y_orig, w_orig, h_orig]):
             logger.warning(f"Pre-draw: Existing region '{self.original_existing_region_data.get('name')}' has invalid coordinate/dimension types. Using defaults.")
             x_orig, y_orig, w_orig, h_orig = DEFAULT_NEW_REGION_X, DEFAULT_NEW_REGION_Y, DEFAULT_NEW_REGION_WIDTH, DEFAULT_NEW_REGION_HEIGHT
@@ -234,15 +232,11 @@ class RegionSelectorWindow(ctk.CTkToplevel):
 
         if self.current_selection_rect_id:
             self.canvas.delete(self.current_selection_rect_id)
-        
-        # Removed fill="#00FF0030" to avoid TclError for invalid color name
-        # Tkinter canvas fill does not support alpha in color strings like #RRGGBBAA.
-        # For a semi-transparent effect, stippling or other methods would be needed.
-        # Keeping it simple with just an outline.
+
         self.current_selection_rect_id = self.canvas.create_rectangle(x1_canvas, y1_canvas, x2_canvas, y2_canvas, outline="lime green", width=3)
-        
+
         self.selected_coords_on_image = (x_orig, y_orig, x_orig + w_orig, y_orig + h_orig)
-        if hasattr(self, 'btn_confirm_selection') and self.btn_confirm_selection:
+        if hasattr(self, "btn_confirm_selection") and self.btn_confirm_selection:
             self.btn_confirm_selection.configure(state="normal")
         logger.info(
             f"RegionSelector: Pre-drew existing region '{self.original_existing_region_data.get('name')}' at canvas ({x1_canvas},{y1_canvas})-({x2_canvas},{y2_canvas}). Original image coords: {self.selected_coords_on_image}"
@@ -254,15 +248,14 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             if self.current_selection_rect_id:
                 self.canvas.delete(self.current_selection_rect_id)
             self.current_selection_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline="red", width=2, dash=(5, 3))
-            if hasattr(self, 'btn_confirm_selection') and self.btn_confirm_selection:
+            if hasattr(self, "btn_confirm_selection") and self.btn_confirm_selection:
                 self.btn_confirm_selection.configure(state="disabled")
             if self.instruction_label and self.instruction_label.winfo_exists():
                 self.instruction_label.configure(text="Dragging... Release mouse to finalize selection.")
         except Exception as e:
             logger.error(f"Error in _on_mouse_press: {e}", exc_info=True)
-            messagebox.showerror("Selection Error", f"An error occurred: {e}", parent=self)
+            messagebox.showerror("Selection Error", f"An error occurred while starting selection: {e}", parent=self)
             self.destroy_selector_immediately()
-
 
     def _on_mouse_drag(self, event):
         try:
@@ -271,7 +264,6 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             self.canvas.coords(self.current_selection_rect_id, self.start_x_canvas, self.start_y_canvas, event.x, event.y)
         except Exception as e:
             logger.error(f"Error in _on_mouse_drag: {e}", exc_info=True)
-            # Non-critical, but log. Might not need to close window for this.
 
     def _on_mouse_release(self, event):
         try:
@@ -286,19 +278,21 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             if w_c > 0 and h_c > 0:
                 self.canvas.coords(self.current_selection_rect_id, x1_c, y1_c, x2_c, y2_c)
                 self.canvas.itemconfig(self.current_selection_rect_id, outline="lime green", width=3, dash=())
-                
+
                 orig_x1 = int(round(x1_c / self.image_display_scale_factor))
                 orig_y1 = int(round(y1_c / self.image_display_scale_factor))
                 orig_x2 = int(round(x2_c / self.image_display_scale_factor))
                 orig_y2 = int(round(y2_c / self.image_display_scale_factor))
-                
+
                 img_w_orig, img_h_orig = self.image_source_pil.size
-                orig_x1 = max(0, orig_x1); orig_y1 = max(0, orig_y1)
-                orig_x2 = min(img_w_orig, orig_x2); orig_y2 = min(img_h_orig, orig_y2)
+                orig_x1 = max(0, orig_x1)
+                orig_y1 = max(0, orig_y1)
+                orig_x2 = min(img_w_orig, orig_x2)
+                orig_y2 = min(img_h_orig, orig_y2)
 
                 if (orig_x2 - orig_x1) > 0 and (orig_y2 - orig_y1) > 0:
                     self.selected_coords_on_image = (orig_x1, orig_y1, orig_x2, orig_y2)
-                    if hasattr(self, 'btn_confirm_selection') and self.btn_confirm_selection:
+                    if hasattr(self, "btn_confirm_selection") and self.btn_confirm_selection:
                         self.btn_confirm_selection.configure(state="normal")
                     if self.instruction_label and self.instruction_label.winfo_exists():
                         self.instruction_label.configure(text=f"Selection: ({orig_x1},{orig_y1}) to ({orig_x2},{orig_y2}) on original. Press Enter or Confirm.")
@@ -308,7 +302,7 @@ class RegionSelectorWindow(ctk.CTkToplevel):
                 self._reset_selection_state("Invalid selection (zero area on canvas). Redraw.")
         except Exception as e:
             logger.error(f"Error in _on_mouse_release: {e}", exc_info=True)
-            messagebox.showerror("Selection Error", f"An error occurred: {e}", parent=self)
+            messagebox.showerror("Selection Error", f"An error occurred finalizing selection: {e}", parent=self)
             self.destroy_selector_immediately()
 
     def _reset_selection_state(self, instruction_text: str):
@@ -316,7 +310,7 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         if self.current_selection_rect_id and self.canvas.winfo_exists():
             self.canvas.delete(self.current_selection_rect_id)
             self.current_selection_rect_id = None
-        if hasattr(self, 'btn_confirm_selection') and self.btn_confirm_selection:
+        if hasattr(self, "btn_confirm_selection") and self.btn_confirm_selection:
             self.btn_confirm_selection.configure(state="disabled")
         if self.instruction_label and self.instruction_label.winfo_exists():
             self.instruction_label.configure(text=instruction_text)
@@ -335,18 +329,25 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         was_topmost = self.attributes("-topmost")
         was_overrideredirect = self.overrideredirect()
 
+        input_name_value_to_prefill = ""  # For CTkInputDialog, we can't prefill the entry easily.
+        # The prompt text itself will suggest the name.
+
+        default_name_suggestion = f"Region_{len(self.config_manager_context.get_regions()) + 1 if self.config_manager_context else 1}"
+        if self.is_editing_existing and self.original_existing_region_data:
+            default_name_suggestion = self.original_existing_region_data.get("name", default_name_suggestion)
+
+        dialog_prompt_text = f"Enter unique name for this region (e.g., '{default_name_suggestion}'):\nCoords (on original): x={x1}, y={y1}, w={sel_w}, h={sel_h}"
+
         try:
             if was_overrideredirect:
                 self.overrideredirect(False)
                 self.attributes("-alpha", 1.0)
             self.attributes("-topmost", False)
 
-            default_name_suggestion = f"Region_{len(self.config_manager_context.get_regions()) + 1 if self.config_manager_context else 1}"
-            if self.is_editing_existing and self.original_existing_region_data:
-                default_name_suggestion = self.original_existing_region_data.get("name", default_name_suggestion)
-
             dialog = ctk.CTkInputDialog(
-                parent=self, text=f"Enter unique name for this region:\nCoords (on original): x={x1}, y={y1}, w={sel_w}, h={sel_h}", title="Confirm Region Name", entry_text=default_name_suggestion
+                text=dialog_prompt_text,
+                title="Confirm Region Name",
+                # CTkInputDialog does not take 'entry_text' or 'parent'
             )
             input_name = dialog.get_input()
 
@@ -370,11 +371,18 @@ class RegionSelectorWindow(ctk.CTkToplevel):
             self.changes_made = True
             logger.info(f"RegionSelector: Confirmed region '{final_name}' with coords {self.saved_region_info} (relative to source image).")
             self.destroy_selector_immediately()
-        else:
-            logger.info("RegionSelector: Name input cancelled/empty. Selection remains.")
+        elif input_name is None:
+            logger.info("RegionSelector: Name input dialog cancelled by user. Selection remains active.")
             if self.instruction_label and self.instruction_label.winfo_exists():
                 self.instruction_label.configure(text=f"Naming cancelled. Selection active. Press Enter or Confirm.")
-            if hasattr(self, 'btn_confirm_selection') and self.btn_confirm_selection:
+            if hasattr(self, "btn_confirm_selection") and self.btn_confirm_selection:
+                self.btn_confirm_selection.configure(state="normal")
+        else:
+            logger.info("RegionSelector: Name input was empty. Selection remains active.")
+            messagebox.showwarning("Name Required", "Region name cannot be empty. Please try again or cancel.", parent=self)
+            if self.instruction_label and self.instruction_label.winfo_exists():
+                self.instruction_label.configure(text=f"Naming aborted (empty name). Selection active. Press Enter or Confirm.")
+            if hasattr(self, "btn_confirm_selection") and self.btn_confirm_selection:
                 self.btn_confirm_selection.configure(state="normal")
 
     def _cancel_selection(self, event=None):
@@ -384,13 +392,20 @@ class RegionSelectorWindow(ctk.CTkToplevel):
         self.destroy_selector_immediately()
 
     def destroy_selector_immediately(self):
-        logger.debug("RegionSelectorWindow: Destroying self.")
+        logger.debug("RegionSelectorWindow: Attempting to destroy self.")
         if self.winfo_exists():
             if self.overrideredirect():
                 self.overrideredirect(False)
-            if self.grab_status(): # Check if grab is set before releasing
+            current_grab = self.grab_current()
+            if current_grab == self:
                 self.grab_release()
+            elif current_grab:
+                logger.warning(f"RegionSelector: Tried to release grab, but grab is held by {current_grab}, not self.")
+
             self.destroy()
+            logger.debug("RegionSelectorWindow: Destroy call completed.")
+        else:
+            logger.debug("RegionSelectorWindow: Destroy called, but window no longer exists.")
 
     def get_selected_region_info(self) -> Optional[Dict[str, Any]]:
         return self.saved_region_info if self.changes_made and self.saved_region_info else None

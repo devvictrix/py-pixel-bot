@@ -29,14 +29,16 @@
             "x": 306,
             "y": 234,
             "width": 1205,
-            "height": 696
+            "height": 696,
+            "comment": "12"
         },
         {
             "name": "test2",
-            "x": 399,
-            "y": 170,
-            "width": 1342,
-            "height": 997
+            "x": 260,
+            "y": 153,
+            "width": 1503,
+            "height": 917,
+            "comment": "Region edited: test"
         }
     ],
     "templates": [],
