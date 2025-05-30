@@ -88,7 +88,7 @@ This document tracks planned features and their status for the Mark-I visual aut
 | v5.0.0 (Phase 3 Integration & Refinement)                                               | Deferred    | Medium   | AI Profile Generation                 | Profile Refinement Loop (Basic)                                   | Basic capability for user to provide feedback on a generated plan/profile, triggering a re-prompt to Gemini for refinement.                                                                                                                                 | `StrategyPlanner`, `ProfileGenerator`. **Deferred to post-v5.0.0 to focus core release.**                                                               |
 | v5.0.0 (Phase 4 Documentation)                                                          | Done        | High     | AI Profile Generation                 | **Final Documentation for v5.0.0**                                | Update README, User Guides, Technical Design, and other relevant documents for the AI Profile Creator feature.                                                                                                                                              | Markdown, Code Docstrings.                                                                                                                              |
 | **v5.0.x (Post-Release Refinement & Testing)**                                          |
-| v5.0.1                                                                                  | In Progress | High     | Code Quality & Maintainability        | Codebase Refactoring (Modularity, Maintainability, Readability)     | Systematic refactoring. **`RulesEngine` (Strategy Pattern), `MainAppWindow` (UI population/update decomposition), `DetailsPanel` (rendering/data retrieval decomposition), `GeminiAnalyzer` (method decomposition for `query_vision_model`) refactored.** | Focus on SRP, file/class sizes, logging, error handling, readability. `REFACTORING_GUIDELINES.MD`. Next: `GeminiDecisionModule` if needed.             |
+| v5.0.1                                                                                  | Done        | High     | Code Quality & Maintainability        | Codebase Refactoring (Modularity, Maintainability, Readability)     | Systematic refactoring. **`RulesEngine`, `MainAppWindow`, `DetailsPanel`, `GeminiAnalyzer`, `GeminiDecisionModule` refactored (method decomposition, Strategy Pattern).** Refactoring for v5.0.1 is complete.                                                 | Focus on SRP, file/class sizes, logging, error handling, readability. `REFACTORING_GUIDELINES.MD`.                                                        |
 | v5.0.2                                                                                  | Planning    | High     | Testing & DX                          | **Implement Unit Test Infrastructure & Initial Coverage**           | Set up `pytest` framework. Write initial unit tests for core logic, utility functions, and key engine components (e.g., `ConfigManager`, `AnalysisEngine` methods, `RulesEngine` condition evaluation). Aim for coverage of refactored areas.                 | `pytest`, `pytest-cov`. Mocking external dependencies (Gemini, PyAutoGUI). Refer to `TECHNICAL_DESIGN.MD` Section 13.                                    |
 | v5.0.3                                                                                  | Planning    | Critical | Testing                               | **v5.0.0 Manual End-to-End (E2E) Testing**                        | Perform comprehensive manual testing of all v5.0.0 features, including the AI-Driven Profile Generator workflow (goal input, plan generation, interactive element definition with AI-assist, profile saving) and execution of AI-generated profiles. | This is a form of End-to-End (E2E) testing, verifying the entire system flow. Focus on stability, usability, and correctness of generated profiles. |
 | **vFuture (Other Enhancements - Post v5.0.0 or Parallel if scope allows)**              |
@@ -115,13 +115,14 @@ This document tracks planned features and their status for the Mark-I visual aut
 **Mark-I v5.0.0, featuring the AI-Driven Profile Generator, is now functionally complete and documented.**
 
 **Current Focus (v5.0.x):**
-- **v5.0.1 Codebase Refactoring:** **IN PROGRESS.**
+- **v5.0.1 Codebase Refactoring:** **DONE.**
     - `RulesEngine` (Strategy Pattern for condition evaluation).
     - `MainAppWindow` (UI population/update decomposition).
     - `DetailsPanel` (rendering/data retrieval decomposition).
     - `GeminiAnalyzer` (`query_vision_model` method decomposition).
-    - The next refactoring target within v5.0.1 will be `GeminiDecisionModule`, focusing on decomposing `_execute_primitive_sub_action` (potentially with Strategy Pattern) and `execute_nlu_task` (specifically `_recursive_execute_plan_node`).
-- **v5.0.2 Implement Unit Test Infrastructure & Initial Coverage:** (Status: `Planning`) Set up `pytest` and begin writing unit tests for critical components and newly refactored code to ensure stability and enable safer future development.
+    - `GeminiDecisionModule` (`_execute_primitive_sub_action` refactored with Strategy Pattern; `execute_nlu_task`'s recursive helper decomposed).
+    - This completes the planned refactoring for the major engine and UI components for v5.0.1.
+- **v5.0.2 Implement Unit Test Infrastructure & Initial Coverage:** (Status: `Planning`) The next logical step is to begin implementing the unit testing infrastructure and writing tests for the refactored and core components.
 - **v5.0.3 Manual End-to-End (E2E) Testing:** (Status: `Planning`) After refactoring and initial unit test implementation, this phase involves comprehensive manual testing of all v5.0.0 functionalities to ensure stability, usability, and correctness.
 
 **Future Considerations (Post v5.0.x):**
@@ -130,4 +131,4 @@ This document tracks planned features and their status for the Mark-I visual aut
 - Explore items listed under "vFuture" on the roadmap based on user feedback and project priorities.
 - Continuous performance optimization and expansion of unit test coverage.
 
-The refactoring of `GeminiAnalyzer.query_vision_model` is complete. Proceeding to `GeminiDecisionModule` refactoring next.
+The refactoring of `GeminiDecisionModule.execute_nlu_task` and its helper `_recursive_execute_plan_node` is complete. This concludes the planned refactoring efforts for v5.0.1.
