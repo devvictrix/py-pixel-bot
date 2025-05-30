@@ -1,14 +1,16 @@
 import logging
-import json # For parsing Gemini's JSON response and debug logging
+import json  # For parsing Gemini's JSON response and debug logging
 from typing import Dict, Any, Optional, List
+import os  # For os.linesep
 
-import numpy as np # For type hint of initial_visual_context_image
+import numpy as np  # For type hint of initial_visual_context_image
 
 # Assuming GeminiAnalyzer is correctly located for import
 from mark_i.engines.gemini_analyzer import GeminiAnalyzer
 
 # Standardized logger for this module
 from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
+
 logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.generation.strategy_planner")
 
 # --- Type Aliases for Clarity ---
@@ -26,7 +28,8 @@ IntermediatePlanStep = Dict[str, Any]
 IntermediatePlan = List[IntermediatePlanStep]
 
 # Default model for complex planning, can be overridden
-DEFAULT_STRATEGY_PLANNING_MODEL = "gemini-1.5-pro-latest" # Or another powerful model suitable for JSON generation and reasoning
+DEFAULT_STRATEGY_PLANNING_MODEL = "gemini-1.5-pro-latest"  # Or another powerful model suitable for JSON generation and reasoning
+
 
 class StrategyPlanner:
     """
@@ -51,11 +54,7 @@ class StrategyPlanner:
         self.gemini_analyzer = gemini_analyzer
         logger.info("StrategyPlanner initialized successfully with GeminiAnalyzer.")
 
-    def _construct_goal_to_plan_prompt(
-        self,
-        user_goal: str,
-        application_context_description: Optional[str] = None
-    ) -> str:
+    def _construct_goal_to_plan_prompt(self, user_goal: str, application_context_description: Optional[str] = None) -> str:
         """
         Constructs the detailed prompt for Gemini to break down a high-level user goal
         into a sequence of logical, human-understandable sub-steps, ensuring output as JSON.
@@ -108,8 +107,12 @@ Key Considerations for your Plan:
 - If the user's goal is too vague, overly complex for a simple sequence, or seems unsafe to automate directly with visual primitives, you should still attempt to generate a plan for the initial, most plausible interpretation. If truly impossible, your JSON can have an empty "intermediate_plan" array and a "reasoning_for_empty_plan" key explaining why.
 - The plan should typically consist of a reasonable number of steps (e.g., 3-15 steps for common desktop tasks). For very complex goals, focus on outlining the initial key stages.
 """
-        app_context_info_str = f"Additional application context to consider: {application_context_description}" if application_context_description else "No specific application context was provided beyond the user's goal and any accompanying initial screenshot (if provided to the multimodal endpoint)."
-        
+        app_context_info_str = (
+            f"Additional application context to consider: {application_context_description}"
+            if application_context_description
+            else "No specific application context was provided beyond the user's goal and any accompanying initial screenshot (if provided to the multimodal endpoint)."
+        )
+
         prompt = plan_schema_description.format(user_goal=user_goal, application_context_info=app_context_info_str)
         prompt += "\n\nNow, generate the JSON object containing the 'intermediate_plan' based on the user's goal and any provided context. Your entire response MUST be only this single, valid JSON object, starting with `{` and ending with `}`."
         return prompt
@@ -117,9 +120,9 @@ Key Considerations for your Plan:
     def generate_intermediate_plan(
         self,
         user_goal: str,
-        initial_visual_context_image: Optional[np.ndarray] = None, # BGR NumPy array
+        initial_visual_context_image: Optional[np.ndarray] = None,  # BGR NumPy array
         application_context_description: Optional[str] = None,
-        plan_generation_model_override: Optional[str] = None
+        plan_generation_model_override: Optional[str] = None,
     ) -> Optional[IntermediatePlan]:
         """
         Generates an intermediate, step-by-step plan from a high-level user goal using Gemini.
@@ -141,103 +144,96 @@ Key Considerations for your Plan:
         if not user_goal or not user_goal.strip():
             logger.error(f"{log_prefix}: User goal is empty. Cannot generate plan.")
             return None
-        if not self.gemini_analyzer: # Should have been caught in __init__
-            logger.critical(f"{log_prefix}: GeminiAnalyzer is not available (e.g., due to API key issue). Cannot generate plan.")
+        if not self.gemini_analyzer:
+            logger.critical(f"{log_prefix}: GeminiAnalyzer is not available. Cannot generate plan.")
             return None
 
         prompt_for_plan = self._construct_goal_to_plan_prompt(user_goal, application_context_description)
-        # logger.debug(f"{log_prefix}: Constructed prompt for goal-to-plan (approx length: {len(prompt_for_plan)} chars).")
 
-        # Determine model: use override, or a powerful default for planning
         model_to_use = plan_generation_model_override if plan_generation_model_override else DEFAULT_STRATEGY_PLANNING_MODEL
         logger.info(f"{log_prefix}: Using Gemini model '{model_to_use}' for plan generation.")
 
-        # Log warnings about model capabilities vs. provided context
         if initial_visual_context_image is None and ("vision" in model_to_use.lower() or "flash" in model_to_use.lower() or "pro" in model_to_use.lower() and "text" not in model_to_use.lower()):
-             logger.debug(f"{log_prefix}: Using multimodal model '{model_to_use}' for planning, but no initial image was provided. Model will rely on text prompt and its general knowledge.")
-        elif initial_visual_context_image is not None and not ("vision" in model_to_use.lower() or "flash" in model_to_use.lower() or "pro" in model_to_use.lower()): # Heuristic
-             logger.warning(f"{log_prefix}: An initial image was provided for context, but the selected planning model '{model_to_use}' appears to be text-only. Visual context might not be utilized by this model for planning. Consider a multimodal model like 'gemini-1.5-pro-latest' or 'gemini-1.5-flash-latest'.")
+            logger.debug(f"{log_prefix}: Using multimodal model '{model_to_use}' for planning, but no initial image was provided.")
+        elif initial_visual_context_image is not None and not ("vision" in model_to_use.lower() or "flash" in model_to_use.lower() or "pro" in model_to_use.lower()):
+            logger.warning(f"{log_prefix}: Initial image provided, but model '{model_to_use}' may be text-only. Visual context might not be used for planning.")
 
-        gemini_api_response = self.gemini_analyzer.query_vision_model( # Renamed from query_model
-            prompt=prompt_for_plan, # Prompt is now first arg
-            image_data=initial_visual_context_image, # Pass image if available
-            model_name_override=model_to_use
-        )
+        gemini_api_response = self.gemini_analyzer.query_vision_model(prompt=prompt_for_plan, image_data=initial_visual_context_image, model_name_override=model_to_use)
 
         if gemini_api_response["status"] != "success" or not gemini_api_response["json_content"]:
-            logger.error(f"{log_prefix}: Failed to get a valid structured plan from Gemini. Status: {gemini_api_response['status']}. Error: {gemini_api_response.get('error_message', 'No JSON content')}")
-            if gemini_api_response.get("text_content"): # Log raw text if JSON parsing failed or if it's an error message
+            logger.error(
+                f"{log_prefix}: Failed to get valid structured plan from Gemini. Status: {gemini_api_response['status']}. Error: {gemini_api_response.get('error_message', 'No JSON content')}"
+            )
+            if gemini_api_response.get("text_content"):
                 logger.error(f"{log_prefix}: Gemini raw text response (on plan failure or non-JSON): {gemini_api_response['text_content'][:1000].replace(os.linesep, ' ')}")
             return None
 
         try:
             parsed_json_content = gemini_api_response["json_content"]
             if not isinstance(parsed_json_content, dict) or "intermediate_plan" not in parsed_json_content:
-                logger.error(f"{log_prefix}: Gemini's plan response JSON is missing the 'intermediate_plan' top-level key. Response: {parsed_json_content}")
+                logger.error(f"{log_prefix}: Gemini's plan response JSON missing 'intermediate_plan' key. Response: {parsed_json_content}")
                 raise ValueError("Invalid plan structure from AI: 'intermediate_plan' key missing.")
-            
+
             raw_plan_steps = parsed_json_content["intermediate_plan"]
             if not isinstance(raw_plan_steps, list):
                 logger.error(f"{log_prefix}: 'intermediate_plan' value in Gemini's response is not a list. Value: {raw_plan_steps}")
                 raise ValueError("'intermediate_plan' value from AI is not a list.")
-            
-            if not raw_plan_steps and "reasoning_for_empty_plan" in parsed_json_content: # Handle explicit empty plan with reasoning
-                logger.warning(f"{log_prefix}: Gemini returned an empty plan. Reasoning: {parsed_json_content['reasoning_for_empty_plan']}")
-                return [] # Return empty list, ProfileGenerator can handle this
+
+            if not raw_plan_steps:  # Handles both empty list and explicit empty plan with reasoning
+                reasoning = parsed_json_content.get("reasoning_for_empty_plan", "AI returned an empty plan without specific reasoning.")
+                logger.warning(f"{log_prefix}: Gemini returned an empty plan. Reasoning: {reasoning}")
+                return []
 
             validated_plan_steps: IntermediatePlan = []
             for idx, step_data_raw in enumerate(raw_plan_steps):
                 if not isinstance(step_data_raw, dict):
-                    logger.warning(f"{log_prefix}: Plan step at index {idx} is not a dictionary: {step_data_raw}. Skipping this step.")
+                    logger.warning(f"{log_prefix}: Plan step at index {idx} is not a dictionary: {step_data_raw}. Skipping.")
                     continue
-                
+
                 step_id_val = step_data_raw.get("step_id")
                 description_val = step_data_raw.get("description")
-
-                # Validate step_id
-                final_step_id = idx + 1 # Default to 1-based index
+                final_step_id = idx + 1
                 if isinstance(step_id_val, int) and step_id_val > 0:
                     final_step_id = step_id_val
-                elif step_id_val is not None: # Log if it was present but invalid
-                    logger.warning(f"{log_prefix}: Plan step at index {idx} has invalid 'step_id' ('{step_id_val}'). Using sequential index {final_step_id}.")
+                elif step_id_val is not None:
+                    logger.warning(f"{log_prefix}: Step idx {idx} invalid 'step_id' ('{step_id_val}'). Using sequential {final_step_id}.")
 
-                # Validate description
                 if not isinstance(description_val, str) or not description_val.strip():
-                    logger.warning(f"{log_prefix}: Plan step ID {final_step_id} (index {idx}) has empty or invalid 'description'. Skipping this critical step.")
-                    continue # A step without a description is not useful
-                
-                # Sanitize optional fields
+                    logger.warning(f"{log_prefix}: Step ID {final_step_id} (idx {idx}) empty/invalid 'description'. Skipping critical step.")
+                    continue
+
                 type_hint_val = str(step_data_raw.get("suggested_element_type_hint", "")).strip()
-                
                 user_inputs_list_raw = step_data_raw.get("required_user_input_for_step", [])
-                final_user_inputs: List[str] = []
-                if isinstance(user_inputs_list_raw, list):
-                    final_user_inputs = [str(ui).strip() for ui in user_inputs_list_raw if isinstance(ui, str) and str(ui).strip()]
-                elif user_inputs_list_raw is not None: # Was present but not a list
-                     logger.warning(f"{log_prefix}: Plan step ID {final_step_id} 'required_user_input_for_step' was not a list (type: {type(user_inputs_list_raw).__name__}). Ignoring this field for step.")
+                final_user_inputs: List[str] = [str(ui).strip() for ui in user_inputs_list_raw if isinstance(user_inputs_list_raw, list) and isinstance(ui, str) and str(ui).strip()]
+                if not isinstance(user_inputs_list_raw, list) and user_inputs_list_raw is not None:
+                    logger.warning(f"{log_prefix}: Step ID {final_step_id} 'required_user_input_for_step' not a list (type: {type(user_inputs_list_raw).__name__}). Ignoring.")
 
-                validated_plan_steps.append({
-                    "step_id": final_step_id,
-                    "description": description_val.strip(),
-                    "suggested_element_type_hint": type_hint_val if type_hint_val else None, # Store as None if empty
-                    "required_user_input_for_step": final_user_inputs # Store as empty list if none
-                })
+                validated_plan_steps.append(
+                    {
+                        "step_id": final_step_id,
+                        "description": description_val.strip(),
+                        "suggested_element_type_hint": type_hint_val if type_hint_val else None,
+                        "required_user_input_for_step": final_user_inputs,
+                    }
+                )
 
-            if not validated_plan_steps and raw_plan_steps: # Had steps, but none were valid
-                logger.error(f"{log_prefix}: Gemini generated a plan structure with steps, but no steps were valid after validation. Raw plan steps: {raw_plan_steps}")
-                return None # Treat as failure if all steps were invalid
-            elif not validated_plan_steps and not raw_plan_steps: # Empty plan was returned
-                 logger.info(f"{log_prefix}: Gemini returned an empty plan (or no valid steps).")
-                 return [] # Return empty list, ProfileGenerator can indicate this to user
+            if not validated_plan_steps and raw_plan_steps:
+                logger.error(f"{log_prefix}: Gemini generated steps, but none were valid after validation. Raw: {raw_plan_steps}")
+                return None
 
-            logger.info(f"{log_prefix}: Successfully generated and validated intermediate plan with {len(validated_plan_steps)} steps.")
-            if logger.isEnabledFor(logging.DEBUG):
-                 logger.debug(f"{log_prefix}: Generated plan details:\n{json.dumps(validated_plan_steps, indent=2)}")
+            log_msg = (
+                f"{log_prefix}: Successfully generated and validated intermediate plan with {len(validated_plan_steps)} steps."
+                if validated_plan_steps
+                else f"{log_prefix}: Gemini returned an empty plan or no valid steps."
+            )
+            logger.info(log_msg)
+            if logger.isEnabledFor(logging.DEBUG) and validated_plan_steps:
+                logger.debug(f"{log_prefix}: Generated plan details:\n{json.dumps(validated_plan_steps, indent=2)}")
             return validated_plan_steps
 
-        except ValueError as e_val_parse: # Catch our own ValueErrors from parsing logic
-            logger.error(f"{log_prefix}: Error validating the structure of Gemini's plan response: {e_val_parse}. Raw JSON from Gemini may have been: {gemini_api_response.get('json_content')}", exc_info=False) # No need for exc_info if we raised it
+        except ValueError as e_val_parse:
+            logger.error(f"{log_prefix}: Error validating Gemini's plan structure: {e_val_parse}. Raw JSON: {gemini_api_response.get('json_content')}", exc_info=False)
             return None
-        except Exception as e_unexpected_processing: # Catch-all for other issues during processing
+        except Exception as e_unexpected_processing:
             logger.error(f"{log_prefix}: Unexpected error processing Gemini's plan response: {e_unexpected_processing}. Raw JSON: {gemini_api_response.get('json_content')}", exc_info=True)
             return None
