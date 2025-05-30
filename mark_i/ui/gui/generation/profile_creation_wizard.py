@@ -6,7 +6,7 @@ import json
 import copy
 import time 
 import threading 
-from typing import Optional, Dict, Any, List, Union, Callable
+from typing import Optional, Dict, Any, List, Union, Callable, Tuple # Added Tuple
 
 import customtkinter as ctk
 import numpy as np
@@ -18,7 +18,7 @@ from mark_i.ui.gui.generation.sub_image_selector_window import SubImageSelectorW
 from mark_i.engines.gemini_analyzer import GeminiAnalyzer 
 from mark_i.core.config_manager import ConfigManager, TEMPLATES_SUBDIR_NAME 
 from mark_i.ui.gui.region_selector import RegionSelectorWindow 
-from mark_i.core.capture_engine import CaptureEngine
+from mark_i.engines.capture_engine import CaptureEngine
 
 from mark_i.ui.gui.gui_config import (
     CONDITION_TYPES as ALL_CONDITION_TYPES_FROM_CONFIG,
@@ -129,7 +129,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         self.step_logic_controlling_widgets: Dict[str, Union[ctk.CTkOptionMenu, ctk.CTkCheckBox]] = {}
         self.step_logic_widget_prefix: str = "" 
 
-        self.loading_overlay = ctk.CTkFrame(self, fg_color=("black", "black"), corner_radius=0) # Should match window bg
+        self.loading_overlay = ctk.CTkFrame(self, fg_color=("black", "black"), corner_radius=0) 
         self.loading_label_overlay = ctk.CTkLabel(self.loading_overlay, text="AI is thinking...", font=ctk.CTkFont(size=18, weight="bold"), text_color="white")
         self.loading_label_overlay.pack(expand=True)
 
@@ -144,9 +144,8 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
 
     def _show_loading_overlay(self, message="AI is thinking..."):
         self.loading_label_overlay.configure(text=message)
-        # Ensure overlay covers the main_content_frame effectively
         self.loading_overlay.place(in_=self.main_content_frame, relx=0, rely=0, relwidth=1, relheight=1)
-        self.loading_overlay.lift() # Lift it above other widgets in main_content_frame
+        self.loading_overlay.lift() 
         self.update_idletasks()
 
     def _hide_loading_overlay(self):
@@ -173,11 +172,12 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
             self.btn_next.configure(text="Generate Plan >")
         elif self.current_page_index == PAGE_PLAN_REVIEW: 
             self.btn_previous.configure(state="normal")
-            self.btn_next.configure(text="Start Building Profile >", state="normal" if self.intermediate_plan and len(self.intermediate_plan)>0 else "disabled")
+            can_proceed_plan_review = bool(self.intermediate_plan and len(self.intermediate_plan) > 0)
+            self.btn_next.configure(text="Start Building Profile >", state="normal" if can_proceed_plan_review else "disabled")
         elif self.current_page_index == PAGE_STEP_DEFINE_REGION: 
             self.btn_previous.configure(state="normal")
-            can_proceed = bool(hasattr(self, 'current_step_region_name_entry') and self.current_step_region_name_entry.get().strip() and self.current_step_region_coords)
-            self.btn_next.configure(text="Confirm Region & Define Logic >", state="normal" if can_proceed else "disabled")
+            can_proceed_define_region = bool(hasattr(self, 'current_step_region_name_entry') and self.current_step_region_name_entry.get().strip() and self.current_step_region_coords)
+            self.btn_next.configure(text="Confirm Region & Define Logic >", state="normal" if can_proceed_define_region else "disabled")
         elif self.current_page_index == PAGE_STEP_DEFINE_LOGIC: 
             self.btn_previous.configure(state="normal")
             is_last_step_in_plan = (self.profile_generator.current_plan_step_index >= len(self.intermediate_plan or []) -1) if self.intermediate_plan else True
@@ -212,26 +212,51 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         self._update_context_image_preview(); self.goal_textbox.focus_set(); logger.debug("Page Goal Input UI setup.")
 
     def _capture_full_screen_context(self): 
-        logger.info("Capturing full screen for context..."); try:
-            self.attributes("-alpha", 0.0); self.lower(); self.update_idletasks(); time.sleep(0.3); img_pil = ImageGrab.grab(all_screens=True); self.attributes("-alpha", 1.0); self.lift(); self.focus_set()
-            if img_pil: self.current_full_context_pil = img_pil.convert("RGB"); img_np_rgb = np.array(self.current_full_context_pil); self.current_full_context_np = cv2.cvtColor(img_np_rgb, cv2.COLOR_RGB2BGR); self.profile_generator.set_current_visual_context(self.current_full_context_np); logger.info(f"Full screen captured (Size: {img_pil.width}x{img_pil.height}).")
-            else: self.current_full_context_pil = self.current_full_context_np = None; self.profile_generator.set_current_visual_context(None); logger.error("Full screen capture failed (ImageGrab None).")
-        except Exception as e: self.current_full_context_pil = self.current_full_context_np = None; self.profile_generator.set_current_visual_context(None); logger.error(f"Error capturing full screen: {e}", exc_info=True); _ = self.attributes("-alpha", 1.0); self.lift() if self.winfo_exists() else None
+        logger.info("Capturing full screen for context...")
+        try:
+            self.attributes("-alpha", 0.0); self.lower(); self.update_idletasks(); time.sleep(0.3)
+            img_pil = ImageGrab.grab(all_screens=True)
+            self.attributes("-alpha", 1.0); self.lift(); self.focus_set()
+            if img_pil: 
+                self.current_full_context_pil = img_pil.convert("RGB")
+                img_np_rgb = np.array(self.current_full_context_pil)
+                self.current_full_context_np = cv2.cvtColor(img_np_rgb, cv2.COLOR_RGB2BGR)
+                self.profile_generator.set_current_visual_context(self.current_full_context_np)
+                logger.info(f"Full screen captured (Size: {img_pil.width}x{img_pil.height}).")
+            else: 
+                self.current_full_context_pil = self.current_full_context_np = None
+                self.profile_generator.set_current_visual_context(None)
+                logger.error("Full screen capture failed (ImageGrab None).")
+        except Exception as e: 
+            self.current_full_context_pil = self.current_full_context_np = None
+            self.profile_generator.set_current_visual_context(None)
+            logger.error(f"Error capturing full screen: {e}", exc_info=True)
+            if self.winfo_exists(): 
+                self.attributes("-alpha", 1.0); self.lift()
         self._update_context_image_preview()
 
     def _load_image_context(self): 
         filepath = filedialog.askopenfilename(title="Select Context Image", filetypes=[("Image", "*.png *.jpg *.jpeg *.bmp")], parent=self)
         if filepath:
-            try: img_pil = Image.open(filepath); self.current_full_context_pil = img_pil.convert("RGB"); img_np_rgb = np.array(self.current_full_context_pil); self.current_full_context_np = cv2.cvtColor(img_np_rgb, cv2.COLOR_RGB2BGR); self.profile_generator.set_current_visual_context(self.current_full_context_np); logger.info(f"Context image loaded: '{filepath}' (Size: {img_pil.width}x{img_pil.height}).")
-            except Exception as e: self.current_full_context_pil = self.current_full_context_np = None; self.profile_generator.set_current_visual_context(None); logger.error(f"Error loading context image: {e}", exc_info=True)
+            try: 
+                img_pil = Image.open(filepath)
+                self.current_full_context_pil = img_pil.convert("RGB")
+                img_np_rgb = np.array(self.current_full_context_pil)
+                self.current_full_context_np = cv2.cvtColor(img_np_rgb, cv2.COLOR_RGB2BGR)
+                self.profile_generator.set_current_visual_context(self.current_full_context_np)
+                logger.info(f"Context image loaded: '{filepath}' (Size: {img_pil.width}x{img_pil.height}).")
+            except Exception as e: 
+                self.current_full_context_pil = self.current_full_context_np = None
+                self.profile_generator.set_current_visual_context(None)
+                logger.error(f"Error loading context image: {e}", exc_info=True)
         self._update_context_image_preview()
 
     def _update_context_image_preview(self): 
         if not hasattr(self, 'context_image_preview_label') or not self.context_image_preview_label.winfo_exists(): return
         if self.current_full_context_pil: 
             img_copy = self.current_full_context_pil.copy()
-            preview_max_w, preview_max_h = 350, self.context_image_preview_label.winfo_reqheight() - 20 # Use requested height of label
-            preview_max_h = max(50, preview_max_h) # Ensure some min height
+            preview_max_w, preview_max_h = 350, self.context_image_preview_label.winfo_reqheight() - 20 
+            preview_max_h = max(50, preview_max_h) 
             img_copy.thumbnail((preview_max_w, preview_max_h), Image.Resampling.LANCZOS)
             ctk_img = ctk.CTkImage(light_image=img_copy, dark_image=img_copy, size=(img_copy.width, img_copy.height))
             self.context_image_preview_label.configure(image=ctk_img, text=f"Context: {self.current_full_context_pil.width}x{self.current_full_context_pil.height} (Loaded)", height=img_copy.height + 10)
@@ -265,7 +290,6 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
 
     def _setup_page_step_define_region(self): 
         page_frame = ctk.CTkFrame(self.main_content_frame, fg_color="transparent"); page_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        # current_plan_step_data is set by _go_to_next_page or _reset_and_load_step_state
         if not self.current_plan_step_data: 
             ctk.CTkLabel(page_frame, text="Error: No current plan step data available. Please go back to Plan Review.").pack(pady=20)
             self._update_navigation_buttons_state(); return
@@ -280,8 +304,6 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         self.region_step_context_display_label = ctk.CTkLabel(page_frame, text="Loading screen context...", fg_color=("gray90", "gray25"), corner_radius=6)
         self.region_step_context_display_label.pack(fill="both", expand=True, pady=(0,10))
         
-        # Display context with overlay if self.current_step_region_coords is set (from loaded state)
-        # Or if self._temp_suggested_region_coords is set (from AI suggestion on this page load)
         overlay_to_draw = self.current_step_region_coords if self.current_step_region_defined_for_pg else self._temp_suggested_region_coords
         overlay_color = SELECTED_CANDIDATE_BOX_COLOR if self.current_step_region_defined_for_pg and self.current_step_region_coords else "orange"
         self.display_current_full_context_with_optional_overlay(
@@ -353,7 +375,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
             self.current_step_region_name_entry.delete(0, tk.END); self.current_step_region_name_entry.insert(0, name_hint)
             self._temp_suggested_region_coords = {"x": box[0], "y": box[1], "width": box[2], "height": box[3]}
             self.current_step_region_coords = self._temp_suggested_region_coords 
-            self.current_step_region_name = name_hint # Tentatively update for nav button state
+            self.current_step_region_name = name_hint 
             self.current_step_region_defined_for_pg = False 
             messagebox.showinfo("AI Suggestion", f"AI suggests highlighted region (named '{name_hint}').\nReasoning: {suggestion.get('reasoning', 'N/A')}\nAdjust name if needed, or draw manually, then 'Confirm Region'.", parent=self)
         else: 
@@ -381,7 +403,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         
         initial_coords_for_selector = self.current_step_region_coords or self._temp_suggested_region_coords or copy.deepcopy(DEFAULT_REGION_STRUCTURE_PG)
         existing_data_for_selector = {"name": initial_name_for_selector, **initial_coords_for_selector}
-        for k_coord, def_coord in DEFAULT_REGION_STRUCTURE_PG.items(): # Ensure all coord keys present
+        for k_coord, def_coord in DEFAULT_REGION_STRUCTURE_PG.items(): 
             if k_coord in ["x", "y", "width", "height"]: existing_data_for_selector.setdefault(k_coord, def_coord)
         
         selector = RegionSelectorWindow(master=self, config_manager_for_saving_path_only=temp_cm, existing_region_data=existing_data_for_selector, direct_image_input_pil=capture_pil_for_selector)
@@ -444,8 +466,17 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         data = self.profile_generator.get_generated_profile_data() 
         if self.user_goal_text: data["profile_description"] = f"AI-Generated for goal: {self.user_goal_text[:120]}"
         
-        try: text = json.dumps(data, indent=2); profile_summary_textbox.configure(state="normal"); profile_summary_textbox.delete("0.0", "end"); profile_summary_textbox.insert("0.0", text); profile_summary_textbox.configure(state="disabled")
-        except Exception as e: profile_summary_textbox.configure(state="normal"); profile_summary_textbox.delete("0.0", "end"); profile_summary_textbox.insert("0.0", f"Error displaying profile: {e}"); profile_summary_textbox.configure(state="disabled")
+        try: 
+            text = json.dumps(data, indent=2)
+            profile_summary_textbox.configure(state="normal")
+            profile_summary_textbox.delete("0.0", "end")
+            profile_summary_textbox.insert("0.0", text)
+            profile_summary_textbox.configure(state="disabled")
+        except Exception as e: 
+            profile_summary_textbox.configure(state="normal")
+            profile_summary_textbox.delete("0.0", "end")
+            profile_summary_textbox.insert("0.0", f"Error displaying profile: {e}")
+            profile_summary_textbox.configure(state="disabled")
         
         name_frame = ctk.CTkFrame(page_frame, fg_color="transparent"); name_frame.pack(fill="x", pady=(10,5))
         ctk.CTkLabel(name_frame, text="Profile Filename:").pack(side="left", padx=(0,5))
@@ -473,7 +504,12 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
                     draw.rectangle([x,y, x+w, y+h], outline=color, width=2, fill=fill_color if i != selected_box_idx else None)
                     if i == selected_box_idx: cx,cy=x+w//2,y+h//2; draw.line([(cx-6,cy),(cx+6,cy)],fill=color,width=3); draw.line([(cx,cy-6),(cx,cy+6)],fill=color,width=3)
                     label_text = str(i + 1); text_x, text_y = x + 3, y + 1
-                    try: draw.text((text_x-1,text_y-1),label_text,font=self.overlay_font,fill="white"); draw.text((text_x+1,text_y-1),label_text,font=self.overlay_font,fill="white"); draw.text((text_x-1,text_y+1),label_text,font=self.overlay_font,fill="white"); draw.text((text_x+1,text_y+1),label_text,font=self.overlay_font,fill="white"); draw.text((text_x,text_y),label_text,font=self.overlay_font,fill=color)
+                    try: 
+                        draw.text((text_x-1,text_y-1),label_text,font=self.overlay_font,fill="white")
+                        draw.text((text_x+1,text_y-1),label_text,font=self.overlay_font,fill="white")
+                        draw.text((text_x-1,text_y+1),label_text,font=self.overlay_font,fill="white")
+                        draw.text((text_x+1,text_y+1),label_text,font=self.overlay_font,fill="white")
+                        draw.text((text_x,text_y),label_text,font=self.overlay_font,fill=color)
                     except Exception: draw.text((text_x,text_y),label_text,fill=color) 
         max_w,max_h = WIZARD_SCREENSHOT_PREVIEW_MAX_WIDTH-50, WIZARD_SCREENSHOT_PREVIEW_MAX_HEIGHT-50; thumb = img_pil_to_draw_on.copy(); thumb.thumbnail((max_w,max_h), Image.Resampling.LANCZOS); dw,dh=thumb.size
         ctk_img = ctk.CTkImage(light_image=thumb,dark_image=thumb,size=(dw,dh)); self.step_logic_region_image_label.configure(image=ctk_img,text="",width=dw,height=dh)
@@ -564,19 +600,19 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
 
     def _get_parameters_from_ui_wizard_scoped(self, param_group_key: str, item_subtype: str, widget_prefix: str) -> Optional[Dict[str, Any]]: 
         params: Dict[str,Any]={"type":item_subtype}; all_ok=True; param_defs=UI_PARAM_CONFIG.get(param_group_key,{}).get(item_subtype,[])
-        if not param_defs and item_subtype!="always_true": return params # No params to get for this type
+        if not param_defs and item_subtype!="always_true": return params 
         for p_def in param_defs:
             p_id,lbl_err,target_type,def_val,is_req_def = p_def["id"],p_def["label"].rstrip(":"),p_def["type"],p_def.get("default",""),p_def.get("required",False)
             w_key=f"{widget_prefix}{p_id}"; widget=self.step_logic_detail_widgets.get(w_key); tk_var=self.step_logic_optionmenu_vars.get(f"{w_key}_var")
             
             is_vis = False
             if widget and widget.winfo_exists(): is_vis = widget.winfo_ismapped()
-            elif tk_var and isinstance(tk_var, tk.BooleanVar) and widget and widget.winfo_exists(): # Checkbox case, widget is the checkbox
+            elif tk_var and isinstance(tk_var, tk.BooleanVar) and widget and widget.winfo_exists(): 
                 is_vis = widget.winfo_ismapped()
 
             eff_req = is_req_def and is_vis
             
-            if not is_vis and not eff_req: continue # Skip hidden optional params
+            if not is_vis and not eff_req: continue 
 
             if widget is None and not isinstance(tk_var, tk.BooleanVar): 
                 if eff_req: logger.error(f"Wizard GetParams: UI Widget for required parameter '{lbl_err}' (ID: {p_id}) not found."); all_ok=False
@@ -592,8 +628,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
                     messagebox.showerror("Input Required", f"Please provide a value for '{lbl_err}'. The placeholder '{val}' is not a valid input.", parent=self)
                     all_ok = False; val = def_val 
                 elif p_def.get("allow_empty_string", False): val = ""
-                # Else (not required, not allow empty), it will take default_val from above `val=def_val` line.
-
+                
             if target_type=="list_str_csv": params[p_id]=[s.strip() for s in val.split(',') if isinstance(val,str) and val.strip()] if isinstance(val,str) and val.strip() else ([] if not def_val or not isinstance(def_val,list) else def_val)
             else: params[p_id]=val
             
@@ -611,16 +646,14 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
                 if "template_name" in params: del params["template_name"] 
 
         if item_subtype=="always_true" and param_group_key=="conditions":
-            # Find the 'region' parameter definition for 'always_true' if it exists in UI_PARAM_CONFIG
             region_pdef_always_true = next((pd for pd in UI_PARAM_CONFIG.get("conditions",{}).get("always_true",[]) if pd["id"]=="region"),None)
             if region_pdef_always_true: 
-                # Retrieve value for the optional 'region' field of 'always_true'
                 region_val_at, _ = validate_and_get_widget_value(
                     self.step_logic_detail_widgets.get(f"{widget_prefix}region"),
                     self.step_logic_optionmenu_vars.get(f"{widget_prefix}region_var"),
                     "Region (for always_true)", str, "", required=False
                 )
-                if region_val_at: params["region"] = region_val_at # Only add 'region' to params if a value was selected
+                if region_val_at: params["region"] = region_val_at 
         
         return params if all_ok else None
 
@@ -638,7 +671,6 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         if action_params is None: 
             logger.error(f"{log_prefix}: Validation failed for Action parameters of type '{act_type}'."); return None
         
-        # Convert click on visually refined Gemini element to absolute coordinates
         if self.ui_confirmed_element_for_action and \
            action_params.get("type") == "click" and \
            action_params.get("gemini_element_variable") == self._ui_current_step_temp_var_name:
@@ -650,7 +682,8 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
             if source_region_config_from_draft:
                 abs_screen_region_x = source_region_config_from_draft.get('x', 0)
                 abs_screen_region_y = source_region_config_from_draft.get('y', 0)
-                click_target_relation_in_ui = self.step_logic_optionmenu_vars.get("step_act_target_relation_var").get() if "step_act_target_relation_var" in self.step_logic_optionmenu_vars else "center_of_gemini_element"
+                click_target_relation_in_ui_var = self.step_logic_optionmenu_vars.get("step_act_target_relation_var")
+                click_target_relation_in_ui = click_target_relation_in_ui_var.get() if click_target_relation_in_ui_var else "center_of_gemini_element"
 
                 if "center" in click_target_relation_in_ui.lower():
                     abs_click_x = abs_screen_region_x + box_data[0] + (box_data[2] // 2)
@@ -717,13 +750,13 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         if self.intermediate_plan and len(self.intermediate_plan) > 0:
             self.profile_generator.start_profile_generation(self.intermediate_plan, f"AI-Gen for: {self.user_goal_text[:70]}", initial_full_screen_context_np=self.current_full_context_np)
             self.current_page_index = PAGE_PLAN_REVIEW
-        elif self.intermediate_plan is not None and len(self.intermediate_plan) == 0: # Explicit empty plan
+        elif self.intermediate_plan is not None and len(self.intermediate_plan) == 0: 
             messagebox.showinfo("AI Plan", "AI generated an empty plan. This might mean the goal was too vague or complex. You can refine your goal or proceed to build manually if desired (though the wizard will end after this if no steps).", parent=self)
-            self.current_page_index = PAGE_PLAN_REVIEW # Show the (empty) plan review
-        else: # Plan generation failed (returned None)
+            self.current_page_index = PAGE_PLAN_REVIEW 
+        else: 
             messagebox.showerror("AI Plan Failed", "Could not generate a plan. Try rephrasing your goal or check application logs.", parent=self)
         
-        self._reset_and_load_step_state() # Prepare for first step if plan exists, or clear if not
+        self._reset_and_load_step_state() 
         self._show_current_page()
 
     def _go_to_previous_page(self): 
@@ -740,35 +773,29 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
                 self.profile_generator.current_plan_step_index = -1 
             elif pg_current_step_idx > 0: 
                 self.profile_generator.current_plan_step_index -= 1
-                self.current_page_index = PAGE_STEP_DEFINE_LOGIC # Go to previous step's logic page
-            else: self.current_page_index = PAGE_PLAN_REVIEW # Should not happen if logic is correct
+                self.current_page_index = PAGE_STEP_DEFINE_LOGIC 
+            else: self.current_page_index = PAGE_PLAN_REVIEW 
         elif self.current_page_index == PAGE_STEP_DEFINE_LOGIC: 
-            # Always go back to the REGION definition page for the *current* step
             self.current_page_index = PAGE_STEP_DEFINE_REGION 
         elif self.current_page_index == PAGE_FINAL_REVIEW_SAVE:
             if self.intermediate_plan and len(self.intermediate_plan) > 0:
-                # If PG's index is beyond last step (means we came from last logic page after last step)
                 if pg_current_step_idx >= len(self.intermediate_plan): 
                     self.profile_generator.current_plan_step_index = len(self.intermediate_plan) - 1
                 
-                # If there's a valid step index, go to its logic page
                 self.current_page_index = PAGE_STEP_DEFINE_LOGIC if self.profile_generator.current_plan_step_index >=0 else PAGE_PLAN_REVIEW
-            else: # No plan, or plan was empty, go back to goal input
+            else: 
                 self.current_page_index = PAGE_GOAL_INPUT
         
         self._reset_and_load_step_state() 
         self._show_current_page()
 
     def _reset_and_load_step_state(self):
-        """Resets UI-specific transient states and loads/re-establishes committed step data from ProfileGenerator."""
-        # Reset UI transient states for logic page first
         self.ui_suggested_condition_for_step = None; self.ui_suggested_action_for_step = None
         self.ui_element_to_refine_desc = None; self.ui_refined_element_candidates = []
         self.ui_selected_candidate_box_index = None; self.ui_confirmed_element_for_action = None
         if hasattr(self, 'element_refine_entry') and self.element_refine_entry and self.element_refine_entry.winfo_exists(): 
             self.element_refine_entry.delete(0, tk.END)
         
-        # Get current step data from ProfileGenerator
         self.current_plan_step_data = self.profile_generator.get_current_plan_step()
         if not self.current_plan_step_data: 
             self.current_step_region_name = None; self.current_step_region_coords = None
@@ -781,17 +808,9 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         step_id_from_plan = self.current_plan_step_data.get("step_id", self.profile_generator.current_plan_step_index + 1)
         logger.info(f"Wizard: Loading state for Step ID {step_id_from_plan} into UI.")
         
-        # Try to find if a region and rule corresponding to this step_id already exists in the PG's draft
-        # For region, we need a more reliable way to link it to the step than just name prefix or comment.
-        # Assuming for now, if we go back, we re-establish self.current_step_region_name/coords if they were set FOR THIS PG step index.
-        # The ProfileGenerator itself doesn't directly link regions to steps, the wizard's flow does.
-        # We will rely on the wizard's current_step_region_name and current_step_region_coords being correct for the PG's current_plan_step_index.
-        
-        # If current_step_region_name is set for this wizard step, assume it's the one to use/show
         if self.current_step_region_name and self.current_step_region_coords:
             self.current_step_region_defined_for_pg = any(r.get("name") == self.current_step_region_name for r in self.profile_generator.generated_profile_data.get("regions",[]))
             if self.current_step_region_defined_for_pg:
-                 # Re-crop image for display
                 if self.current_full_context_np is not None:
                     x,y,w,h = self.current_step_region_coords['x'], self.current_step_region_coords['y'], self.current_step_region_coords['width'], self.current_step_region_coords['height']
                     img_h_f, img_w_f = self.current_full_context_np.shape[:2]; x_c,y_c=max(0,x),max(0,y); x2_c,y2_c=min(img_w_f,x+w),min(img_h_f,y+h); w_c,h_c=x2_c-x_c,y2_c-y_c
@@ -799,57 +818,36 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
                         self.current_step_region_image_np = self.current_full_context_np[y_c:y2_c, x_c:x2_c]
                         self.current_step_region_image_pil_for_display = Image.fromarray(cv2.cvtColor(self.current_step_region_image_np, cv2.COLOR_BGR2RGB))
                     else: self.current_step_region_image_np = self.current_step_region_image_pil_for_display = None
-            else: # Region name/coords might be set in wizard state but not yet committed to PG
+            else: 
                 self.current_step_region_image_np = None; self.current_step_region_image_pil_for_display = None
-        else: # No region name/coords currently set for this step in wizard state
+        else: 
             self.current_step_region_defined_for_pg = False
             self.current_step_region_image_np = None; self.current_step_region_image_pil_for_display = None
             self._temp_suggested_region_coords = None
 
-        # Try to find existing rule logic for this step in PG's draft
         potential_rule_name_prefix = f"Rule_Step{step_id_from_plan}" 
         found_rule_for_step = next((r for r in self.profile_generator.generated_profile_data.get("rules",[]) if r.get("name","").startswith(potential_rule_name_prefix)), None)
         
         if found_rule_for_step:
             self.ui_suggested_condition_for_step = copy.deepcopy(found_rule_for_step.get("condition"))
             self.ui_suggested_action_for_step = copy.deepcopy(found_rule_for_step.get("action"))
-            # Check if the action had a target_description (implying refinement might have occurred or was suggested)
             self.ui_element_to_refine_desc = self.ui_suggested_action_for_step.get("target_description") if self.ui_suggested_action_for_step else None
         else: 
             self.ui_suggested_condition_for_step = None; self.ui_suggested_action_for_step = None
             self.ui_element_to_refine_desc = None
-
         logger.debug(f"Wizard: State loaded for step {step_id_from_plan}. Region '{self.current_step_region_name}' defined in PG: {self.current_step_region_defined_for_pg}. Rule logic loaded: {found_rule_for_step is not None}")
 
-    # --- Methods for Page Step Define Logic (UI wiring, AI calls, template capture) ---
-    # ... The rest of the methods are largely as implemented in the previous full response ...
-    # Key is that _setup_page_step_define_logic will use self.ui_suggested_condition/action_for_step
-    # if they were populated by _reset_and_load_step_state.
-    # All AI calls within these methods use the threaded pattern.
-
-    # Placeholder for the extensive UI and AI call methods for Define Logic page
-    # These methods (_setup_page_step_define_logic, _trigger_ai_logic_suggestion_for_step_threaded, etc.)
-    # would be identical to the ones provided in the "v5.0.0 Phase 2 GUI & AI Assist - Concurrency Implemented" response.
-    # For brevity, only the structure and key state management parts are shown here.
-    # The actual implementation of these methods involves detailed UI_PARAM_CONFIG parsing,
-    # widget creation, and managing interactions for conditions, actions, element refinement,
-    # and template capture, all while using the threaded AI calls.
-
-    # ... (Assume all methods from _setup_page_step_define_logic to _save_generated_profile are here,
-    #      as per the version where threading was implemented and previous state refinements were made)
-    # --- Methods for Page Step Define Logic (UI wiring, AI calls, template capture) ---
     def _setup_page_step_define_logic(self): 
         page_frame = ctk.CTkFrame(self.main_content_frame, fg_color="transparent")
         page_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
-        # current_plan_step_data should be set by _reset_and_load_step_state
         if not self.current_plan_step_data or not self.current_step_region_name or self.current_step_region_image_pil_for_display is None:
             ctk.CTkLabel(page_frame, text="Error: Critical data missing (step, region name, or region image).\nPlease go back to define the region for this task step first.", wraplength=self.winfo_width()-30, justify="left").pack(pady=20)
             self.btn_next.configure(state="disabled"); self._update_navigation_buttons_state(); return
 
         step_id = self.current_plan_step_data.get('step_id', self.profile_generator.current_plan_step_index + 1)
         step_desc = self.current_plan_step_data.get('description', 'N/A')
-        self._ui_current_step_temp_var_name = f"_ai_gen_step{step_id}_elem" # Set temp var name for this step
+        self._ui_current_step_temp_var_name = f"_ai_gen_step{step_id}_elem" 
 
         header_frame = ctk.CTkFrame(page_frame, fg_color="transparent"); header_frame.pack(fill="x", pady=(0,5))
         ctk.CTkLabel(header_frame, text=f"Step {step_id}.B: Define Logic for Region '{self.current_step_region_name}'", font=ctk.CTkFont(size=18, weight="bold")).pack(side="left", anchor="w")
@@ -874,7 +872,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         params_panel_outer = ctk.CTkFrame(main_logic_area, fg_color="transparent"); params_panel_outer.grid(row=0, column=1, sticky="nsew", padx=(5,0))
         params_panel_outer.grid_rowconfigure(0, weight=1); params_panel_outer.grid_columnconfigure(0, weight=1)
         self.params_panel_scrollable = ctk.CTkScrollableFrame(params_panel_outer, label_text="Configure Step Logic (AI Suggested / Manual)"); self.params_panel_scrollable.pack(fill="both", expand=True)
-        self.params_panel_scrollable.grid_columnconfigure(1, weight=1) # Ensure second column (widgets) in scrollable frame expands
+        self.params_panel_scrollable.grid_columnconfigure(1, weight=1) 
         
         self.step_logic_condition_frame = ctk.CTkFrame(self.params_panel_scrollable, fg_color="transparent"); self.step_logic_condition_frame.pack(fill="x", pady=(5,15), padx=5); self.step_logic_condition_frame.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(self.step_logic_condition_frame, text="STEP CONDITION:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0,5))
@@ -884,7 +882,6 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
 
         self._display_current_step_region_image_with_candidates() 
         
-        # Use pre-loaded suggestions if available (from navigating back), else trigger AI
         if self.ui_suggested_condition_for_step and self.ui_suggested_action_for_step:
             logger.debug(f"Logic Page: Using pre-loaded/existing logic for step {step_id}.")
             self._render_step_logic_editors(
@@ -939,13 +936,13 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         self.step_logic_optionmenu_vars["step_act_type_var"] = act_type_var; self.step_logic_detail_widgets["step_act_type"] = act_menu
         self._render_dynamic_params_in_wizard_subframe("actions", act_type, action_data, self.step_logic_action_frame, 2, "step_act_")
 
-        self.ui_element_to_refine_desc = element_to_refine_description # Store for current view
+        self.ui_element_to_refine_desc = element_to_refine_description 
         if element_to_refine_description and hasattr(self, 'element_refine_entry'):
             self.element_refine_entry.delete(0, tk.END); self.element_refine_entry.insert(0, element_to_refine_description)
             self.btn_refine_element.configure(state="normal")
         elif hasattr(self, 'element_refine_entry'): self.element_refine_entry.delete(0, tk.END); self.btn_refine_element.configure(state="disabled")
         
-        self.btn_capture_template_for_step.configure(state="normal") # Template capture is always an option
+        self.btn_capture_template_for_step.configure(state="normal") 
 
     def _on_wizard_logic_type_change(self, part_key: str, new_type: str): 
         self.main_app_instance._set_dirty_status(True) 
@@ -981,7 +978,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
             current_value_for_param = data_source.get(p_id, def_val); widget_full_key = f"{widget_prefix}{p_id}"
             label_widget = ctk.CTkLabel(parent_frame, text=lbl_txt); created_widget_instance = None
             if w_type == "entry":
-                entry = ctk.CTkEntry(parent_frame, placeholder_text=str(p_def.get("placeholder",""))); display_value = ", ".join(current_value_for_param) if d_type == "list_str_csv" and isinstance(current_value_for_param, list) else str(current_value_for_param); entry.insert(0, display_value); entry.bind("<KeyRelease>", lambda e: self.main_app_instance._set_dirty_status(True)); created_widget_instance = entry
+                entry = ctk.CTkEntry(parent_frame, placeholder_text=str(p_def.get("placeholder",""))); display_value = ", ".join(map(str,current_value_for_param)) if d_type == "list_str_csv" and isinstance(current_value_for_param, list) else str(current_value_for_param); entry.insert(0, display_value); entry.bind("<KeyRelease>", lambda e: self.main_app_instance._set_dirty_status(True)); created_widget_instance = entry
             elif w_type == "textbox":
                 textbox = ctk.CTkTextbox(parent_frame, height=p_def.get("height", 60), wrap="word"); textbox.insert("0.0", str(current_value_for_param)); textbox.bind("<FocusOut>", lambda e: self.main_app_instance._set_dirty_status(True)); created_widget_instance = textbox
             elif w_type.startswith("optionmenu"):
@@ -994,18 +991,23 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
                 tk_var = ctk.StringVar(value=final_current_val_for_menu); option_menu = ctk.CTkOptionMenu(parent_frame, variable=tk_var, values=options_list, command=lambda choice, p=p_def: self._update_step_logic_conditional_visibility(p, choice)); self.step_logic_optionmenu_vars[f"{widget_full_key}_var"] = tk_var; created_widget_instance = option_menu
                 if any(other_pdef.get("condition_show",{}).get("field") == p_id for other_pdef in param_defs_for_subtype if other_pdef.get("condition_show")): self.step_logic_controlling_widgets[p_id] = created_widget_instance
             elif w_type == "checkbox":
-                tk_bool_var = tk.BooleanVar(value=bool(current_value_for_param)); checkbox = ctk.CTkCheckBox(parent_frame, text=lbl_txt, variable=tk_bool_var, command=lambda p=p_def, v=tk_bool_var: self._update_step_logic_conditional_visibility(p, v.get())); self.step_logic_optionmenu_vars[f"{widget_full_key}_var"] = tk_bool_var; created_widget_instance = checkbox
+                # Checkbox label is part of lbl_txt; CTkCheckBox text is for the checkbox itself (can be empty)
+                tk_bool_var = tk.BooleanVar(value=bool(current_value_for_param))
+                checkbox = ctk.CTkCheckBox(parent_frame, text="", variable=tk_bool_var, command=lambda p=p_def, v=tk_bool_var: self._update_step_logic_conditional_visibility(p, v.get()))
+                self.step_logic_optionmenu_vars[f"{widget_full_key}_var"] = tk_bool_var
+                created_widget_instance = checkbox
                 if any(other_pdef.get("condition_show",{}).get("field") == p_id for other_pdef in param_defs_for_subtype if other_pdef.get("condition_show")): self.step_logic_controlling_widgets[p_id] = created_widget_instance
+            
             if created_widget_instance:
                 self.step_logic_detail_widgets[widget_full_key] = created_widget_instance
-                if w_type == "checkbox": created_widget_instance.grid(row=current_r, column=0, columnspan=2, padx=(0,5), pady=2, sticky="w")
-                else: label_widget.grid(row=current_r, column=0, padx=(0,5), pady=2, sticky="nw" if w_type=="textbox" else "w"); created_widget_instance.grid(row=current_r, column=1, padx=5, pady=2, sticky="ew")
-                self.step_logic_param_widgets_and_defs.append({"widget": created_widget_instance, "label_widget": label_widget if w_type != "checkbox" else None, "param_def": p_def}); current_r += 1
-            elif w_type!="checkbox": label_widget.destroy()
+                label_widget.grid(row=current_r, column=0, padx=(0,5), pady=2, sticky="nw" if w_type=="textbox" else "w")
+                created_widget_instance.grid(row=current_r, column=1, padx=5, pady=2, sticky="ew")
+                self.step_logic_param_widgets_and_defs.append({"widget": created_widget_instance, "label_widget": label_widget, "param_def": p_def}); current_r += 1
+            else: label_widget.destroy()
         self._apply_step_logic_conditional_visibility()
 
     def _update_step_logic_conditional_visibility(self, changed_param_def_controller: Dict[str,Any], new_value_of_controller: Any):
-        self.main_app_instance._set_dirty_status(True) # Action implies user change
+        self.main_app_instance._set_dirty_status(True) 
         logger.debug(f"Wizard: Controller '{changed_param_def_controller.get('id')}' for prefix '{self.step_logic_widget_prefix}' changed to '{new_value_of_controller}'. Re-evaluating visibility.")
         self._apply_step_logic_conditional_visibility()
 
@@ -1018,7 +1020,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
                 controlling_field_id = visibility_config.get("field"); expected_values_for_visibility = visibility_config.get("values", [])
                 controller_widget_instance = self.step_logic_controlling_widgets.get(controlling_field_id); current_controller_value = None
                 if isinstance(controller_widget_instance, ctk.CTkOptionMenu): tk_var_for_controller = self.step_logic_optionmenu_vars.get(f"{self.step_logic_widget_prefix}{controlling_field_id}_var"); current_controller_value = tk_var_for_controller.get() if tk_var_for_controller else None
-                elif isinstance(controller_widget_instance, ctk.CTkCheckBox): tk_var_for_controller = self.step_logic_optionmenu_vars.get(f"{self.step_logic_widget_prefix}{controlling_field_id}_var"); current_controller_value = tk_var_for_controller.get() if tk_var_for_controller else None; expected_values_for_visibility = [bool(v) for v in expected_values_for_visibility]
+                elif isinstance(controller_widget_instance, ctk.CTkCheckBox): tk_var_for_controller = self.step_logic_optionmenu_vars.get(f"{self.step_logic_widget_prefix}{controlling_field_id}_var"); current_controller_value = tk_var_for_controller.get() if tk_var_for_controller else None; expected_values_for_visibility = [bool(v) for v in expected_values_for_visibility if isinstance(v,(str,int,bool))]
                 elif isinstance(controller_widget_instance, ctk.CTkEntry): current_controller_value = controller_widget_instance.get()
                 if current_controller_value is None or current_controller_value not in expected_values_for_visibility: should_be_visible = False
             if widget_instance and widget_instance.winfo_exists():
@@ -1093,7 +1095,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
         
         profile_data_for_saving = self.profile_generator.get_generated_profile_data() 
         if self.user_goal_text: profile_data_for_saving["profile_description"] = f"AI-Generated for goal: {self.user_goal_text[:120]}"
-        self.profile_generator.generated_profile_data["profile_description"] = profile_data_for_saving["profile_description"] # Update PG's internal master copy for saving
+        self.profile_generator.generated_profile_data["profile_description"] = profile_data_for_saving["profile_description"] 
 
         default_save_dir = self.main_app_instance.config_manager.profiles_base_dir 
         initial_filename_for_dialog = f"{filename_base_from_ui}.json" 
@@ -1103,7 +1105,7 @@ class ProfileCreationWizardWindow(ctk.CTkToplevel):
             success = self.profile_generator.save_generated_profile(filepath_chosen_by_user)
             if success:
                 messagebox.showinfo("Profile Saved", f"AI-Generated profile (and its templates) saved to:\n{filepath_chosen_by_user}", parent=self)
-                self.newly_saved_profile_path = filepath_chosen_by_user # Set this attribute
+                self.newly_saved_profile_path = filepath_chosen_by_user 
                 if messagebox.askyesno("Open in Editor?", "Open the new profile in the main editor?", parent=self): 
                     self.main_app_instance._load_profile_from_path(filepath_chosen_by_user)
                 self._on_close_wizard(was_saved=True)

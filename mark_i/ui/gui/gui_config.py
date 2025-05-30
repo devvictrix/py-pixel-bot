@@ -1,4 +1,5 @@
 import logging
+from typing import Dict, List, Any, Optional # Added this line
 
 # Use __name__ for module-level logger for better organization if this module grows.
 # For now, simple print or direct APP_ROOT_LOGGER_NAME if complex logging needed here.
@@ -8,7 +9,7 @@ import logging
 
 
 # --- Constants ---
-DEFAULT_PROFILE_STRUCTURE = {
+DEFAULT_PROFILE_STRUCTURE: Dict[str, Any] = { # Added type hint
     "profile_description": "New Profile",
     "settings": {
         "monitoring_interval_seconds": 1.0,
@@ -22,11 +23,11 @@ DEFAULT_PROFILE_STRUCTURE = {
     "rules": [],
 }
 
-MAX_PREVIEW_WIDTH = 200  # Max width for template image previews in GUI
-MAX_PREVIEW_HEIGHT = 150  # Max height for template image previews in GUI
+MAX_PREVIEW_WIDTH: int = 200  # Max width for template image previews in GUI
+MAX_PREVIEW_HEIGHT: int = 150  # Max height for template image previews in GUI
 
 # --- Dropdown Options ---
-CONDITION_TYPES = [
+CONDITION_TYPES: List[str] = [
     "pixel_color",
     "average_color_is",
     "template_match_found",
@@ -36,11 +37,11 @@ CONDITION_TYPES = [
     "always_true",  # For unconditional rule execution or testing
 ]
 
-ACTION_TYPES = ["click", "type_text", "press_key", "log_message", "gemini_perform_task"]  # AI-driven task execution (goal-based and NLU-based)
+ACTION_TYPES: List[str] = ["click", "type_text", "press_key", "log_message", "gemini_perform_task"]  # AI-driven task execution (goal-based and NLU-based)
 
-LOGICAL_OPERATORS = ["AND", "OR"]  # For compound conditions
+LOGICAL_OPERATORS: List[str] = ["AND", "OR"]  # For compound conditions
 
-CLICK_TARGET_RELATIONS = [
+CLICK_TARGET_RELATIONS: List[str] = [
     "center_of_region",
     "center_of_last_match",
     "absolute",
@@ -49,15 +50,15 @@ CLICK_TARGET_RELATIONS = [
     "top_left_of_gemini_element",  # Target top-left of Gemini-identified bounding box
 ]
 
-CLICK_BUTTONS = ["left", "middle", "right", "primary", "secondary"]  # PyAutoGUI valid button names
+CLICK_BUTTONS: List[str] = ["left", "middle", "right", "primary", "secondary"]  # PyAutoGUI valid button names
 
-LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]  # For log_message action
+LOG_LEVELS: List[str] = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]  # For log_message action
 
 # For 'gemini_perform_task' action's 'allowed_actions_override' parameter.
 # These should match the keys in GeminiDecisionModule.PREDEFINED_ALLOWED_SUB_ACTIONS.
 # This list is for UI presentation (e.g., tooltips, validation hints).
 # The actual enforcement happens in GeminiDecisionModule.
-GEMINI_TASK_ALLOWED_PRIMITIVE_ACTIONS_FOR_UI_HINT = [
+GEMINI_TASK_ALLOWED_PRIMITIVE_ACTIONS_FOR_UI_HINT: List[str] = [
     "CLICK_DESCRIBED_ELEMENT",
     "TYPE_IN_DESCRIBED_FIELD",
     "PRESS_KEY_SIMPLE",

@@ -1,0 +1,13 @@
+{
+    "profile_description": "New Profile",
+    "settings": {
+        "monitoring_interval_seconds": 1.0,
+        "analysis_dominant_colors_k": 3,
+        "tesseract_cmd_path": null,
+        "tesseract_config_custom": "",
+        "gemini_default_model_name": "gemini-1.5-flash-latest"
+    },
+    "regions": [],
+    "templates": [],
+    "rules": []
+}
