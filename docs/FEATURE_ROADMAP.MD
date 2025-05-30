@@ -1,8 +1,5 @@
-// File: docs/FEATURE_ROADMAP.MD
-
 # Feature Roadmap & Status for Mark-I
 
-This document tracks planned features and their status for the Mark-I visual automation tool. Version 4.0.0 (Gemini-Powered Visual Intelligence) is COMPLETE.
 **Version 5.0.0 (AI-Driven Profile Generation) is now considered COMPLETE.**
 
 **Key Supporting Documents:**
@@ -116,13 +113,13 @@ This document tracks planned features and their status for the Mark-I visual aut
 **Current Focus (v5.0.x):**
 - **v5.0.1 Codebase Refactoring:** **DONE.**
 - **v5.0.2 Implement Unit Test Infrastructure & Initial Coverage:** **DONE.**
-    - `pytest` framework setup, `tests/` directory, and initial tests for `ConfigManager`, `gui_utils`, `ConditionEvaluators`, `PrimitiveExecutors`, `AnalysisEngine`, and `RulesEngine` are complete.
+    - `pytest` framework setup and initial tests for `ConfigManager`, `gui_utils.parse_bgr_string`, `ConditionEvaluator` classes, `PrimitiveSubActionExecutor` classes, `AnalysisEngine`, and `RulesEngine` (core logic) are complete. This provides a foundational level of unit test coverage for many refactored and core components.
 - **v5.0.3 Manual End-to-End (E2E) Testing:** (Status: `Planning`) The next logical step is to proceed with comprehensive manual E2E testing of all v5.0.0 features, including the AI Profile Generator and the execution of generated profiles, to ensure overall system stability, usability, and correctness after refactoring and initial unit test implementation.
 
 **Future Considerations (Post v5.0.x):**
 - Address any bugs or critical refinements identified during E2E testing (v5.0.3).
 - Revisit the deferred "Profile Refinement Loop (Basic)" for the AI Profile Creator.
 - Explore items listed under "vFuture" on the roadmap based on user feedback and project priorities.
-- Continuous performance optimization and expansion of unit test coverage for remaining modules and new features.
+- Continuous performance optimization and expansion of unit test coverage for remaining modules (e.g., GUI components, `MainController`) and new features.
 
 The planned work for v5.0.2 (Implement Unit Test Infrastructure & Initial Coverage) is now complete.
