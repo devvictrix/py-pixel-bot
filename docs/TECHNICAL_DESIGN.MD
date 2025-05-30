@@ -199,127 +199,140 @@ The tool is modular, comprising several key Python components, all residing with
 *   `RulesEngine` calls `GeminiDecisionModule.execute_nlu_task()` when `gemini_perform_task` action is triggered.
 
 ---
-## 15. AI-Driven Profile Generation (`StrategyPlanner` & `ProfileGenerator` - v5.0.0)
+## 15. AI-Driven Profile Generation (v5.0.0 - `StrategyPlanner` & `ProfileGenerator`)
 
-This new system, introduced in v5.0.0 as per ADR-009, aims to assist users in creating Mark-I profiles from high-level goals. It involves AI for strategic planning and AI-assistance for defining profile elements interactively.
+This section details the architecture for Mark-I v5.0.0's "AI Profile Creator" feature, designed to assist users in generating Mark-I JSON profiles from high-level natural language goals, as per ADR-009. **This update details the GUI Workflow and AI-Assisted Element Suggestion logic for Phase 2 of v5.0.0.**
 
 ### 15.1. Overview and Purpose (v5.0.0)
+*(Remains as previously defined in the v5.0.0 design for `TECHNICAL_DESIGN.MD`)*
+The primary goal is to use AI to translate a user's high-level automation goal into an intermediate plan, and then interactively guide the user, with AI assistance, to convert this plan into a functional Mark-I JSON profile.
 
-*   **Goal:** To significantly reduce the manual effort of creating Mark-I profiles. Users will state a high-level automation goal (e.g., "Automate login to MyApp," "Extract data from the daily report PDF and enter it into the web form"). Mark-I, using Gemini, will generate an initial "strategic plan" and then guide the user through an interactive process to translate this plan into a concrete Mark-I JSON profile.
-*   **Paradigm:** "Goal -> AI-Generated Plan -> AI-Assisted Interactive Profile Element Definition -> Usable Mark-I Profile."
-*   **Output:** A standard Mark-I `.json` profile that can be run by the existing v4.0.0 execution engine (`MainController`, `RulesEngine`, etc.) or further edited in the standard GUI.
+### 15.2. Core Components for Profile Generation (v5.0.0)
 
-### 15.2. System Architecture and New Components (v5.0.0)
+#### 15.2.1. `generation.strategy_planner.StrategyPlanner` Class
+*(Core responsibilities and `generate_intermediate_plan` method remain as designed in v5.0.0 Phase 1. It produces the `IntermediatePlan`.)*
 
-*   **New Package: `mark_i.generation`** (or similar)
-    *   **`generation.strategy_planner.StrategyPlanner` Class:**
-        *   **Input:** User's high-level goal (natural language), optional initial full-screen screenshot or application context.
-        *   **Process:** Uses `GeminiAnalyzer` to send the goal and context to a Gemini model (likely a powerful one like Gemini 1.5 Pro). Prompts Gemini to break down the goal into a sequence of logical, human-understandable sub-steps or sub-goals. This output is the "intermediate plan."
-        *   **Output:** The intermediate plan (e.g., a list of dictionaries, each describing a step's intent and general target).
-        *   **Error Handling:** Manages failures from Gemini in generating a coherent plan.
-    *   **`generation.profile_generator.ProfileGenerator` Class:**
-        *   **Input:** The intermediate plan from `StrategyPlanner`, access to `GeminiAnalyzer`, and a mechanism to interact with the user via a new GUI workflow.
-        *   **Process:**
-            1.  Iterates through each step of the intermediate plan.
-            2.  For each step (e.g., "Find the 'username' input field"):
-                *   **Region Suggestion/Definition:** May prompt Gemini (via `GeminiAnalyzer` with a current screenshot) to suggest a screen area relevant to this step. Shows this suggestion to the user. The user confirms, adjusts, or manually draws the region using a `RegionSelector`-like interface. The defined region is added to the profile-in-progress.
-                *   **Condition/Action Logic Suggestion:** Based on the plan step's intent, suggests a Mark-I condition type and/or action type. E.g., for "Find 'username' input field," might suggest an OCR condition looking for "Username:" label or a `gemini_vision_query` to locate it semantically. For "Type 'admin'," suggests a `type_text` action.
-                *   **Interactive Element Grounding:** If the step involves interacting with a specific UI element (e.g., "click the 'Login' button"), it uses `GeminiAnalyzer` (similar to `_refine_target_description_to_bbox` logic) to visually highlight potential candidates on the current screen. The user clicks to confirm the correct element.
-                *   **Template Prompting:** If the AI suggests a template would be best (e.g., for a unique icon), it prompts the user: "I need a template for 'the login icon'. Please capture it now." The GUI facilitates this capture, and the template is added to the profile-in-progress.
-                *   **Parameter Elicitation:** Prompts the user for any parameters that cannot be inferred by AI (e.g., "What username should I type into this field?").
-            3.  Assembles the confirmed and defined regions, rules (conditions + actions), and templates into a `profile_data` dictionary.
-        *   **Output:** The complete `profile_data` dictionary.
-*   **New GUI Workflow (`generation_ui.ProfileGenerationWizard` or similar):**
-    *   A new set of GUI views/dialogs to manage the interactive profile generation process.
-    *   See Section 9.x for more GUI details.
+#### 15.2.2. `generation.profile_generator.ProfileGenerator` Class (Enhanced for v5.0.0 Phase 2 AI Assist)
 
-### 15.3. Data Flow for AI Profile Generation (v5.0.0)
+*   **Responsibilities (Recap & Enhancements):**
+    *   Takes the "intermediate plan" from `StrategyPlanner`.
+    *   Manages an interactive workflow with the user via the `ProfileCreationWizardWindow` GUI.
+    *   Iterates through each step of the plan:
+        *   **Visual Contextualization:** Receives current screen capture relevant to the step.
+        *   **(NEW - AI Assist) Region Suggestion/Definition:** Calls `self.suggest_region_for_current_step()` which uses `GeminiAnalyzer` to suggest a relevant screen area. Passes suggestion to GUI. GUI allows user to confirm, adjust (invoking a region selection tool), or manually define. The final region is added to the profile draft.
+        *   **(NEW - AI Assist) Condition/Action Logic Suggestion & Formulation:** Calls `self.suggest_logic_for_current_step()` which uses `GeminiAnalyzer` to suggest Mark-I condition(s) and action(s) appropriate for the plan step and defined region. Passes suggestions to GUI.
+        *   **(NEW - AI Assist & GUI Interaction) Interactive Element Grounding & Parameter Elicitation:**
+            *   If an AI-suggested action involves a specific UI element (e.g., "click 'Login' button"), `ProfileGenerator` may use `GeminiAnalyzer` again to get candidate bounding boxes for that element description within the step's region.
+            *   GUI displays these candidates (e.g., overlays on a screenshot snippet). User clicks to confirm.
+            *   If AI or user decides a template is best, GUI prompts user to capture it. Template saved, metadata added to profile draft.
+            *   GUI prompts user for any parameters AI cannot infer (e.g., text to type, specific file names).
+            *   User confirms/modifies all AI-suggested and user-provided parameters for conditions and actions.
+        *   **Rule Assembly:** Assembles the confirmed elements into a Mark-I rule and adds it to `profile_data`.
+    *   Maintains the `profile_data` dictionary (regions, templates, rules, settings) as it's being built.
+*   **Key Enhanced/New Methods for AI Assist:**
+    *   `suggest_region_for_current_step(self, plan_step: IntermediatePlanStep, current_full_screen_capture: np.ndarray) -> Optional[Dict[str, Any]]`:
+        *   Input: Current plan step description, full screen capture.
+        *   Process: Crafts prompt for `GeminiAnalyzer` (vision model) asking it to identify and return a bounding box `{"box": [x,y,w,h], "reasoning": "..."}` for the most relevant screen area for *this specific plan step*.
+        *   Output: A dictionary `{"x": ..., "y": ..., "width": ..., "height": ..., "ai_confidence": ..., "ai_reasoning": ...}` or `None`.
+    *   `suggest_logic_for_current_step(self, plan_step: IntermediatePlanStep, current_region_capture: np.ndarray, region_name: str) -> Optional[Dict[str, Any]]`:
+        *   Input: Current plan step, image of the *focused region for this step*, name of this region.
+        *   Process: Crafts prompt for `GeminiAnalyzer` asking it to suggest a Mark-I `condition` object and an `action` object (with types and parameters) to implement the `plan_step.description` within the given `current_region_capture`. The prompt will include examples of Mark-I condition/action JSON structures.
+        *   Output: `{"suggested_condition": {...}, "suggested_action": {...}, "ai_reasoning": "..."}` or `None`.
+    *   `refine_element_location_for_step(self, element_description: str, current_region_capture: np.ndarray, region_name: str) -> Optional[Dict[str, Any]]`:
+        *   Input: A textual description of an element (e.g., "the username field," "the submit button") from a plan step or AI logic suggestion, image of the current working region.
+        *   Process: Uses `GeminiAnalyzer` with a vision prompt (similar to Phase 1.5 `_refine_target_description_to_bbox`) to get bounding box candidates for the `element_description` within the `current_region_capture`.
+        *   Output: List of `{"box": [x,y,w,h], "label_suggestion": "...", "confidence": ...}` or `None`.
+*   *(Other methods like `initialize_profile_generation`, `get_next_plan_step_description`, `add_region_to_profile`, etc., remain structurally similar but will be called by the new GUI wizard.)*
 
-1.  **User Initiates:** User selects "AI Create Profile" in GUI, enters high-level goal (e.g., "Log me into MyApp"). Provides initial screen context (e.g., MyApp is open).
-2.  **`StrategyPlanner.generate_plan(goal, initial_screenshot)`:**
-    a.  `StrategyPlanner` crafts a prompt for `GeminiAnalyzer` containing the goal and instructions to output a step-by-step plan.
-    b.  `GeminiAnalyzer` calls Gemini (text/multimodal model).
-    c.  Gemini returns a structured "intermediate plan" (e.g., JSON list of steps).
-    d.  `StrategyPlanner` parses and validates this plan.
-3.  **`ProfileGenerator.build_profile_from_plan(intermediate_plan, interactive_gui_callback_handler)`:**
-    a.  `ProfileGenerator` iterates through plan steps.
-    b.  **For each step:**
-        i.  GUI displays current plan step to user (e.g., "Step 1: Locate Username Field").
-        ii. `ProfileGenerator` (using `GeminiAnalyzer` + current screen capture) suggests a region. GUI shows it; user confirms/adjusts. Defined region added to profile draft.
-        iii. `ProfileGenerator` suggests a condition (e.g., OCR for "Username:" near the field). GUI shows it; user confirms/edits parameters.
-        iv. `ProfileGenerator` suggests an action (e.g., "Click this field"). GUI shows visual highlight (from Gemini); user confirms.
-        v. If template needed, GUI prompts user to capture it.
-        vi. Necessary rule with condition/action added to profile draft.
-    c.  Loop continues for all steps.
-4.  **Finalization:**
-    a.  User reviews the complete generated profile structure (list of regions, rules, templates).
-    b.  User saves the profile via `ConfigManager`.
-    c.  The saved profile can then be opened in the standard editor or run.
+### 15.3. Data Flow for AI Profile Generation Workflow (v5.0.0 - Enhanced for Interactivity)
+*(The Mermaid diagram from ADR-009 and previous design is still a good high-level. The "ProfileGenerator" box now has more internal calls to GeminiAnalyzer for suggestions during its loop.)*
 
-**Diagram: AI Profile Generation High-Level Flow (v5.0.0)**
-```mermaid
-sequenceDiagram
-    participant UserGUI
-    participant StrategyPlanner as SP
-    participant ProfileGenerator as PG
-    participant GeminiAnalyzer as GA
-    participant RegionSelectorTool as RST # For user drawing regions
-    participant ConfigManager as CM
+1.  **User Goal Input (GUI):** User provides goal string and optional initial screen context image.
+2.  **`StrategyPlanner.generate_intermediate_plan(goal, initial_context)`:**
+    *   `SP` -> `GeminiAnalyzer` (text/multimodal model with goal-to-plan prompt) -> Gemini returns JSON plan.
+    *   `SP` parses plan, returns `IntermediatePlan` (list of `IntermediatePlanStep` dicts).
+3.  **`ProfileCreationWizardWindow` (GUI) starts, gets plan from `SP`.**
+4.  **Loop through each `IntermediatePlanStep` in the GUI Wizard, managed by `ProfileGenerator`:**
+    a.  **GUI:** Displays `plan_step.description`. Takes current full screenshot.
+    b.  **`ProfileGenerator.suggest_region_for_current_step(plan_step, full_screenshot)`:**
+        *   `PG` -> `GeminiAnalyzer` (vision prompt for region box) -> Returns suggested box.
+    c.  **GUI:** Displays suggested region on screenshot. User confirms, adjusts (invoking `RegionSelector`-like tool), or draws manually. User names the region.
+    d.  **`ProfileGenerator.add_region_to_profile(user_defined_region_spec)`.**
+    e.  **`ProfileGenerator.suggest_logic_for_current_step(plan_step, image_of_confirmed_region, region_name)`:**
+        *   `PG` -> `GeminiAnalyzer` (prompt for condition/action JSON structure) -> Returns `{"suggested_condition": ..., "suggested_action": ...}`.
+    f.  **GUI:** Displays suggested condition and action with editable parameters.
+        *   If suggestion involves a specific element (e.g., action target "the login button"):
+            *   **`ProfileGenerator.refine_element_location_for_step("login button", image_of_confirmed_region, region_name)`:**
+                *   `PG` -> `GeminiAnalyzer` (vision prompt for bounding boxes of "login button") -> Returns candidate boxes.
+            *   **GUI:** Overlays candidate boxes. User clicks to confirm THE "login button".
+            *   If user chooses "Use Template" for this element: GUI prompts for template capture. `ProfileGenerator.add_template_to_profile()`. The condition/action is updated to use this template.
+            *   Else (user confirms a bounding box or AI suggestion): The action parameters (e.g., `target_relation: "center_of_gemini_element"`, `gemini_element_variable` pointing to this refined box) are prepared.
+        *   User provides any other needed parameters (e.g., text for `type_text`).
+    g.  **`ProfileGenerator.add_rule_to_profile(user_confirmed_rule_spec)`.**
+    h.  GUI proceeds to next plan step.
+5.  **Finalization (GUI):** User reviews all generated regions, templates, rules. Clicks "Save Profile."
+6.  **`ProfileCreationWizardWindow` -> `ProfileGenerator.save_generated_profile(filepath)`.**
 
-    UserGUI->>SP: Start AI Profile Generation (User Goal, Initial Screen Context)
-    SP->>GA: query_model(goal_to_plan_prompt, initial_context)
-    GA-->>SP: GeminiResponse (Intermediate Plan JSON)
-    SP->>SP: Parse & Validate Plan
-    SP-->>UserGUI: Display Intermediate Plan (Optional Review Step)
-    UserGUI-->>PG: Proceed with Plan / User Confirmed Plan
+### 15.4. GUI Workflow for AI Profile Generation (`ProfileCreationWizardWindow` - v5.0.0 Phase 2)
 
-    loop For each Step in Intermediate Plan
-        UserGUI->>PG: Request processing for current_step
-        PG->>UserGUI: Display current_step_description
-        
-        alt Region Definition for step
-            PG->>GA: query_model(suggest_region_prompt, current_screen_capture)
-            GA-->>PG: SuggestedRegionCoords
-            PG->>UserGUI: DisplaySuggestedRegion(SuggestedRegionCoords)
-            UserGUI->>RST: User Confirms/Adjusts/Draws Region
-            RST-->>PG: FinalRegionSpec
-            PG->>PG: Add Region to profile_in_progress
-        end
+This new GUI component will guide the user through the AI-assisted profile creation.
 
-        alt Condition & Action Definition for step
-            PG->>GA: query_model(suggest_condition_action_prompt, current_screen_capture, step_description)
-            GA-->>PG: SuggestedConditionActionLogic
-            PG->>UserGUI: DisplaySuggestions(Logic, PotentialVisualTargets)
-            UserGUI->>PG: User Confirms/Edits/ProvidesParams (e.g. text for OCR, template capture if prompted)
-            PG->>PG: Add Rule (Condition+Action) to profile_in_progress
-        end
-    end
+*   **Overall Structure:** Likely a `ctk.CTkToplevel` window acting as a wizard. It will have "Next Step," "Previous Step" (optional), "Define Manually," "Accept Suggestion," and "Cancel" buttons.
+*   **Screen 1: Goal Input & Initial Context:**
+    *   Large `CTkTextbox` for "Describe your automation goal:"
+    *   Button: "Use Current Full Screen as Context" (takes screenshot).
+    *   Button: "Select Application Window as Context" (lists open windows, user selects, captures that window).
+    *   Button: "Proceed without Initial Image Context."
+    *   "Generate Automation Plan" button -> calls `StrategyPlanner`.
+*   **Screen 2: Plan Review & Confirmation (Optional):**
+    *   If `StrategyPlanner` returns a plan, display it as a list of step descriptions.
+    *   User can review. (Future: edit/reorder).
+    *   "Start Building Profile from this Plan" button -> calls `ProfileGenerator.start_profile_generation_from_plan()`.
+*   **Screen 3 (Repeats for each plan step): Interactive Step Definition:**
+    *   **Display Area:** Shows current full screenshot (or selected app window screenshot). This area will be used to overlay AI-suggested regions and element bounding boxes.
+    *   **Plan Step Display:** Clearly shows the current `plan_step.description` (e.g., "Locate the 'Username' input field.").
+    *   **AI Suggestion Area:**
+        *   **Region:** "AI suggests focusing on this area for this step:" (displays a highlighted rectangle from `ProfileGenerator.suggest_region_for_current_step()`). Buttons: "Accept Suggested Region," "Draw/Adjust Region Manually."
+            *   If "Draw/Adjust": Invokes an embedded or modal `RegionSelector`-like tool. User defines/names the region. `ProfileGenerator.add_region_to_profile()`.
+        *   **Logic:** "AI suggests for this step in region `'{confirmed_region_name}'`:"
+            *   Displays suggested Condition (type, params).
+            *   Displays suggested Action (type, params).
+            *   Editable fields for all parameters.
+        *   **Element Grounding:** If action needs a target (e.g., "Click 'Login Button'"):
+            *   `ProfileGenerator.refine_element_location_for_step()` is called.
+            *   "AI found these candidates for 'Login Button':" (Highlights are shown on the screenshot snippet of the confirmed region). User clicks one.
+            *   Option: "Element not listed / Capture Template Instead." -> Template capture workflow.
+        *   **Parameter Input:** Prompts for any `required_user_input_for_step` from the plan (e.g., "Enter text to type:").
+    *   **Controls:** "Confirm Step & Add to Profile," "Skip Step / Define Manually Later," "Cancel Profile Generation."
+*   **Screen 4: Final Review & Save:**
+    *   Displays a tree-like summary of generated `profile_data` (regions, templates, rules).
+    *   "Save Profile As..." button.
+    *   "Open in Editor for Refinement" button (saves then opens in `MainAppWindow`).
 
-    PG-->>UserGUI: DisplayGeneratedProfileSummary
-    UserGUI->>CM: SaveProfile(generated_profile_data, chosen_filepath)
-    CM-->>UserGUI: SaveStatus
-```
+### 15.5. Prompt Engineering for Profile Generation - Element Suggestion (v5.0.0 Phase 2)
 
-### 15.4. Prompt Engineering for Profile Generation (v5.0.0)
+This details prompts for `ProfileGenerator`'s AI-assist methods.
 
-*   **Goal-to-Intermediate-Plan (`StrategyPlanner`):**
-    *   **System Role:** "You are an expert automation planner. Given a user's high-level goal for desktop automation and an optional screenshot, break it down into a logical sequence of distinct, human-understandable sub-steps. Each sub-step should describe a simple user interaction or observation."
-    *   **Output Format:** Request JSON output, e.g., `{"plan_name": "User Goal Summary", "steps": [{"step_id": 1, "description": "Locate the username input field on the login screen."}, {"step_id": 2, "description": "Type the provided username into the username field."}, ...]}`.
-*   **Plan-Step-to-Profile-Element-Suggestion (`ProfileGenerator` interacting with user & Gemini):**
-    *   For "Locate the username input field":
-        *   To suggest region: "Based on the current screen and the task 'Locate username input field', suggest a bounding box for the most relevant area to search." (Returns box)
-        *   To suggest condition: "To implement 'Locate username input field' in region X, what's a good visual condition? E.g., OCR for label 'Username', template match for an input field icon, or a semantic search for 'an input field typically used for usernames'?" (Returns suggested method and parameters).
-    *   These will be highly interactive and context-dependent.
+*   **For `ProfileGenerator.suggest_region_for_current_step()`:**
+    *   **Input:** Full screen image, current `plan_step.description`.
+    *   **Prompt Snippet:** "...Given the full screen image and the current task step: `'{plan_step.description}'`. Your goal is to identify the primary rectangular area on this screen where this step is most likely to take place. Respond ONLY with a JSON object containing a 'box' key with an array of four integers [x, y, width, height] representing this area, and a 'reasoning' key explaining your choice. The coordinates must be relative to the top-left of the provided full image."
+*   **For `ProfileGenerator.suggest_logic_for_current_step()`:**
+    *   **Input:** Image of the *focused/confirmed region for this step*, `plan_step.description`, `region_name`.
+    *   **Prompt Snippet:** "...For the task step `'{plan_step.description}'` to be performed within the provided image (which is region `'{region_name}'`), suggest a Mark-I condition object and a Mark-I action object to implement it.
+        Valid condition types: `pixel_color`, `average_color_is`, `template_match_found`, `ocr_contains_text`, `dominant_color_matches`, `gemini_vision_query`, `always_true`.
+        Valid action types: `click`, `type_text`, `press_key`, `log_message`.
+        Provide parameters. If a template is best, for `template_match_found` use `\"template_filename\": \"USER_TO_CAPTURE_TEMPLATE_FOR_{element_description}\"`. If an element needs precise clicking, describe it for the `click` action's `target_description` (e.g., `\"target_description\": \"the green OK button\"`).
+        Respond ONLY with JSON: `{\"suggested_condition\": {\"type\": \"...\", ...}, \"suggested_action\": {\"type\": \"...\", ...}, \"reasoning\": \"...\"}`."
+*   **For `ProfileGenerator.refine_element_location_for_step()` (finding specific element box):**
+    *   *(This reuses the robust bounding box prompt from v4.0.0 Phase 1.5/Section 10.3/14.4.2)*: "You are a precise visual element locator. In the provided image (of region `'{region_name}'`), identify the UI element best described as: `'{element_description}'`. Respond ONLY with JSON: `{\"found\": true/false, \"box\": [x,y,w,h_or_null], \"element_label\": \"{element_description}\"}`."
 
-### 15.5. Safety, Control, and Limitations (v5.0.0 AI Profile Creator)
-
-*   **User-in-the-Loop (Critical):** The user MUST confirm/define key visual elements like regions and templates. AI suggests, user validates.
-*   **Transparency:** The intermediate plan and suggested profile elements should be visible to the user.
-*   **Generated Profile Quality:** The initial generated profile is a "best effort" starting point. Users should expect to review and potentially refine it using the standard editor.
-*   **Complexity Handling:** Very complex or ambiguous goals may result in poor plans or profile suggestions.
-*   **No Direct Execution During Generation:** The generation phase does not execute actions on the live system; it only builds the profile structure.
-
-### 15.6. GUI for AI Profile Generation Workflow (v5.0.0)
-*(As outlined in Section 9.x. This will be a new major UI component/wizard.)*
+### 15.6. Error Handling and User Feedback during Generation (v5.0.0 Phase 2)
+*(Builds upon Section 8 notes)*
+*   The GUI Wizard must clearly display errors from `StrategyPlanner` or `ProfileGenerator`.
+*   If AI fails to suggest a region, condition, or action for a step, the GUI should allow the user to:
+    *   Manually define the element (e.g., draw region, manually create condition/action using standard GUI elements similar to `DetailsPanel`).
+    *   Ask the AI to "try again" (perhaps with a rephrased step description by the user).
+    *   Skip the current plan step (leaving a placeholder or comment in the generated profile).
+*   Progress indicators for long Gemini calls.
 
 ---
