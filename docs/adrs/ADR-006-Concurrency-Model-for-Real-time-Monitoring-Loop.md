@@ -1,5 +1,3 @@
-// File: docs/adrs/ADR-006-Concurrency-Model-for-Real-time-Monitoring-Loop.md
-
 # ADR-006: Concurrency Model for Real-time Monitoring Loop
 
 *   **Status:** Approved (Implemented; v4.0.0 AI API calls are I/O-bound within this model)

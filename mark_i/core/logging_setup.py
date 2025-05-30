@@ -100,15 +100,16 @@ def setup_logging(
             if log_file_path_override:
                 final_log_file_for_handler = os.path.abspath(log_file_path_override)
                 log_file_dir_to_ensure = os.path.dirname(final_log_file_for_handler)
-                logger.info(f"Custom log file path specified: {final_log_file_for_handler}")
+                # Use logger_instance here as it should be configured for basic console output by now
+                logger_instance.info(f"Custom log file path specified: {final_log_file_for_handler}")
             else:
                 final_log_file_for_handler = os.path.join(default_logs_dir, f"{log_file_base_name}.log")
                 log_file_dir_to_ensure = default_logs_dir
-                logger.info(f"Using default rotating log file strategy in directory: {default_logs_dir}")
+                logger_instance.info(f"Using default rotating log file strategy in directory: {default_logs_dir}")
 
             if not os.path.exists(log_file_dir_to_ensure):
                 os.makedirs(log_file_dir_to_ensure)
-                logger.info(f"Created logs directory: {log_file_dir_to_ensure}")
+                logger_instance.info(f"Created logs directory: {log_file_dir_to_ensure}")
 
             file_formatter_obj = logging.Formatter(file_formatter_str)
 
@@ -130,7 +131,7 @@ def setup_logging(
 
         except Exception as e:
             logger_instance.error(f"Failed to set up file logging: {e}", exc_info=True)
-            print(f"ERROR: Could not set up file logging for path '{log_file_path_override or default_logs_dir}': {e}", file=sys.stderr)
+            print(f"ERROR: Could not set up file logging for path '{log_file_path_override or default_logs_dir if 'default_logs_dir' in locals() else 'unknown'}': {e}", file=sys.stderr)
     else:
         logger_instance.info("File logging is disabled by configuration.")
 

@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Dict, Any, Optional, List
 import copy  # For deepcopying default profile structure
+import sys  # For printing to stderr in critical failure
 
 import dotenv  # For loading .env files
 

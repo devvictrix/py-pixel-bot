@@ -256,8 +256,8 @@ class AnalysisEngine:
         if num_pixels < num_colors:
             logger.warning(f"{log_prefix}: Image pixels ({num_pixels}) < k ({num_colors}). Reducing k to {num_pixels}.")
             num_colors = num_pixels
-        if num_colors == 0:
-            logger.warning(f"{log_prefix}: Effective k is 0. Cannot perform K-Means.")
+        if num_colors == 0:  # Can happen if num_pixels was 0 and k was also 0 or less.
+            logger.warning(f"{log_prefix}: Effective k is 0 after adjustments. Cannot perform K-Means.")
             return []
 
         try:
@@ -273,25 +273,27 @@ class AnalysisEngine:
 
             dominant_colors_list: List[Dict[str, Any]] = []
             for i, cluster_idx in enumerate(unique_cluster_indices):
-                if cluster_idx < len(centers_float_bgr):
+                if cluster_idx < len(centers_float_bgr):  # Ensure cluster_idx is a valid index for centers_float_bgr
                     bgr_float_components = centers_float_bgr[cluster_idx]
                     bgr_int_components = [int(round(c)) for c in bgr_float_components]
                     occurrence_percentage = (pixel_counts_per_cluster[i] / num_pixels) * 100.0
                     dominant_colors_list.append({"bgr_color": bgr_int_components, "percentage": float(occurrence_percentage)})
-                else:  # Should not happen if k-means works as expected
-                    logger.warning(f"{log_prefix}: K-Means label index {cluster_idx} out of bounds for centers array (len {len(centers_float_bgr)}).")
+                else:
+                    logger.warning(
+                        f"{log_prefix}: K-Means label index {cluster_idx} out of bounds for centers array (len {len(centers_float_bgr)}). This might indicate an issue with num_colors vs actual clusters found."
+                    )
 
             dominant_colors_list.sort(key=lambda x: x["percentage"], reverse=True)
 
             if not dominant_colors_list:
-                logger.warning(f"{log_prefix}: No dominant colors resolved.")
+                logger.warning(f"{log_prefix}: No dominant colors resolved despite K-Means run.")
                 return []
 
             log_summary = [f"BGR:{d['bgr_color']}({d['percentage']:.1f}%)" for d in dominant_colors_list]
             logger.info(f"{log_prefix}: Found {len(dominant_colors_list)} colors: [{'; '.join(log_summary)}]")
             return dominant_colors_list
         except cv2.error as e_cv2:
-            logger.error(f"{log_prefix}: OpenCV error during K-Means: {e_cv2}.", exc_info=True)
+            logger.error(f"{log_prefix}: OpenCV error during K-Means: {e_cv2}. Check if image is too small or k is too large for unique colors.", exc_info=True)
             return None
         except Exception as e:
             logger.exception(f"{log_prefix}: Unexpected error during K-Means: {e}")

@@ -1,8 +1,8 @@
-// File: docs/DEV_CONFIG.MD
-
 # Development Configuration & Choices
 
-This document outlines key development choices, current phase settings, and environment setup for the **Mark-I** project. Version 4.0.0 is complete. **Focus is now on designing and implementing v5.0.0 (AI-Driven Profile Generation) Phase 2: GUI Workflow and AI-Assisted Element Suggestion.**
+This document outlines key development choices, current phase settings, and environment setup for the **Mark-I** project.
+**Version 5.0.0 (AI-Driven Profile Generation) is now considered complete and stable.**
+Focus will shift to planning for future enhancements (`vFuture`).
 
 ## 1. Core Project Setup
 
@@ -30,17 +30,19 @@ This document outlines key development choices, current phase settings, and envi
 ## 2. Current Development Phase Focus
 
 - **Overall Goal for Fourth Major Deliverable:** `v4.0.0 (Gemini-Powered Visual Intelligence)` - **COMPLETED.**
-- **Overall Goal for Fifth Major Deliverable (Current Target):** `v5.0.0 (AI-Driven Profile Generation)`
-  - This version aims to enable Mark-I to assist users in creating automation profiles by understanding high-level goals and translating them into Mark-I configurations.
+- **Overall Goal for Fifth Major Deliverable:** `v5.0.0 (AI-Driven Profile Generation)` - **COMPLETED.**
+  - This version enabled Mark-I to assist users in creating automation profiles by understanding high-level goals and translating them into Mark-I configurations via an interactive AI-assisted wizard.
   - Phase 1 (Core Backend Logic: `StrategyPlanner`, `ProfileGenerator` core) - `COMPLETED`.
-- **Active Version (Current Focus for Implementation):** `v5.0.0 (Phase 2 Implementation: GUI for AI Profile Creation Workflow & AI-Assisted Element Suggestion)`
-  - _This version dictates the immediate GUI implementation tasks for the AI collaborator, building upon the approved designs and backend logic._
-- **Primary Goal for Active Version:**
-  1.  **AI Collaborator to implement the `ProfileCreationWizardWindow` GUI:** This includes all UI screens (goal input, plan review, iterative step definition for regions/logic), user interaction logic, calls to `StrategyPlanner` and `ProfileGenerator` (including its AI-assist methods), display of AI suggestions (with visual overlays), and handling of user inputs/confirmations for defining profile elements interactively.
-  2.  **AI Collaborator to implement template image file saving** within `ProfileGenerator.save_generated_profile()`.
-  3.  **DevLead to review the GUI implementation and AI-assist integration.**
-  4.  **Proceed to thorough testing upon implementation review.**
-- **Testing Strategy for v5.0.0 Phase 2:** Will involve intensive manual testing of the interactive `ProfileCreationWizardWindow`, the quality and usability of AI suggestions for regions/logic/elements, the template capture flow, and the correctness of the finally generated profile.
+  - Phase 2 (GUI Workflow & AI-Assisted Element Suggestion) - `COMPLETED`.
+  - Phase 3 (Integration & Refinement) - `COMPLETED`.
+  - Phase 4 (Documentation) - `COMPLETED`.
+
+- **Active Version (Current State):** `v5.0.0 (AI-Driven Profile Generation) - STABLE`
+  - **Primary Goal for Active Version:** This version is feature-complete. Current activities involve maintenance, addressing any post-release feedback, and planning for future development cycles (`vFuture`).
+- **Next Development Cycle Focus:** `vFuture - Planning Phase`
+  - Evaluate features listed under "vFuture" in `FEATURE_ROADMAP.MD`.
+  - Gather user feedback on v5.0.0 to inform priorities.
+  - Consider revisiting deferred features like the "Profile Refinement Loop".
 - **Linting/Formatting Setup:**
   - **Flake8 (Linter):** Enabled (Configured for Black compatibility via `.flake8`).
   - **Black (Formatter):** Enabled (Configured via `pyproject.toml`).
@@ -48,9 +50,9 @@ This document outlines key development choices, current phase settings, and envi
 
 ## 3. Architectural & Design Approach
 
-- **Overall Architectural Style:** Modular, with a new `generation` package and new GUI components for the AI Profile Creator.
+- **Overall Architectural Style:** Modular, with the `generation` package and `ProfileCreationWizardWindow` GUI components being key additions in v5.0.0.
   - _Details in `TECHNICAL_DESIGN.MD` Section 15 and ADR-009._
-- **Logging Strategy:** Comprehensive logging for the entire profile generation process, including GUI interactions and AI suggestion calls.
+- **Logging Strategy:** Comprehensive logging implemented for the entire profile generation process, including GUI interactions and AI suggestion calls.
 - **Code Design Principles:** Readability, Simplicity, Modularity, Testability, Diagnosability.
 
 ## 4. Tooling Choices (Key Tools - per ADRs)
@@ -74,19 +76,18 @@ This document outlines key development choices, current phase settings, and envi
 
 - **System:** Git
 - **Branching (Simplified Strategy):**
-  - `main`: Contains the v4.0.0 release.
-  - `develop`: Active development branch for v5.0.0. Feature branches for v5.0.0 Phase 2 (e.g., `feature/ai-profile-wizard-gui`) are created from `develop`.
+  - `main`: Should now reflect the v5.0.0 stable release.
+  - `develop`: Active development branch for any ongoing minor fixes for v5.0.0 or for starting `vFuture` work. Feature branches for new development are created from `develop`.
 - **Commit Messages:** Aim for conventional commit style.
 
 ## 6. Documentation
 
 - **Docstring Style:** Google Python Style.
 - **Project Documentation Status:**
-  - v4.0.0 documentation is finalized.
-  - ADR-009 approved for v5.0.0.
-  - `TECHNICAL_DESIGN.MD` Section 15 (including GUI workflow and AI-assist logic) is designed for v5.0.0 Phase 2.
-  - `FUNCTIONAL_REQUIREMENTS.MD` and `NON_FUNCTIONAL_REQUIREMENTS.MD` updated for v5.0.0.
-- **README.md (Project Root):** Will need major updates upon v5.0.0 completion.
+  - v4.0.0 documentation finalized.
+  - v5.0.0 documentation (ADRs, `TECHNICAL_DESIGN.MD` Section 15, FRs/NFRs, `PROJECT_OVERVIEW.MD`, `README.MD`) updated and complete.
+  - All new code modules for v5.0.0 (`StrategyPlanner`, `ProfileGenerator`, `ProfileCreationWizardWindow`, `SubImageSelectorWindow`) include comprehensive docstrings.
+- **README.md (Project Root):** Updated for v5.0.0.
 
 ## 7. Development Environment
 

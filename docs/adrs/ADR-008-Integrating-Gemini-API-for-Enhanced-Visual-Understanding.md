@@ -1,5 +1,3 @@
-// File: docs/adrs/ADR-008-Integrating-Gemini-API-for-Enhanced-Visual-Understanding.md
-
 # ADR-008: Integrating Gemini API for Enhanced Visual Understanding, Decision Making, and NLU
 
 *   **Status:** Implemented and Evolved through v4.0.0 (Initial Vision Query, Bounding Box Actions, Goal-Driven Decisions, NLU Command Interface)

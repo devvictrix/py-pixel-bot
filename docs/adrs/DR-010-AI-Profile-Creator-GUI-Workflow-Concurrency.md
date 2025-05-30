@@ -1,3 +1,5 @@
+// File: docs/adrs/DR-010-AI-Profile-Creator-GUI-Workflow-Concurrency.md
+
 # ADR-010: Concurrency Model for AI Profile Creator GUI Wizard
 
 - **Status:** Accepted

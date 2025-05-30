@@ -1,5 +1,3 @@
-// File: docs/adrs/ADR-003-Configuration-Profile-Storage-Format.md
-
 # ADR-003: Configuration Profile Storage Format
 
 *   **Status:** Approved (v4.0.0: Schema expanded for AI features, format remains JSON)

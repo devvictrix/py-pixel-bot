@@ -1,5 +1,3 @@
-// File: docs/adrs/ADR-001-Choice-Screen-Capture-Analysis-Tech.md
-
 # ADR-001: Choice of Core Technologies for Screen Capture and Region Analysis
 
 *   **Status:** Approved (v4.0.0: Decision remains valid; image data also consumed by AI analysis modules)

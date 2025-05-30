@@ -130,6 +130,7 @@ class CaptureEngine:
                 img_cv_bgr = cv2.cvtColor(img_np_intermediate, cv2.COLOR_RGBA2BGR)
                 logger.debug(f"{log_prefix}: 4-channel image (assumed RGBA) captured, converted to BGR.")
             elif img_np_intermediate.shape[2] == 3:  # Assume RGB if 3 channels and not already handled
+                # This could be an issue if it's already BGR from some backend, but Pillow usually gives RGB
                 img_cv_bgr = cv2.cvtColor(img_np_intermediate, cv2.COLOR_RGB2BGR)
                 logger.debug(f"{log_prefix}: 3-channel image (assumed RGB based on shape) captured, converted to BGR.")
             else:
@@ -145,7 +146,7 @@ class CaptureEngine:
             return None
         except Exception as e:
             logger.error(f"{log_prefix}: Capture FAILED for BBox {bbox_to_capture}. Unexpected Error: {e}", exc_info=True)  # Include full stack trace for unexpected errors
-            # More specific OS error interpretations (as in previous version)
+            # More specific OS error interpretations
             err_str = str(e).lower()
             if "scrot" in err_str or "gnome-screenshot" in err_str:
                 logger.error(f"{log_prefix}: Pillow ImageGrab on Linux might be missing 'scrot' or 'gnome-screenshot'. Please ensure one is installed.")

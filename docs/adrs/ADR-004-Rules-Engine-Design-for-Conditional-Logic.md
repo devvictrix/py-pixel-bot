@@ -1,5 +1,3 @@
-// File: docs/adrs/ADR-004-Rules-Engine-Design-for-Conditional-Logic.md
-
 # ADR-004: Rules Engine Design for Conditional Logic
 
 *   **Status:** Approved (Implemented and Evolved; v4.0.0 additions like `gemini_vision_query` fit this structure)

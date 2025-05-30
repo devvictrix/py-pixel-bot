@@ -1,5 +1,3 @@
-// File: docs/adrs/ADR-007-Logging-Strategy-and-Environment-Configuration.md
-
 # ADR-007: Logging Strategy and Environment Configuration
 
 *   **Status:** Approved (Implemented; v4.0.0 includes `GEMINI_API_KEY` in .env and specific logging for AI interactions)
