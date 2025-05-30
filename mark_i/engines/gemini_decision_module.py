@@ -1,77 +1,38 @@
 import logging
 import json
-import time  # For optional delays between NLU task steps
-from typing import Dict, Any, Optional, List, Tuple
-import os  # For os.linesep
+import time
+from typing import Dict, Any, Optional, List, Tuple, Callable  # Added Callable
+import os
 
 import numpy as np
 
-from mark_i.engines.gemini_analyzer import GeminiAnalyzer
+from mark_i.engines.gemini_analyzer import GeminiAnalyzer, DEFAULT_NLU_PLANNING_MODEL, DEFAULT_VISUAL_REFINE_MODEL
 from mark_i.engines.action_executor import ActionExecutor
-from mark_i.core.config_manager import ConfigManager  # For resolving region data for refinement context
+from mark_i.core.config_manager import ConfigManager
 
-# Standardized logger for this module
+# Import new primitive executor classes
+from mark_i.engines.primitive_executors import (
+    PrimitiveSubActionExecutorBase,
+    ClickDescribedElementExecutor,
+    TypeInDescribedFieldExecutor,
+    PressKeySimpleExecutor,
+    CheckVisualStateExecutor,
+    PrimitiveSubActionExecuteResult,
+)
+
 from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
 
 logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_decision_module")
 
-# --- Constants for GeminiDecisionModule ---
-
-# Predefined set of "primitive" sub-actions that an NLU-decomposed plan can map to.
-# Gemini will be prompted to suggest actions whose `action_type` (from its JSON response
-# for a sub-step) maps to one of these keys.
-# `expected_params_from_gemini`: Parameters Gemini needs to provide for this sub-action.
-# `maps_to_action_executor_type`: The corresponding type understood by ActionExecutor.
-# `refinement_needed`: True if this action typically needs visual target refinement (bounding box).
 PREDEFINED_ALLOWED_SUB_ACTIONS: Dict[str, Dict[str, Any]] = {
-    "CLICK_DESCRIBED_ELEMENT": {
-        "description": "Clicks an element described textually (e.g., 'the blue button labeled Submit').",
-        "expected_params_from_gemini": ["target_description"],  # Gemini should provide this
-        "maps_to_action_executor_type": "click",
-        "refinement_needed": True,  # This action's target needs visual refinement
-    },
-    "TYPE_IN_DESCRIBED_FIELD": {
-        "description": "Types text into an element described textually (e.g., 'the username input field').",
-        "expected_params_from_gemini": ["text_to_type", "target_description"],
-        "maps_to_action_executor_type": None,  # Handled as a sequence: click field, then type text
-        "refinement_needed": True,  # For the field target (before clicking)
-    },
-    "PRESS_KEY_SIMPLE": {
-        "description": "Presses a single standard keyboard key (e.g., 'enter', 'tab', 'escape').",
-        "expected_params_from_gemini": ["key_name"],
-        "maps_to_action_executor_type": "press_key",
-        "refinement_needed": False,
-    },
-    "CHECK_VISUAL_STATE": {
-        "description": "Checks if a visual condition described textually is met (e.g., 'if an error message is visible', 'is the Save button enabled?'). Used for conditional branching in NLU tasks. Result is true/false.",
-        "expected_params_from_gemini": ["condition_description"],
-        "maps_to_action_executor_type": None,  # Internal evaluation, not a direct PyAutoGUI action
-        "refinement_needed": False,  # The description is evaluated against an image.
-    },
-    # Example: "WAIT_SHORT": {
-    #     "description": "Waits for a short duration (e.g., 1.5 seconds).",
-    #     "expected_params_from_gemini": ["duration_seconds"],
-    #     "maps_to_action_executor_type": "wait", # Assumes ActionExecutor could have a 'wait' type
-    #     "refinement_needed": False
-    # },
+    "CLICK_DESCRIBED_ELEMENT": {"description": "Clicks an element described textually.", "executor_class": ClickDescribedElementExecutor},
+    "TYPE_IN_DESCRIBED_FIELD": {"description": "Types text into an element described textually.", "executor_class": TypeInDescribedFieldExecutor},
+    "PRESS_KEY_SIMPLE": {"description": "Presses a single standard keyboard key.", "executor_class": PressKeySimpleExecutor},
+    "CHECK_VISUAL_STATE": {"description": "Checks if a visual condition is met.", "executor_class": CheckVisualStateExecutor},
 }
-
-# Default model for NLU parsing and complex planning, can be overridden by profile settings if desired
-DEFAULT_NLU_PLANNING_MODEL = "gemini-1.5-flash-latest"
-# Default model for visual refinement (bounding box) and visual state checks - flash is faster
-DEFAULT_VISUAL_REFINE_MODEL = "gemini-1.5-flash-latest"
 
 
 class GeminiDecisionModule:
-    """
-    Parses Natural Language User Commands (v4.0.0 Phase 3), decomposes them into
-    tasks/steps, and orchestrates their execution. For each step, it uses Gemini
-    (via GeminiAnalyzer) for visual analysis to determine appropriate primitive
-    actions and refine targets, then calls ActionExecutor.
-    Also handles simpler goal-driven single action selection (v4.0.0 Phase 2)
-    if `natural_language_command` is not provided but `goal_prompt` is.
-    """
-
     def __init__(
         self,
         gemini_analyzer: GeminiAnalyzer,
@@ -79,24 +40,47 @@ class GeminiDecisionModule:
         config_manager: ConfigManager,
     ):
         if not isinstance(gemini_analyzer, GeminiAnalyzer) or not gemini_analyzer.client_initialized:
-            logger.critical("GeminiDecisionModule CRITICAL: Initialized with an invalid or uninitialized GeminiAnalyzer. AI decision features will fail.")
-            raise ValueError("A valid, initialized GeminiAnalyzer instance is required for GeminiDecisionModule.")
+            logger.critical("GDM CRITICAL: Invalid GeminiAnalyzer.")
+            raise ValueError("Valid, initialized GeminiAnalyzer instance required for GeminiDecisionModule.")
         self.gemini_analyzer = gemini_analyzer
 
         if not isinstance(action_executor, ActionExecutor):
-            logger.critical("GeminiDecisionModule CRITICAL: Initialized without a valid ActionExecutor.")
+            logger.critical("GDM CRITICAL: Invalid ActionExecutor.")
             raise ValueError("ActionExecutor instance is required.")
         self.action_executor = action_executor
 
         if not isinstance(config_manager, ConfigManager):
-            logger.critical("GeminiDecisionModule CRITICAL: Initialized without a valid ConfigManager.")
+            logger.critical("GDM CRITICAL: Invalid ConfigManager.")
             raise ValueError("ConfigManager instance is required.")
-        self.config_manager = config_manager  # Used to get region screen coordinates for refinement
+        self.config_manager = config_manager
+
+        # Initialize primitive sub-action executors (Strategy Pattern)
+        self._primitive_executors: Dict[str, PrimitiveSubActionExecutorBase] = self._initialize_primitive_executors()
 
         logger.info("GeminiDecisionModule (NLU Task Orchestrator & Goal Executor) initialized.")
 
+    def _initialize_primitive_executors(self) -> Dict[str, PrimitiveSubActionExecutorBase]:
+        """Initializes and returns a dictionary of primitive_action_type to executor instance."""
+        executors: Dict[str, PrimitiveSubActionExecutorBase] = {}
+        shared_dependencies = {
+            "action_executor_instance": self.action_executor,
+            "gemini_analyzer_instance": self.gemini_analyzer,
+            "target_refiner_func": self._refine_target_description_to_bbox,  # Pass method reference
+        }
+        for action_type, meta in PREDEFINED_ALLOWED_SUB_ACTIONS.items():
+            executor_class = meta.get("executor_class")
+            if executor_class:
+                try:
+                    executors[action_type] = executor_class(**shared_dependencies)
+                except Exception as e_init_exec:
+                    logger.error(f"GDM: Failed to initialize primitive executor for '{action_type}': {e_init_exec}", exc_info=True)
+            else:
+                logger.warning(f"GDM: No executor_class defined for primitive action type '{action_type}' in PREDEFINED_ALLOWED_SUB_ACTIONS.")
+        logger.debug(f"GDM: Initialized {len(executors)} primitive sub-action executors.")
+        return executors
+
     def _construct_nlu_parse_prompt(self, natural_language_command: str) -> str:
-        """Constructs the prompt for Gemini to parse the NLU command into a structured plan."""
+        # Unchanged from previous version
         nlu_schema_description = """
 You are an NLU (Natural Language Understanding) parser for a desktop automation tool named Mark-I.
 Your task is to analyze the user's natural language command and convert it into a structured JSON plan.
@@ -144,29 +128,23 @@ Expected "parsed_task" for example:
         return prompt
 
     def _map_nlu_intent_to_allowed_sub_action(self, nlu_intent_verb: Optional[str]) -> Optional[str]:
-        """Maps a parsed NLU intent verb to one of the PREDEFINED_ALLOWED_SUB_ACTIONS keys."""
+        # Unchanged from previous version
         if not nlu_intent_verb or not isinstance(nlu_intent_verb, str):
             return None
         verb = nlu_intent_verb.strip().upper()
-        # This mapping needs to be robust and potentially expanded.
         if "CLICK" in verb or ("PRESS" in verb and "BUTTON" in verb) or "SELECT" in verb:
             return "CLICK_DESCRIBED_ELEMENT"
-        if "TYPE" in verb or ("ENTER" in verb and "KEY" not in verb and "TEXT" in verb) or "FILL" in verb or "INPUT" in verb:  # More specific for TYPE
+        if "TYPE" in verb or ("ENTER" in verb and "KEY" not in verb and "TEXT" in verb) or "FILL" in verb or "INPUT" in verb:
             return "TYPE_IN_DESCRIBED_FIELD"
-        if ("PRESS" in verb and "KEY" in verb) or verb in ["HIT_ENTER", "SUBMIT_FORM_WITH_ENTER", "PRESS_ENTER", "PRESS_TAB", "PRESS_ESCAPE"]:  # Added common key presses
+        if ("PRESS" in verb and "KEY" in verb) or verb in ["HIT_ENTER", "SUBMIT_FORM_WITH_ENTER", "PRESS_ENTER", "PRESS_TAB", "PRESS_ESCAPE"]:
             return "PRESS_KEY_SIMPLE"
         if "CHECK" in verb or "VERIFY" in verb or "IS" in verb and ("VISIBLE" in verb or "PRESENT" in verb or "ENABLED" in verb or "DISABLED" in verb) or "IF" in verb and "STATE" in verb:
             return "CHECK_VISUAL_STATE"
         logger.warning(f"NLU Intent verb '{nlu_intent_verb}' (normalized to '{verb}') could not be mapped to a predefined sub-action type.")
         return None
 
-    def _construct_sub_step_action_suggestion_prompt(self, sub_step_goal_description: str, allowed_sub_actions_map: Dict[str, Any]) -> str:
-        logger.debug(f"Constructing sub-step action suggestion prompt for sub-goal: '{sub_step_goal_description}' (This path might be less used if NLU is direct).")
-        actions_desc_parts = [f"- \"{name}\": {meta['description']} Expected parameters: [{', '.join(meta.get('expected_params_from_gemini',[]))}]" for name, meta in allowed_sub_actions_map.items()]
-        prompt = f'You are an AI assistant executing one step of an automated task. Sub-goal: "{sub_step_goal_description}". Based on the image, choose ONE action from:\n{chr(10).join(actions_desc_parts)}\nRespond JSON: {{"action_type": "CHOSEN_TYPE", "parameters": {{...}}, "reasoning": "..."}}'
-        return prompt
-
     def _refine_target_description_to_bbox(self, target_description: str, context_image_np: np.ndarray, context_image_region_name: str, task_rule_name_for_log: str) -> Optional[Dict[str, Any]]:
+        # Unchanged from previous version (this method is now passed to primitive executors)
         log_prefix = f"R '{task_rule_name_for_log}', NLU Task TargetRefine"
         logger.info(f"{log_prefix}: Refining target: '{target_description}' in rgn '{context_image_region_name}'")
         prompt = (
@@ -174,7 +152,7 @@ Expected "parsed_task" for example:
             f'If found, respond ONLY with JSON: {{"found": true, "box": [x,y,w,h], "element_label": "{target_description}", "confidence_score": 0.0_to_1.0}}. The box coordinates [x,y,w,h] must be integers relative to the top-left of the provided image. Ensure width and height are positive.\n'
             f'If not found or ambiguous, respond ONLY with JSON: {{"found": false, "box": null, "element_label": "{target_description}", "reasoning": "why_not_found_or_ambiguous"}}.'
         )
-        response = self.gemini_analyzer.query_vision_model(prompt=prompt, image_data=context_image_np, model_name_override=DEFAULT_VISUAL_REFINE_MODEL)  # Prompt first
+        response = self.gemini_analyzer.query_vision_model(prompt=prompt, image_data=context_image_np, model_name_override=DEFAULT_VISUAL_REFINE_MODEL)
         if response["status"] == "success" and response["json_content"]:
             data = response["json_content"]
             if isinstance(data, dict) and "found" in data:
@@ -186,7 +164,6 @@ Expected "parsed_task" for example:
                     and data["box"][2] > 0
                     and data["box"][3] > 0
                 ):
-
                     box = [int(round(n)) for n in data["box"]]
                     logger.info(f"{log_prefix}: Target '{target_description}' refined to bbox: {box}. Confidence: {data.get('confidence_score', 'N/A')}")
                     return {
@@ -195,11 +172,11 @@ Expected "parsed_task" for example:
                     }
                 elif not data["found"]:
                     logger.info(f"{log_prefix}: Target '{target_description}' not found by Gemini. Reasoning: {data.get('reasoning', 'N/A')}")
-                else:  # Found true, but box invalid
-                    logger.warning(f"{log_prefix}: Refined box data for '{target_description}' invalid or missing. Data: {data}")
-            else:  # JSON structure unexpected
+                else:
+                    logger.warning(f"{log_prefix}: Refined box data for '{target_description}' invalid. Data: {data}")
+            else:
                 logger.warning(f"{log_prefix}: Refinement JSON structure unexpected: {data}")
-        else:  # API call failed or no JSON content
+        else:
             logger.error(f"{log_prefix}: Refinement query failed. Status: {response['status']}, Err: {response.get('error_message')}")
         return None
 
@@ -210,149 +187,41 @@ Expected "parsed_task" for example:
         primary_context_region_name: str,
         task_rule_name_for_log: str,
         task_parameters_from_rule: Dict[str, Any],
-    ) -> bool:
-        log_prefix = f"R '{task_rule_name_for_log}', NLU SubStep"
+    ) -> PrimitiveSubActionExecuteResult:
+        """
+        Delegates execution of a primitive sub-action to the appropriate executor
+        based on the mapped NLU intent. (Refactored to use Strategy Pattern)
+        """
         intent_verb = step_instruction_details.get("intent_verb")
-        target_desc_from_nlu = step_instruction_details.get("target_description")
-        params_from_nlu = step_instruction_details.get("parameters", {})
-        if not isinstance(params_from_nlu, dict):
-            params_from_nlu = {}
-
-        logger.info(f"{log_prefix}: Executing primitive. Intent='{intent_verb}', TargetDesc='{target_desc_from_nlu}', NLU Params={params_from_nlu}")
+        log_prefix_base = f"R '{task_rule_name_for_log}', NLU SubStep"
+        logger.info(
+            f"{log_prefix_base}: Executing primitive. Intent='{intent_verb}', TargetDesc='{step_instruction_details.get('target_description')}', NLU Params={step_instruction_details.get('parameters', {})}"
+        )
 
         primitive_action_type = self._map_nlu_intent_to_allowed_sub_action(intent_verb)
         if not primitive_action_type:
-            logger.error(f"{log_prefix}: Could not map NLU intent '{intent_verb}' to an allowed primitive sub-action. Step failed.")
-            return False
+            logger.error(f"{log_prefix_base}: Could not map NLU intent '{intent_verb}' to an allowed primitive sub-action. Step failed.")
+            return PrimitiveSubActionExecuteResult(success=False, boolean_eval_result=False)
 
-        action_meta = PREDEFINED_ALLOWED_SUB_ACTIONS[primitive_action_type]
-        final_ae_spec: Dict[str, Any] = {
-            "type": "",
-            "context": {
-                "rule_name": f"{task_rule_name_for_log}_NLU_SubStep_{primitive_action_type.replace('_','-')}",
-                "variables": {},
-                "condition_region": primary_context_region_name,
-            },
-            "pyautogui_pause_before": task_parameters_from_rule.get("pyautogui_pause_before", 0.1),
-        }
+        executor = self._primitive_executors.get(primitive_action_type)
+        if not executor:
+            logger.error(f"{log_prefix_base}: No executor found for primitive action type '{primitive_action_type}'. Step failed.")
+            return PrimitiveSubActionExecuteResult(success=False, boolean_eval_result=False)
 
-        current_step_image_np = current_visual_context_images.get(primary_context_region_name)
-        if current_step_image_np is None:
-            logger.error(f"{log_prefix}: Primary context image for region '{primary_context_region_name}' is missing. Step failed.")
-            return False
-
-        refined_target_data_for_ae: Optional[Dict[str, Any]] = None
-        if action_meta.get("refinement_needed", False):
-            if not target_desc_from_nlu or not isinstance(target_desc_from_nlu, str):
-                logger.error(f"{log_prefix}: Primitive action '{primitive_action_type}' requires 'target_description', but it's missing or invalid: '{target_desc_from_nlu}'. Step failed.")
-                return False
-            refined_target_data_for_ae = self._refine_target_description_to_bbox(target_desc_from_nlu, current_step_image_np, primary_context_region_name, task_rule_name_for_log)
-            if not refined_target_data_for_ae:
-                logger.error(f"{log_prefix}: Failed to refine target '{target_desc_from_nlu}' for primitive action '{primitive_action_type}'. Step failed.")
-                return False
-
-        action_executor_type = action_meta.get("maps_to_action_executor_type")
-
-        if primitive_action_type == "CLICK_DESCRIBED_ELEMENT":
-            if not refined_target_data_for_ae:
-                logger.critical(f"{log_prefix}: Internal error - refined target data missing for CLICK. Step failed.")
-                return False
-            temp_var_name = f"_nlu_click_target_{time.monotonic_ns()}"
-            final_ae_spec["context"]["variables"][temp_var_name] = refined_target_data_for_ae
-            final_ae_spec["type"] = action_executor_type  # "click"
-            final_ae_spec["target_relation"] = "center_of_gemini_element"
-            final_ae_spec["gemini_element_variable"] = temp_var_name
-            final_ae_spec["button"] = params_from_nlu.get("button", "left")
-            final_ae_spec["clicks"] = int(params_from_nlu.get("clicks", 1))
-            final_ae_spec["interval"] = float(params_from_nlu.get("interval", 0.0))
-
-        elif primitive_action_type == "TYPE_IN_DESCRIBED_FIELD":
-            if not refined_target_data_for_ae:
-                logger.critical(f"{log_prefix}: Internal error - refined target data missing for TYPE. Step failed.")
-                return False
-            text_to_type = params_from_nlu.get("text_to_type")
-            if not isinstance(text_to_type, str):  # Can be empty string
-                logger.error(f"{log_prefix}: 'text_to_type' missing or invalid for TYPE_IN_DESCRIBED_FIELD. NLU Params: {params_from_nlu}. Step failed.")
-                return False
-
-            click_var_name_type = f"_nlu_type_field_target_{time.monotonic_ns()}"
-            click_context_vars = {click_var_name_type: refined_target_data_for_ae}
-            click_spec_for_type = {
-                "type": "click",
-                "target_relation": "center_of_gemini_element",
-                "gemini_element_variable": click_var_name_type,
-                "button": "left",
-                "clicks": 1,
-                "pyautogui_pause_before": 0.15,
-                "context": {**final_ae_spec["context"], "variables": click_context_vars},
-            }
-            logger.info(f"{log_prefix}: Executing pre-type click on '{target_desc_from_nlu}'")
-            try:
-                self.action_executor.execute_action(click_spec_for_type)
-            except Exception as e_click_field:
-                logger.error(f"{log_prefix}: Failed to execute pre-type click on field '{target_desc_from_nlu}': {e_click_field}", exc_info=True)
-                return False
-            time.sleep(0.2)
-
-            final_ae_spec["type"] = "type_text"
-            final_ae_spec["text"] = text_to_type
-            final_ae_spec["interval"] = float(params_from_nlu.get("typing_interval", 0.01))
-
-        elif primitive_action_type == "PRESS_KEY_SIMPLE":
-            key_name = params_from_nlu.get("key_name")
-            if not key_name or not isinstance(key_name, str):
-                logger.error(f"{log_prefix}: 'key_name' missing or invalid for PRESS_KEY_SIMPLE. NLU Params: {params_from_nlu}. Step failed.")
-                return False
-            final_ae_spec["type"] = action_executor_type  # "press_key"
-            final_ae_spec["key"] = key_name
-
-        elif primitive_action_type == "CHECK_VISUAL_STATE":
-            condition_desc_from_params = params_from_nlu.get("condition_description", target_desc_from_nlu)
-            if not condition_desc_from_params:
-                logger.error(f"{log_prefix}: 'condition_description' missing for CHECK_VISUAL_STATE. Step failed.")
-                return False
-            check_prompt = f"Based on the provided image of region '{primary_context_region_name}', is the following condition true or false? Condition: \"{condition_desc_from_params}\". Respond with only the single word 'true' or 'false'."
-            logger.info(f"{log_prefix}: Evaluating visual state: '{condition_desc_from_params}' in region '{primary_context_region_name}'")
-            gemini_eval_response = self.gemini_analyzer.query_vision_model(prompt=check_prompt, image_data=current_step_image_np, model_name_override=DEFAULT_VISUAL_REFINE_MODEL)  # Prompt first
-            if gemini_eval_response["status"] == "success" and gemini_eval_response["text_content"]:
-                response_text = gemini_eval_response["text_content"].strip().lower()
-                if response_text == "true":
-                    logger.info(f"{log_prefix}: Visual state '{condition_desc_from_params}' evaluated to TRUE.")
-                    return True
-                elif response_text == "false":
-                    logger.info(f"{log_prefix}: Visual state '{condition_desc_from_params}' evaluated to FALSE.")
-                    return False
-                else:
-                    logger.warning(f"{log_prefix}: CHECK_VISUAL_STATE got ambiguous response: '{response_text}'. Interpreting as FALSE.")
-                    return False
-            else:
-                logger.error(f"{log_prefix}: CHECK_VISUAL_STATE failed. Gemini query status: {gemini_eval_response['status']}, Error: {gemini_eval_response.get('error_message')}")
-                return False
-        else:
-            logger.error(f"{log_prefix}: Internal error - unhandled primitive action type '{primitive_action_type}'. Step failed.")
-            return False
-
-        if task_parameters_from_rule.get("require_confirmation_per_step", True) and final_ae_spec.get("type"):
-            action_desc_for_confirm = f"{final_ae_spec.get('type')} on target '{target_desc_from_nlu or 'N/A'}'"
-            if primitive_action_type == "TYPE_IN_DESCRIBED_FIELD":
-                action_desc_for_confirm = f"TYPE '{params_from_nlu.get('text_to_type')}' in '{target_desc_from_nlu}'"
-            elif primitive_action_type == "PRESS_KEY_SIMPLE":
-                action_desc_for_confirm = f"PRESS_KEY '{params_from_nlu.get('key_name')}'"
-            logger.info(f"{log_prefix}: USER CONFIRMATION REQUIRED for: {action_desc_for_confirm} (Simulating 'Yes' for backend test)")
-
-        if final_ae_spec.get("type"):
-            try:
-                loggable_ae_spec = {k: v for k, v in final_ae_spec.items() if k != "context"}
-                logger.info(f"{log_prefix}: Dispatching to ActionExecutor. Spec (params only): {loggable_ae_spec}")
-                self.action_executor.execute_action(final_ae_spec)
-                logger.info(f"{log_prefix}: Primitive action '{final_ae_spec['type']}' targeting '{target_desc_from_nlu or 'N/A'}' executed successfully.")
-                return True
-            except Exception as e_ae_exec:
-                logger.error(f"{log_prefix}: Error during ActionExecutor execution for primitive action '{final_ae_spec['type']}': {e_ae_exec}", exc_info=True)
-                return False
-        else:  # Should only be for CHECK_VISUAL_STATE which returns boolean directly
-            logger.error(f"{log_prefix}: No ActionExecutor type set for primitive action '{primitive_action_type}'. This is unexpected if not CHECK_VISUAL_STATE.")
-            return False  # Should have returned earlier for CHECK_VISUAL_STATE
+        try:
+            # Pass all necessary context to the specific executor's execute method
+            result = executor.execute(
+                step_instruction_details=step_instruction_details,
+                current_visual_context_images=current_visual_context_images,
+                primary_context_region_name=primary_context_region_name,
+                task_rule_name_for_log=task_rule_name_for_log,
+                task_parameters_from_rule=task_parameters_from_rule,
+                log_prefix_base=log_prefix_base,
+            )
+            return result
+        except Exception as e_exec_primitive:
+            logger.error(f"{log_prefix_base}: Unexpected error during execution of primitive '{primitive_action_type}': {e_exec_primitive}", exc_info=True)
+            return PrimitiveSubActionExecuteResult(success=False, boolean_eval_result=False)
 
     def execute_nlu_task(
         self,
@@ -361,6 +230,11 @@ Expected "parsed_task" for example:
         initial_context_images: Dict[str, np.ndarray],
         task_parameters: Dict[str, Any],
     ) -> Dict[str, Any]:
+        # This method's core logic (NLU parsing, recursive plan execution) remains.
+        # The key change is how _execute_primitive_sub_action is called.
+        # The recursive helper `_recursive_execute_plan_node` will now use the refactored
+        # `_execute_primitive_sub_action` which delegates to strategy executors.
+
         overall_task_result = {"status": "failure", "message": "NLU task initiated.", "executed_steps_summary": []}
         log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd='{natural_language_command[:60].replace(os.linesep,' ')}...'"
         logger.info(f"{log_prefix_task}: Starting execution.")
@@ -371,14 +245,9 @@ Expected "parsed_task" for example:
             return overall_task_result
 
         nlu_parse_prompt = self._construct_nlu_parse_prompt(natural_language_command)
-        # Provide first image as context for NLU parsing if available, otherwise a dummy or None based on model needs.
-        # The current GeminiAnalyzer handles None image_data by making a text-only call if model supports it.
         nlu_context_image_for_parsing = next(iter(initial_context_images.values()), None) if initial_context_images else None
-
         nlu_response = self.gemini_analyzer.query_vision_model(
-            prompt=nlu_parse_prompt,
-            image_data=nlu_context_image_for_parsing,
-            model_name_override=task_parameters.get("nlu_model_override", DEFAULT_NLU_PLANNING_MODEL),
+            prompt=nlu_parse_prompt, image_data=nlu_context_image_for_parsing, model_name_override=task_parameters.get("nlu_model_override", DEFAULT_NLU_PLANNING_MODEL)
         )
 
         if nlu_response["status"] != "success" or not nlu_response["json_content"]:
@@ -418,6 +287,7 @@ Expected "parsed_task" for example:
 
         executed_steps_log: List[str] = []
 
+        # Inner recursive helper for plan execution
         def _recursive_execute_plan_node(plan_node_data: Dict[str, Any], current_images: Dict[str, np.ndarray], primary_rgn_name: str, depth: int = 0, branch_prefix: str = "") -> bool:
             if depth > task_parameters.get("max_recursion_depth_nlu", 5):
                 logger.error(f"{log_prefix_task}: Max recursion depth ({depth}) reached: {branch_prefix}")
@@ -430,9 +300,10 @@ Expected "parsed_task" for example:
             if node_type == "SINGLE_INSTRUCTION":
                 instr_details = plan_node_data.get("instruction_details")
                 if isinstance(instr_details, dict):
-                    step_success = self._execute_primitive_sub_action(instr_details, current_images, primary_rgn_name, f"{task_rule_name}_{branch_prefix}Single", task_parameters)
-                    executed_steps_log.append(f"{branch_prefix}Single '{instr_details.get('intent_verb')}': {'OK' if step_success else 'FAIL'}")
-                    return step_success
+                    # Call to the refactored method
+                    exec_result = self._execute_primitive_sub_action(instr_details, current_images, primary_rgn_name, f"{task_rule_name}_{branch_prefix}Single", task_parameters)
+                    executed_steps_log.append(f"{branch_prefix}Single '{instr_details.get('intent_verb')}': {'OK' if exec_result.success else 'FAIL'}")
+                    return exec_result.success
                 else:
                     logger.error(f"{log_prefix_task}: {node_log_id} missing 'instruction_details'.")
                     executed_steps_log.append(f"{branch_prefix}Single: FormatFAIL")
@@ -457,10 +328,11 @@ Expected "parsed_task" for example:
                     logger.info(
                         f"{log_prefix_task}: {branch_prefix}SeqStep {step_num}/{len(steps_list)}: Intent='{instr_details.get('intent_verb')}' Target='{instr_details.get('target_description')}'"
                     )
-                    current_images_for_step = current_images  # TODO: Context refresh logic
-                    step_success = self._execute_primitive_sub_action(instr_details, current_images_for_step, primary_rgn_name, f"{task_rule_name}_{branch_prefix}SeqStep{step_num}", task_parameters)
-                    executed_steps_log.append(f"{branch_prefix}SeqStep{step_num} '{instr_details.get('intent_verb')}': {'OK' if step_success else 'FAIL'}")
-                    if not step_success:
+                    current_images_for_step = current_images  # TODO: Context refresh logic for sequential steps
+                    # Call to the refactored method
+                    exec_result = self._execute_primitive_sub_action(instr_details, current_images_for_step, primary_rgn_name, f"{task_rule_name}_{branch_prefix}SeqStep{step_num}", task_parameters)
+                    executed_steps_log.append(f"{branch_prefix}SeqStep{step_num} '{instr_details.get('intent_verb')}': {'OK' if exec_result.success else 'FAIL'}")
+                    if not exec_result.success:
                         return False
                     time.sleep(float(task_parameters.get("delay_between_nlu_steps_sec", 0.3)))
                 return True
@@ -474,8 +346,12 @@ Expected "parsed_task" for example:
                     return False
                 eval_instr = {"intent_verb": "CHECK_VISUAL_STATE", "target_description": cond_desc, "parameters": {"condition_description": cond_desc}}
                 logger.info(f"{log_prefix_task}: {branch_prefix}Evaluating IF: '{cond_desc}'")
-                condition_met_bool = self._execute_primitive_sub_action(eval_instr, current_images, primary_rgn_name, f"{task_rule_name}_{branch_prefix}IF_Check", task_parameters)
-                executed_steps_log.append(f"{branch_prefix}IF '{cond_desc}': {'TRUE' if condition_met_bool else 'FALSE'}")
+                # Call to the refactored method
+                condition_exec_result = self._execute_primitive_sub_action(eval_instr, current_images, primary_rgn_name, f"{task_rule_name}_{branch_prefix}IF_Check", task_parameters)
+                condition_met_bool = condition_exec_result.boolean_eval_result if condition_exec_result.success else False
+                executed_steps_log.append(f"{branch_prefix}IF '{cond_desc}': {'TRUE' if condition_met_bool else 'FALSE'} (ExecSuccess: {condition_exec_result.success})")
+                if not condition_exec_result.success:
+                    return False  # If the check itself failed, abort conditional
                 target_branch_plan = None
                 new_branch_prefix_for_log = ""
                 if condition_met_bool:
@@ -491,7 +367,7 @@ Expected "parsed_task" for example:
                     return True
                 if target_branch_plan:
                     return _recursive_execute_plan_node(target_branch_plan, current_images, primary_rgn_name, depth + 1, new_branch_prefix_for_log)
-                return True
+                return True  # No branch to execute or branch executed successfully
             else:
                 logger.error(f"{log_prefix_task}: {node_log_id} Unknown 'command_type'.")
                 executed_steps_log.append(f"{branch_prefix}UnknownTypeFAIL")
