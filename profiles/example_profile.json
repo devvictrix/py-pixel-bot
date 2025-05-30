@@ -4,7 +4,8 @@
         "monitoring_interval_seconds": 3.0,
         "analysis_dominant_colors_k": 3,
         "tesseract_cmd_path": null,
-        "tesseract_config_custom": ""
+        "tesseract_config_custom": "",
+        "gemini_default_model_name": "gemini-1.5-flash-latest"
     },
     "regions": [
         {

@@ -123,7 +123,7 @@ class MainAppWindow(ctk.CTk):
         self.bind_all("<Control-g>", lambda e: self._launch_ai_profile_creator_wizard())
         self.bind_all("<Control-o>", lambda e: self._open_profile())
         self.bind_all("<Control-s>", lambda e: self._save_profile())
-        self.bind_all("<Control-S>", lambda e: self._save_profile_as())
+        self.bind_all("<Control-S>", lambda e: self._save_profile_as()) # Corrected accelerator for Save As to match common apps
 
         self.grid_columnconfigure(0, weight=1, minsize=330)
         self.grid_columnconfigure(1, weight=2, minsize=380)
@@ -207,13 +207,13 @@ class MainAppWindow(ctk.CTk):
         self.btn_remove_template = ctk.CTkButton(template_buttons_frame, text="Remove Selected", width=120, command=self._remove_selected_template, state="disabled")
         self.btn_remove_template.pack(side="left", padx=5)
 
-        self.left_panel.grid_rowconfigure(0, weight=0)
-        self.left_panel.grid_rowconfigure(1, weight=1)
-        self.left_panel.grid_rowconfigure(2, weight=1)
+        self.left_panel.grid_rowconfigure(0, weight=0)  # Profile info frame
+        self.left_panel.grid_rowconfigure(1, weight=1)  # Regions frame
+        self.left_panel.grid_rowconfigure(2, weight=1)  # Templates frame
 
     def _setup_center_panel_content(self):
         self.center_panel.grid_columnconfigure(0, weight=1)
-        self.center_panel.grid_rowconfigure(1, weight=1)
+        self.center_panel.grid_rowconfigure(1, weight=1) # Rules list expands
         ctk.CTkLabel(self.center_panel, text="Automation Rules", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=10, pady=(10, 5), sticky="w")
         self.rules_list_scroll_frame = ctk.CTkScrollableFrame(self.center_panel, label_text="", fg_color=("gray95", "gray22"))
         self.rules_list_scroll_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 5))
@@ -246,38 +246,45 @@ class MainAppWindow(ctk.CTk):
         self.current_profile_path = None
         self.profile_data = copy.deepcopy(DEFAULT_PROFILE_STRUCTURE)
         self.config_manager = ConfigManager(None, create_if_missing=True)
-        self.config_manager.update_profile_data(self.profile_data)
+        self.config_manager.update_profile_data(self.profile_data) # Ensure new CM has default data
         self._populate_ui_from_profile_data()
-        self._set_dirty_status(False)
+        self._set_dirty_status(False) # New profile is not dirty initially
         logger.info("New profile created and UI reset.")
 
     def _launch_ai_profile_creator_wizard(self, event=None):
         if not self.gemini_analyzer_instance or not self.gemini_analyzer_instance.client_initialized:
-            messagebox.showerror("Gemini Not Ready", "Gemini API client is not initialized. Please set API key.", parent=self)
+            messagebox.showerror("Gemini Not Ready", "Gemini API client is not initialized. Please set API key in .env and restart.", parent=self)
             return
         if self._is_dirty and not self._prompt_save_if_dirty():
-            return
+            return # User cancelled saving dirty profile
+
         logger.info("Launching AI Profile Creator Wizard...")
         wizard = ProfileCreationWizardWindow(master=self, main_app_instance=self)
-        self.wait_window(wizard)
+        self.wait_window(wizard) # Wait for wizard to close
+
         if hasattr(wizard, "newly_saved_profile_path") and wizard.newly_saved_profile_path:
             logger.info(f"AI Wizard saved new profile to: {wizard.newly_saved_profile_path}")
             self._load_profile_from_path(wizard.newly_saved_profile_path)
         elif hasattr(wizard, "user_cancelled_wizard") and wizard.user_cancelled_wizard:
-            logger.info("AI Profile Creator Wizard cancelled.")
+            logger.info("AI Profile Creator Wizard cancelled by user.")
         else:
-            logger.info("AI Profile Creator Wizard closed.")
+            logger.info("AI Profile Creator Wizard closed without saving a new profile (or error).")
 
     def _open_profile(self, event=None):
         if self._is_dirty and not self._prompt_save_if_dirty():
             return
-        filepath = filedialog.askopenfilename(title="Open Profile", defaultextension=".json", filetypes=[("JSON files", "*.json"), ("All files", "*.*")], parent=self)
+        filepath = filedialog.askopenfilename(
+            title="Open Profile",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            parent=self
+        )
         if filepath:
             self._load_profile_from_path(filepath)
 
     def _load_profile_from_path(self, filepath: str):
         try:
-            self.config_manager = ConfigManager(filepath, create_if_missing=False)
+            self.config_manager = ConfigManager(filepath, create_if_missing=False) # create_if_missing=False because file MUST exist to be opened
             self.profile_data = self.config_manager.get_profile_data()
             self.current_profile_path = self.config_manager.get_profile_path()
             self._populate_ui_from_profile_data()
@@ -286,266 +293,315 @@ class MainAppWindow(ctk.CTk):
         except (FileNotFoundError, ValueError, IOError) as e:
             logger.error(f"Failed to load profile '{filepath}': {e}", exc_info=True)
             messagebox.showerror("Load Error", f"Could not load profile: {filepath}\nError: {e}", parent=self)
-            self._new_profile(prompt_save=False)
+            self._new_profile(prompt_save=False) # Reset to a new blank profile on load error
 
     def _save_profile(self, event=None) -> bool:
-        if not self.current_profile_path:
+        if not self.current_profile_path: # If no path (new profile), then it's a "Save As"
             return self._save_profile_as()
+
         if not self._update_profile_data_from_ui():
             logger.warning("Save profile aborted: invalid UI settings.")
             return False
-        self.config_manager.update_profile_data(self.profile_data)
+
+        self.config_manager.update_profile_data(self.profile_data) # Push UI data to CM's internal copy
         try:
-            if self.config_manager.save_current_profile():
+            if self.config_manager.save_current_profile(): # CM saves its internal copy to self.current_profile_path
                 self._set_dirty_status(False)
                 logger.info(f"Profile saved to: {self.current_profile_path}")
                 return True
-            else:
-                messagebox.showerror("Save Error", "Could not save. Path invalid?", parent=self)
+            else: # save_current_profile returned False, likely an IO error reported by CM
+                messagebox.showerror("Save Error", f"Could not save profile to {self.current_profile_path}. Check logs.", parent=self)
                 return False
-        except Exception as e:
+        except Exception as e: # Should be caught by CM, but defensive
             logger.error(f"Failed to save to '{self.current_profile_path}': {e}", exc_info=True)
-            messagebox.showerror("Save Error", f"Error: {e}", parent=self)
+            messagebox.showerror("Save Error", f"Error saving profile: {e}", parent=self)
             return False
 
     def _save_profile_as(self, event=None) -> bool:
-        if not self._update_profile_data_from_ui():
+        if not self._update_profile_data_from_ui(): # Get latest changes from UI into self.profile_data
             logger.warning("Save As aborted: invalid UI settings.")
             return False
+
         initial_fn = os.path.basename(self.current_profile_path) if self.current_profile_path else "new_profile.json"
-        default_dir = self.config_manager.profiles_base_dir if self.config_manager else os.getcwd()
+        # Use config_manager's base dir if available, else CWD
+        default_dir = self.config_manager.profiles_base_dir if self.config_manager and self.config_manager.profiles_base_dir else os.getcwd()
+
         filepath = filedialog.asksaveasfilename(
-            title="Save Profile As", defaultextension=".json", initialdir=default_dir, filetypes=[("JSON files", "*.json"), ("All files", "*.*")], initialfile=initial_fn, parent=self
+            title="Save Profile As",
+            defaultextension=".json",
+            initialdir=default_dir,
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            initialfile=initial_fn,
+            parent=self
         )
         if filepath:
-            self.current_profile_path = filepath
+            self.current_profile_path = filepath # Update the current path
+            # Create a new ConfigManager instance associated with the new path
+            # This ensures that template paths resolve correctly relative to the new profile location
             self.config_manager = ConfigManager(self.current_profile_path, create_if_missing=True)
-            self.config_manager.update_profile_data(self.profile_data)
-            return self._save_profile()
-        return False
+            self.config_manager.update_profile_data(self.profile_data) # Give it the current data
+            return self._save_profile() # Now perform a regular save to the new path
+        return False # User cancelled dialog
 
     def _populate_ui_from_profile_data(self):
         logger.debug("Populating UI from MainAppWindow.profile_data...")
-        if not all(
-            [
-                self.entry_profile_desc,
-                self.entry_monitor_interval,
-                self.entry_dominant_k,
-                self.entry_tesseract_cmd,
-                self.entry_tesseract_config,
-                self.entry_gemini_default_model,
-                self.label_gemini_api_key_status,
-                self.label_current_profile_path,
-                self.regions_list_scroll_frame,
-                self.templates_list_scroll_frame,
-                self.rules_list_scroll_frame,
-                self.btn_remove_region,
-                self.btn_remove_template,
-                self.btn_remove_rule,
-            ]
-        ):
-            logger.error("Core UI elements not init. Cannot populate UI.")
+        if not all([ # Check if all essential UI elements are initialized
+            self.entry_profile_desc, self.entry_monitor_interval, self.entry_dominant_k,
+            self.entry_tesseract_cmd, self.entry_tesseract_config, self.entry_gemini_default_model,
+            self.label_gemini_api_key_status, self.label_current_profile_path,
+            self.regions_list_scroll_frame, self.templates_list_scroll_frame, self.rules_list_scroll_frame,
+            self.btn_remove_region, self.btn_remove_template, self.btn_remove_rule
+        ]):
+            logger.error("Core UI elements not initialized. Cannot populate UI.")
             return
 
         self.label_current_profile_path.configure(text=f"Path: {self.current_profile_path if self.current_profile_path else 'New Profile (unsaved)'}")
-        self._update_window_title()
+        self._update_window_title() # Reflects path and dirty status
 
         self.entry_profile_desc.delete(0, tk.END)
         self.entry_profile_desc.insert(0, self.profile_data.get("profile_description", ""))
+
         settings = self.profile_data.get("settings", {})
         self.entry_monitor_interval.delete(0, tk.END)
         self.entry_monitor_interval.insert(0, str(settings.get("monitoring_interval_seconds", 1.0)))
         self.entry_dominant_k.delete(0, tk.END)
         self.entry_dominant_k.insert(0, str(settings.get("analysis_dominant_colors_k", 3)))
         self.entry_tesseract_cmd.delete(0, tk.END)
-        self.entry_tesseract_cmd.insert(0, str(settings.get("tesseract_cmd_path", "") or ""))
+        self.entry_tesseract_cmd.insert(0, str(settings.get("tesseract_cmd_path", "") or "")) # Ensure string, handle None from default
         self.entry_tesseract_config.delete(0, tk.END)
         self.entry_tesseract_config.insert(0, str(settings.get("tesseract_config_custom", "")))
         self.entry_gemini_default_model.delete(0, tk.END)
         self.entry_gemini_default_model.insert(0, str(settings.get("gemini_default_model_name", "gemini-1.5-flash-latest")))
         self.label_gemini_api_key_status.configure(text=self._check_gemini_api_key_status())
 
+        # Reset selections and repopulate lists
         self.selected_region_index = self.selected_template_index = self.selected_rule_index = None
         self._populate_specific_list_frame("region", self.regions_list_scroll_frame, self.profile_data.get("regions", []), lambda item, idx: item.get("name", f"R_{idx}"), self.btn_remove_region)
-        self._populate_specific_list_frame(
-            "template", self.templates_list_scroll_frame, self.profile_data.get("templates", []), lambda item, idx: f"{item.get('name','T_')}({item.get('filename','F_')})", self.btn_remove_template
-        )
+        self._populate_specific_list_frame("template", self.templates_list_scroll_frame, self.profile_data.get("templates", []), lambda item, idx: f"{item.get('name','T_')}({item.get('filename','F_')})", self.btn_remove_template)
         self._populate_specific_list_frame("rule", self.rules_list_scroll_frame, self.profile_data.get("rules", []), lambda item, idx: item.get("name", f"Rule_{idx}"), self.btn_remove_rule)
+
         if self.details_panel_instance:
-            self.details_panel_instance.update_display(None, "none")
+            self.details_panel_instance.update_display(None, "none") # Clear details panel
         logger.debug("UI population from profile_data complete.")
 
     def _populate_specific_list_frame(self, list_key: str, frame: ctk.CTkScrollableFrame, items: List[Dict], display_cb: Callable, button: Optional[ctk.CTkButton]):
-        for w in frame.winfo_children():
-            w.destroy()
-        setattr(self, f"selected_{list_key}_item_widget", None)
-        if button and hasattr(button, "configure"):
-            button.configure(state="disabled")
+        for w in frame.winfo_children(): w.destroy()
+        setattr(self, f"selected_{list_key}_item_widget", None) # Clear highlighted widget tracker
+        if button and hasattr(button, "configure"): button.configure(state="disabled")
+
         for i, item_data in enumerate(items):
             txt = display_cb(item_data, i)
-            item_frame_ref = {}
-            item_ui_frame = create_clickable_list_item(frame, txt, lambda e=None, lk=list_key, d=item_data, idx=i, ifr=item_frame_ref: self._on_item_selected(lk, d, idx, ifr.get("frame")))
+            item_frame_ref = {} # To pass the frame itself to the lambda for highlighting
+            item_ui_frame = create_clickable_list_item(
+                frame, txt,
+                # Use copy.deepcopy for item_data to avoid issues if data is modified elsewhere while lambda waits
+                lambda e=None, lk=list_key, d=copy.deepcopy(item_data), idx=i, ifr=item_frame_ref: self._on_item_selected(lk, d, idx, ifr.get("frame"))
+            )
             item_frame_ref["frame"] = item_ui_frame
 
     def _update_profile_data_from_ui(self) -> bool:
         logger.debug("Updating MainAppWindow.profile_data from UI settings inputs...")
-        if not all([self.entry_profile_desc, self.entry_monitor_interval, self.entry_dominant_k, self.entry_tesseract_cmd, self.entry_tesseract_config, self.entry_gemini_default_model]):
+        if not all([ # Check essential UI elements are present
+            self.entry_profile_desc, self.entry_monitor_interval, self.entry_dominant_k,
+            self.entry_tesseract_cmd, self.entry_tesseract_config, self.entry_gemini_default_model
+        ]):
             logger.error("Cannot update profile data: Core settings UI elements not fully initialized.")
             return False
 
-        desc, desc_ok = validate_and_get_widget_value(
-            self.entry_profile_desc, None, "Profile Description", str, self.profile_data.get("profile_description", ""), required=False, allow_empty_string=True
-        )
-        if desc_ok:
-            self.profile_data["profile_description"] = desc
-        settings = self.profile_data.get("settings", {})
-        all_ok = desc_ok
+        desc, desc_ok = validate_and_get_widget_value(self.entry_profile_desc, None, "Profile Description", str, self.profile_data.get("profile_description",""), required=False, allow_empty_string=True)
+        if desc_ok: self.profile_data["profile_description"] = desc
+        else: return False # Stop if fundamental description is invalid (though it's not required)
+
+        settings = self.profile_data.get("settings", {}) # Get current settings dict or new
+        all_ok = True # Track overall validation
+
         val, ok = validate_and_get_widget_value(self.entry_monitor_interval, None, "Monitoring Interval", float, settings.get("monitoring_interval_seconds", 1.0), required=True, min_val=0.01)
-        settings["monitoring_interval_seconds"] = val
-        all_ok &= ok
-        val, ok = validate_and_get_widget_value(self.entry_dominant_k, None, "Dominant K", int, settings.get("analysis_dominant_colors_k", 3), required=True, min_val=1, max_val=20)
-        settings["analysis_dominant_colors_k"] = val
-        all_ok &= ok
+        settings["monitoring_interval_seconds"] = val; all_ok &= ok
+
+        val, ok = validate_and_get_widget_value(self.entry_dominant_k, None, "Dominant K", int, settings.get("analysis_dominant_colors_k",3), required=True, min_val=1, max_val=20)
+        settings["analysis_dominant_colors_k"] = val; all_ok &= ok
+
         val, ok = validate_and_get_widget_value(self.entry_tesseract_cmd, None, "Tesseract CMD Path", str, settings.get("tesseract_cmd_path", ""), required=False, allow_empty_string=True)
-        settings["tesseract_cmd_path"] = val if val else None
+        settings["tesseract_cmd_path"] = val if val else None # Store None if empty
+        all_ok &= ok # Non-required, so ok is always true if format is good
+
+        val, ok = validate_and_get_widget_value(self.entry_tesseract_config, None, "Tesseract Config Str", str, settings.get("tesseract_config_custom",""), required=False, allow_empty_string=True)
+        settings["tesseract_config_custom"] = val; all_ok &= ok
+
+        val, ok = validate_and_get_widget_value(self.entry_gemini_default_model, None, "Gemini Default Model", str, settings.get("gemini_default_model_name","gemini-1.5-flash-latest"), required=False, allow_empty_string=True)
+        settings["gemini_default_model_name"] = val if val else "gemini-1.5-flash-latest" # Ensure a default if empty
         all_ok &= ok
-        val, ok = validate_and_get_widget_value(self.entry_tesseract_config, None, "Tesseract Config Str", str, settings.get("tesseract_config_custom", ""), required=False, allow_empty_string=True)
-        settings["tesseract_config_custom"] = val
-        all_ok &= ok
-        val, ok = validate_and_get_widget_value(
-            self.entry_gemini_default_model, None, "Gemini Default Model", str, settings.get("gemini_default_model_name", "gemini-1.5-flash-latest"), required=False, allow_empty_string=True
-        )
-        settings["gemini_default_model_name"] = val if val else "gemini-1.5-flash-latest"
-        all_ok &= ok
+
         self.profile_data["settings"] = settings
         if not all_ok:
-            logger.warning("One or more settings invalid. Profile data may not be fully updated.")
+            logger.warning("One or more settings invalid during UI data update. Profile data may not be fully updated or correct.")
+            # Optionally show a single messagebox summarizing that some fields are invalid.
+            # Individual validate_and_get_widget_value calls show specific error popups.
+            messagebox.showwarning("Validation Issues", "Some settings have invalid values. Please correct them.", parent=self)
             return False
         return True
 
     def _prompt_save_if_dirty(self) -> bool:
         if not self._is_dirty:
-            return True
-        resp = messagebox.askyesnocancel("Unsaved Changes", "Current profile has unsaved changes. Save before proceeding?", parent=self, icon=messagebox.QUESTION, default=messagebox.YES)
-        if resp is True:
+            return True # Not dirty, no need to prompt
+        response = messagebox.askyesnocancel(
+            "Unsaved Changes",
+            "Current profile has unsaved changes. Save before proceeding?",
+            parent=self,
+            icon=messagebox.QUESTION,
+            default=messagebox.YES
+        )
+        if response is True: # Yes, save
             return self._save_profile()
-        elif resp is False:
+        elif response is False: # No, don't save, proceed
             return True
-        else:
+        else: # Cancel
             return False
 
     def _on_close_window(self, event=None):
         if self._prompt_save_if_dirty():
             logger.info("Exiting MainAppWindow.")
-            self.destroy()
+            self.destroy() # Close the window
 
     def _on_item_selected(self, list_name: str, item_data: Dict, item_index: int, item_widget_frame: Optional[ctk.CTkFrame]):
         if not item_widget_frame or not item_widget_frame.winfo_exists():
-            logger.warning(f"Item selection for {list_name} failed: widget frame invalid.")
+            logger.warning(f"Item selection for {list_name} failed: item UI widget frame is invalid or destroyed.")
             return
+
         logger.info(f"Item selected: {list_name}, index {item_index}, name '{item_data.get('name')}'")
+
+        # Map list_name to corresponding UI elements and state attributes
         list_map = {
             "region": (self.btn_remove_region, "selected_region_index", "selected_region_item_widget"),
             "template": (self.btn_remove_template, "selected_template_index", "selected_template_item_widget"),
             "rule": (self.btn_remove_rule, "selected_rule_index", "selected_rule_item_widget"),
         }
+
+        # Deselect items in other lists
         for ln, (btn, idx_attr, widget_attr) in list_map.items():
-            if ln != list_name:
-                self._highlight_selected_list_item(ln, None)
-                setattr(self, idx_attr, None)
-                _ = btn.configure(state="disabled") if btn else None
-        if list_name == "rule" and self.details_panel_instance:
-            self.details_panel_instance.parent_app.selected_sub_condition_index = None
-            self.details_panel_instance._highlight_selected_list_item("condition", None, is_sub_list=True)
-            _ = self.details_panel_instance.btn_remove_sub_condition.configure(state="disabled") if self.details_panel_instance.btn_remove_sub_condition else None
-        setattr(self, list_map[list_name][1], item_index)
-        self._highlight_selected_list_item(list_name, item_widget_frame)
-        btn_curr = list_map[list_name][0]
-        _ = btn_curr.configure(state="normal") if btn_curr else None
+            if ln != list_name: # If this is not the list where the selection happened
+                self._highlight_selected_list_item(ln, None) # Remove highlight from its selected item
+                setattr(self, idx_attr, None) # Clear its selected index
+                if btn and hasattr(btn, "configure"): btn.configure(state="disabled") # Disable its remove button
+
+        # If a rule was selected, and we are now selecting something else (or another rule),
+        # clear sub-condition selection in DetailsPanel
+        if list_name != "rule" and self.selected_rule_index is not None: # If something other than a rule is now selected
+            self.selected_sub_condition_index = None # Clear sub-condition index
+            if self.details_panel_instance:
+                self.details_panel_instance._highlight_selected_list_item("condition", None, is_sub_list=True) # Clear sub-cond highlight in DP
+                if self.details_panel_instance.btn_remove_sub_condition:
+                    self.details_panel_instance.btn_remove_sub_condition.configure(state="disabled")
+
+        # Set selection for the current list
+        if list_name in list_map:
+            setattr(self, list_map[list_name][1], item_index) # Update selected_X_index
+            self._highlight_selected_list_item(list_name, item_widget_frame) # Highlight the new item
+            current_remove_button = list_map[list_name][0]
+            if current_remove_button and hasattr(current_remove_button, "configure"):
+                current_remove_button.configure(state="normal") # Enable its remove button
+
+        # Update details panel
         if self.details_panel_instance:
             self.details_panel_instance.update_display(copy.deepcopy(item_data), list_name)
 
-    def _highlight_selected_list_item(self, list_name_key: str, new_selected_widget_frame: Optional[ctk.CTkFrame], is_sub_list: bool = False):
+    def _highlight_selected_list_item(self, list_name_key: str, new_selected_widget_frame: Optional[ctk.CTkFrame], is_sub_list:bool = False):
         attr_prefix = "selected_sub_" if is_sub_list else "selected_"
         attr_widget_name = f"{attr_prefix}{list_name_key}_item_widget"
+
         target_obj = self.details_panel_instance if is_sub_list and self.details_panel_instance else self
+
         old_widget = getattr(target_obj, attr_widget_name, None)
         if old_widget and isinstance(old_widget, ctk.CTkFrame) and old_widget.winfo_exists():
-            old_widget.configure(fg_color="transparent")
+            old_widget.configure(fg_color="transparent") # Reset old selection
+
         if new_selected_widget_frame and new_selected_widget_frame.winfo_exists():
-            try:
+            try: # Get theme-aware highlight color
                 hl_colors = ctk.ThemeManager.theme["CTkButton"]["fg_color"]
-                hl_color = hl_colors[0] if isinstance(hl_colors, tuple) and ctk.get_appearance_mode() == "Light" else (hl_colors[1] if isinstance(hl_colors, tuple) else hl_colors)
-            except:
-                hl_color = "#3a7ebf"
+                hl_color = hl_colors[0] if isinstance(hl_colors, tuple) and ctk.get_appearance_mode().lower() == "light" else \
+                           (hl_colors[1] if isinstance(hl_colors, tuple) else hl_colors)
+            except (KeyError, TypeError, AttributeError):
+                hl_color = "#3a7ebf" # Fallback blue
             new_selected_widget_frame.configure(fg_color=hl_color)
-            setattr(target_obj, attr_widget_name, new_selected_widget_frame)
+            setattr(target_obj, attr_widget_name, new_selected_widget_frame) # Store new selected widget
         else:
-            setattr(target_obj, attr_widget_name, None)
+            setattr(target_obj, attr_widget_name, None) # Clear if no new selection
 
     def _apply_region_changes(self):
-        if self.selected_region_index is None or self.details_panel_instance is None:
-            return
-        if not (0 <= self.selected_region_index < len(self.profile_data.get("regions", []))):
-            return
+        if self.selected_region_index is None or self.details_panel_instance is None: return
+        if not (0 <= self.selected_region_index < len(self.profile_data.get("regions", []))): return
+
         current_region = self.profile_data["regions"][self.selected_region_index]
         original_name = current_region.get("name")
         new_vals = {}
         all_valid = True
+
+        # Validate and get Name
         name_w = self.details_panel_instance.detail_widgets.get("name")
-        val, ok = validate_and_get_widget_value(name_w, None, "Region Name", str, original_name, True)
-        new_vals["name"] = val
-        all_valid &= ok
-        for p in ["x", "y", "width", "height"]:
-            w = self.details_panel_instance.detail_widgets.get(p)
-            min_v = 1 if p in ["width", "height"] else None
-            def_v = current_region.get(p, 0 if p in ["x", "y"] else 1)
-            val, ok = validate_and_get_widget_value(w, None, p.capitalize(), int, def_v, True, min_val=min_v)
-            new_vals[p] = val
-            all_valid &= ok
+        val, ok = validate_and_get_widget_value(name_w, None, "Region Name", str, original_name, required=True)
+        new_vals["name"] = val; all_valid &= ok
+
+        # Validate and get Coords/Dimensions
+        for p_key in ["x", "y", "width", "height"]:
+            widget_ref = self.details_panel_instance.detail_widgets.get(p_key)
+            min_v = 1 if p_key in ["width", "height"] else None # Width/height must be > 0
+            def_v = current_region.get(p_key, 0 if p_key in ["x", "y"] else 1)
+            val, ok = validate_and_get_widget_value(widget_ref, None, p_key.capitalize(), int, def_v, required=True, min_val=min_v)
+            new_vals[p_key] = val; all_valid &= ok
+
+        # Validate and get Comment
         comment_w = self.details_panel_instance.detail_widgets.get("comment")
-        val, ok = validate_and_get_widget_value(comment_w, None, "Comment", str, current_region.get("comment", ""), False, True)
-        new_vals["comment"] = val
-        all_valid &= ok
+        val, ok = validate_and_get_widget_value(comment_w, None, "Comment", str, current_region.get("comment",""), required=False, allow_empty_string=True)
+        new_vals["comment"] = val; all_valid &= ok
+
         if not all_valid:
-            messagebox.showerror("Validation Error", "One or more region fields are invalid.", parent=self)
+            messagebox.showerror("Validation Error", "One or more region fields are invalid. Please correct them.", parent=self)
             return
-        if new_vals["name"] != original_name and any(r.get("name") == new_vals["name"] for i, r in enumerate(self.profile_data["regions"]) if i != self.selected_region_index):
-            messagebox.showerror("Name Error", f"Region name '{new_vals['name']}' already exists.", parent=self)
+
+        # Check for name uniqueness if name changed
+        if new_vals["name"] != original_name and any(r.get("name") == new_vals["name"] for i,r in enumerate(self.profile_data["regions"]) if i != self.selected_region_index):
+            messagebox.showerror("Name Error", f"Region name '{new_vals['name']}' already exists. Please choose a unique name.", parent=self)
             return
+
         current_region.update(new_vals)
         self._set_dirty_status(True)
-        self._populate_specific_list_frame("region", self.regions_list_scroll_frame, self.profile_data["regions"], lambda item, idx: item.get("name", f"R_{idx}"), self.btn_remove_region)
-        if self.selected_region_index < len(self.profile_data["regions"]):
-            children = self.regions_list_scroll_frame.winfo_children()
+        self._populate_specific_list_frame("region", self.regions_list_scroll_frame, self.profile_data["regions"], lambda item, idx: item.get("name",f"R_{idx}"), self.btn_remove_region)
+
+        # Re-select and re-highlight the item in the list
+        if self.selected_region_index < len(self.profile_data["regions"]): # Check bounds
+            children = self.regions_list_scroll_frame.winfo_children() # Get current UI items
             new_item_w = children[self.selected_region_index] if children and self.selected_region_index < len(children) else None
             self._highlight_selected_list_item("region", new_item_w)
+            # Refresh details panel display with the (potentially renamed) item
             self.details_panel_instance.update_display(copy.deepcopy(current_region), "region")
-        messagebox.showinfo("Region Updated", f"Region '{new_vals['name']}' updated.", parent=self)
+        messagebox.showinfo("Region Updated", f"Region '{new_vals['name']}' updated successfully.", parent=self)
 
     def _apply_template_changes(self):
-        if self.selected_template_index is None or self.details_panel_instance is None:
-            return
-        if not (0 <= self.selected_template_index < len(self.profile_data.get("templates", []))):
-            return
+        if self.selected_template_index is None or self.details_panel_instance is None: return
+        if not (0 <= self.selected_template_index < len(self.profile_data.get("templates", []))): return
+
         current_template = self.profile_data["templates"][self.selected_template_index]
         original_name = current_template.get("name")
+
         name_w = self.details_panel_instance.detail_widgets.get("template_name")
-        name_val, name_valid = validate_and_get_widget_value(name_w, None, "Template Name", str, original_name, True)
+        name_val, name_valid = validate_and_get_widget_value(name_w, None, "Template Name", str, original_name, required=True)
+
         comment_w = self.details_panel_instance.detail_widgets.get("comment")
-        comment_val, comment_valid = validate_and_get_widget_value(comment_w, None, "Comment", str, current_template.get("comment", ""), False, True)
+        comment_val, comment_valid = validate_and_get_widget_value(comment_w, None, "Comment", str, current_template.get("comment",""), required=False, allow_empty_string=True)
+
         if not (name_valid and comment_valid):
-            messagebox.showerror("Validation Error", "Template name or comment invalid.", parent=self)
+            messagebox.showerror("Validation Error", "Template name or comment has an invalid value.", parent=self)
             return
-        if name_val != original_name and any(t.get("name") == name_val for i, t in enumerate(self.profile_data["templates"]) if i != self.selected_template_index):
+
+        if name_val != original_name and any(t.get("name") == name_val for i,t in enumerate(self.profile_data["templates"]) if i != self.selected_template_index):
             messagebox.showerror("Name Error", f"Template name '{name_val}' already exists.", parent=self)
             return
+
         current_template["name"] = name_val
         current_template["comment"] = comment_val
         self._set_dirty_status(True)
-        self._populate_specific_list_frame(
-            "template", self.templates_list_scroll_frame, self.profile_data["templates"], lambda item, idx: f"{item.get('name')}({item.get('filename')})", self.btn_remove_template
-        )
+        self._populate_specific_list_frame("template", self.templates_list_scroll_frame, self.profile_data["templates"], lambda item,idx: f"{item.get('name')}({item.get('filename')})", self.btn_remove_template)
+
         if self.selected_template_index < len(self.profile_data["templates"]):
             children = self.templates_list_scroll_frame.winfo_children()
             new_item_w = children[self.selected_template_index] if children and self.selected_template_index < len(children) else None
@@ -554,24 +610,27 @@ class MainAppWindow(ctk.CTk):
         messagebox.showinfo("Template Updated", f"Template '{name_val}' updated.", parent=self)
 
     def _apply_rule_changes(self):
-        if self.selected_rule_index is None or self.details_panel_instance is None:
-            return
-        if not (0 <= self.selected_rule_index < len(self.profile_data.get("rules", []))):
-            return
+        if self.selected_rule_index is None or self.details_panel_instance is None: return
+        if not (0 <= self.selected_rule_index < len(self.profile_data.get("rules", []))): return
+
         current_rule_orig = self.profile_data["rules"][self.selected_rule_index]
         old_name = current_rule_orig.get("name")
         logger.info(f"Applying changes for rule: '{old_name}' (index {self.selected_rule_index})")
+
         updated_rule_data_from_ui = self.details_panel_instance.get_all_rule_data_from_ui()
-        if updated_rule_data_from_ui is None:
-            messagebox.showerror("Validation Error", "Invalid rule parameters.", parent=self)
+        if updated_rule_data_from_ui is None: # Validation failed in DetailsPanel
+            messagebox.showerror("Validation Error", "Invalid rule parameters. Please check the details panel.", parent=self)
             return
+
         new_name = updated_rule_data_from_ui.get("name")
-        if new_name != old_name and any(r.get("name") == new_name for i, r in enumerate(self.profile_data.get("rules", [])) if i != self.selected_rule_index):
+        if new_name != old_name and any(r.get("name") == new_name for i,r in enumerate(self.profile_data.get("rules",[])) if i != self.selected_rule_index):
             messagebox.showerror("Name Error", f"Rule name '{new_name}' already exists.", parent=self)
             return
+
         self.profile_data["rules"][self.selected_rule_index] = updated_rule_data_from_ui
         self._set_dirty_status(True)
-        self._populate_specific_list_frame("rule", self.rules_list_scroll_frame, self.profile_data["rules"], lambda item, idx: item.get("name", f"Rule{idx}"), self.btn_remove_rule)
+        self._populate_specific_list_frame("rule", self.rules_list_scroll_frame, self.profile_data["rules"], lambda item, idx: item.get("name",f"Rule{idx}"), self.btn_remove_rule)
+
         if self.selected_rule_index < len(self.profile_data["rules"]):
             children = self.rules_list_scroll_frame.winfo_children()
             new_item_w = children[self.selected_rule_index] if children and self.selected_rule_index < len(children) else None
@@ -583,305 +642,332 @@ class MainAppWindow(ctk.CTk):
         if not self.current_profile_path:
             if not messagebox.askokcancel("Save Required", "Profile must be saved before adding regions. Save now?", parent=self) or not self._save_profile_as():
                 return
-            if not self.current_profile_path:
+            if not self.current_profile_path: # Still no path after save_as attempt
                 logger.warning("Add region aborted: Profile not saved.")
                 return
-        if self._is_dirty and not self._prompt_save_if_dirty():
-            return
+
+        # If profile is dirty, prompt to save before opening selector to avoid losing unsaved changes
+        # This is important because RegionSelector might rely on the saved state for context
+        # if it were to read the file (though current design passes CM instance for path context mostly)
+        if self._is_dirty:
+            if not self._prompt_save_if_dirty(): # This will save if user says yes
+                 return # User cancelled save or entire operation
+            # If saved, _is_dirty is false. If not saved but proceed, changes are in self.profile_data
+
         try:
-            cm_for_selector = ConfigManager(self.current_profile_path, create_if_missing=False)
-            selector = RegionSelectorWindow(master=self, config_manager_for_saving_path_only=cm_for_selector, existing_region_data=None)
-            self.wait_window(selector)
+            # Pass the MainAppWindow's ConfigManager. RegionSelectorWindow uses it for context
+            # like getting count of regions for default naming, or for resolving template directory if it were to save images itself.
+            # Now, RegionSelectorWindow returns data, MainAppWindow handles adding to its self.profile_data.
+            cm_for_selector_context = self.config_manager # Use existing main app CM
+            selector = RegionSelectorWindow(master=self, config_manager_context=cm_for_selector_context, existing_region_data=None)
+            self.wait_window(selector) # Wait for selector to close
+
             if hasattr(selector, "changes_made") and selector.changes_made and selector.saved_region_info:
-                # RegionSelector now returns data, MainAppWindow adds it to its profile_data
                 new_region_data = selector.saved_region_info
-                if any(r.get("name") == new_region_data["name"] for r in self.profile_data.get("regions", [])):
+                if any(r.get("name") == new_region_data["name"] for r in self.profile_data.get("regions",[])):
                     messagebox.showerror("Name Conflict", f"Region name '{new_region_data['name']}' already exists.", parent=self)
                     return
-                self.profile_data.setdefault("regions", []).append(new_region_data)
+
+                self.profile_data.setdefault("regions",[]).append(new_region_data)
                 self._set_dirty_status(True)
-                self._populate_specific_list_frame("region", self.regions_list_scroll_frame, self.profile_data["regions"], lambda item, idx: item.get("name", f"R_{idx}"), self.btn_remove_region)
+                self._populate_specific_list_frame("region", self.regions_list_scroll_frame, self.profile_data["regions"], lambda item, idx: item.get("name",f"R_{idx}"), self.btn_remove_region)
                 # Optionally select the new region
                 new_idx = len(self.profile_data["regions"]) - 1
                 children = self.regions_list_scroll_frame.winfo_children()
                 new_item_w = children[new_idx] if children and new_idx < len(children) else None
                 self._on_item_selected("region", new_region_data, new_idx, new_item_w)
-
         except Exception as e:
             logger.error(f"Error in Add Region: {e}", exc_info=True)
             messagebox.showerror("Add Region Error", f"Error: {e}", parent=self)
 
     def _edit_region_coordinates_with_selector(self):
-        if self.selected_region_index is None or not (0 <= self.selected_region_index < len(self.profile_data.get("regions", []))):
+        if self.selected_region_index is None or not (0 <= self.selected_region_index < len(self.profile_data.get("regions",[]))):
+            messagebox.showwarning("No Region Selected", "Please select a region from the list to edit its coordinates.", parent=self)
             return
-        if self._is_dirty and not self._prompt_save_if_dirty():
-            return
-        if not self.current_profile_path:
-            messagebox.showerror("Error", "Profile must be saved before editing region coordinates.", parent=self)
-            return
-        try:
-            cm_for_selector = ConfigManager(self.current_profile_path, create_if_missing=False)
-            region_to_edit_data = copy.deepcopy(self.profile_data["regions"][self.selected_region_index])
-            selector = RegionSelectorWindow(master=self, config_manager_for_saving_path_only=cm_for_selector, existing_region_data=region_to_edit_data)
-            self.wait_window(selector)
-            if hasattr(selector, "changes_made") and selector.changes_made and selector.saved_region_info:
-                updated_region_data = selector.saved_region_info
-                # Check name conflict if name was changed by selector (though selector dialog is primary for name)
-                if updated_region_data["name"] != region_to_edit_data["name"] and any(
-                    r.get("name") == updated_region_data["name"] for i, r in enumerate(self.profile_data["regions"]) if i != self.selected_region_index
-                ):
-                    messagebox.showerror("Name Conflict", f"Region name '{updated_region_data['name']}' already exists.", parent=self)
-                    return  # Or revert name change if desired
 
-                self.profile_data["regions"][self.selected_region_index].update(updated_region_data)
+        if not self.current_profile_path:
+            messagebox.showerror("Error", "Profile must be saved before editing region coordinates with the selector.", parent=self)
+            return
+        if self._is_dirty and not self._prompt_save_if_dirty(): # Ensure unsaved changes are handled
+            return
+
+        try:
+            cm_for_selector_context = self.config_manager # Use existing main app CM
+            region_to_edit_data = copy.deepcopy(self.profile_data["regions"][self.selected_region_index])
+
+            selector = RegionSelectorWindow(master=self, config_manager_context=cm_for_selector_context, existing_region_data=region_to_edit_data)
+            self.wait_window(selector)
+
+            if hasattr(selector, "changes_made") and selector.changes_made and selector.saved_region_info:
+                updated_region_data_from_selector = selector.saved_region_info
+                # Name uniqueness check (if name was changed by selector, though typically just coords are updated)
+                if updated_region_data_from_selector["name"] != region_to_edit_data["name"] and \
+                   any(r.get("name") == updated_region_data_from_selector["name"] for i,r in enumerate(self.profile_data["regions"]) if i != self.selected_region_index):
+                    messagebox.showerror("Name Conflict", f"Region name '{updated_region_data_from_selector['name']}' already exists. Name change not applied from selector.", parent=self)
+                    # Keep old name but update coords, or let user resolve in details panel.
+                    # For simplicity, we'll update coords and let user fix name in DetailsPanel if it was changed via selector's dialog.
+                    updated_region_data_from_selector["name"] = region_to_edit_data["name"] # Revert name if conflict
+
+                self.profile_data["regions"][self.selected_region_index].update(updated_region_data_from_selector)
                 self._set_dirty_status(True)
-                self._populate_specific_list_frame("region", self.regions_list_scroll_frame, self.profile_data["regions"], lambda item, idx: item.get("name", f"R_{idx}"), self.btn_remove_region)
+                self._populate_specific_list_frame("region", self.regions_list_scroll_frame, self.profile_data["regions"], lambda item, idx: item.get("name",f"R_{idx}"), self.btn_remove_region)
+                # Re-select and refresh details panel
                 children = self.regions_list_scroll_frame.winfo_children()
                 new_item_w = children[self.selected_region_index] if children and self.selected_region_index < len(children) else None
                 self._on_item_selected("region", self.profile_data["regions"][self.selected_region_index], self.selected_region_index, new_item_w)
-
         except Exception as e:
             logger.error(f"Error in Edit Region Coords: {e}", exc_info=True)
             messagebox.showerror("Edit Region Error", f"Error: {e}", parent=self)
 
     def _remove_selected_item(self, list_name_key: str, profile_data_key: str, selected_index_attr: str, remove_button_widget: Optional[ctk.CTkButton], display_cb: Callable):
         selected_idx = getattr(self, selected_index_attr, None)
-        if selected_idx is None or not self.profile_data or profile_data_key not in self.profile_data:
-            return
+        if selected_idx is None or not self.profile_data or profile_data_key not in self.profile_data: return
+
         item_list: List[Dict] = self.profile_data[profile_data_key]
         if 0 <= selected_idx < len(item_list):
             removed_item = item_list.pop(selected_idx)
             logger.info(f"Removed {list_name_key} '{removed_item.get('name','N/A')}' at index {selected_idx}.")
+
             list_frame = getattr(self, f"{list_name_key}s_list_scroll_frame", None)
             if list_frame:
                 self._populate_specific_list_frame(list_name_key, list_frame, item_list, display_cb, remove_button_widget)
+
             self._set_dirty_status(True)
-            setattr(self, selected_index_attr, None)
+            setattr(self, selected_index_attr, None) # Clear selection
             if remove_button_widget and hasattr(remove_button_widget, "configure"):
                 remove_button_widget.configure(state="disabled")
             if self.details_panel_instance:
-                self.details_panel_instance.update_display(None, "none")
+                self.details_panel_instance.update_display(None, "none") # Clear details panel
+
+            # Special handling for templates: delete associated image file
             if list_name_key == "template" and self.current_profile_path and removed_item.get("filename"):
                 try:
-                    # Use ConfigManager to get the correct path
+                    # Use the active ConfigManager instance (self.config_manager) which is associated with self.current_profile_path
                     tpl_path = self.config_manager.get_template_image_path(removed_item["filename"])
                     if tpl_path and os.path.exists(tpl_path):
                         os.remove(tpl_path)
                         logger.info(f"Deleted template image file: {tpl_path}")
-                    elif tpl_path:
-                        logger.warning(f"Template file '{tpl_path}' not found for deletion, but removed from profile.")
-                    else:
-                        logger.warning(f"Could not resolve path for template '{removed_item['filename']}' during removal.")
+                    elif tpl_path: # Path resolved but file doesn't exist
+                        logger.warning(f"Template file '{tpl_path}' not found for deletion, but its entry was removed from profile.")
+                    else: # Path could not be resolved (e.g., profile unsaved at that moment, though current_profile_path check should prevent)
+                        logger.warning(f"Could not resolve path for template '{removed_item['filename']}' during removal. File may not be deleted.")
                 except OSError as e_os:
                     logger.error(f"OS error deleting template file '{removed_item['filename']}': {e_os.strerror}", exc_info=True)
                     messagebox.showwarning("File Deletion Error", f"Could not delete image '{removed_item['filename']}':\n{e_os.strerror}", parent=self)
+                except Exception as e_del: # General exception
+                    logger.error(f"Unexpected error deleting template file '{removed_item['filename']}': {e_del}", exc_info=True)
+                    messagebox.showwarning("File Deletion Error", f"Error deleting '{removed_item['filename']}':\n{e_del}", parent=self)
         else:
             logger.warning(f"Cannot remove {list_name_key}: Invalid index {selected_idx} for list len {len(item_list)}.")
 
     def _remove_selected_region(self):
         if self.btn_remove_region:
-            self._remove_selected_item("region", "regions", "selected_region_index", self.btn_remove_region, lambda item, idx: item.get("name", f"R_{idx}"))
+            self._remove_selected_item("region", "regions", "selected_region_index", self.btn_remove_region, lambda item, idx: item.get("name",f"R_{idx}"))
 
     def _remove_selected_template(self):
         if self.btn_remove_template:
-            self._remove_selected_item("template", "templates", "selected_template_index", self.btn_remove_template, lambda item, idx: f"{item.get('name')}({item.get('filename')})")
+            self._remove_selected_item("template", "templates", "selected_template_index", self.btn_remove_template, lambda item,idx: f"{item.get('name')}({item.get('filename')})")
 
     def _remove_selected_rule(self):
         if self.btn_remove_rule:
-            self._remove_selected_item("rule", "rules", "selected_rule_index", self.btn_remove_rule, lambda item, idx: item.get("name", f"Rule{idx}"))
+            self._remove_selected_item("rule", "rules", "selected_rule_index", self.btn_remove_rule, lambda item, idx: item.get("name",f"Rule{idx}"))
 
     def _add_template(self):
         if not self.current_profile_path:
             if not messagebox.askokcancel("Save Required", "Profile must be saved before adding templates. Save now?", parent=self) or not self._save_profile_as():
                 return
-            if not self.current_profile_path:
+            if not self.current_profile_path: # Still no path
                 logger.warning("Add template aborted: Profile not saved.")
                 return
-        if self._is_dirty and not self._prompt_save_if_dirty():
-            return
-        img_path = filedialog.askopenfilename(title="Select Template Image", filetypes=[("PNG/JPG", "*.png;*.jpg;*.jpeg"), ("All", "*.*")], parent=self)
-        if not img_path:
-            return
-        name_dialog = ctk.CTkInputDialog(text="Enter unique name for this template:", title="Template Name")
+        if self._is_dirty and not self._prompt_save_if_dirty(): return
+
+        img_path = filedialog.askopenfilename(title="Select Template Image", filetypes=[("PNG/JPG", "*.png;*.jpg;*.jpeg"),("All", "*.*")], parent=self)
+        if not img_path: return
+
+        name_dialog = ctk.CTkInputDialog(text="Enter unique name for this template:", title="Template Name", parent=self)
         tpl_name_input = name_dialog.get_input()
         if not tpl_name_input or not tpl_name_input.strip():
-            logger.info("Add template cancelled: No name.")
-            return
+            logger.info("Add template cancelled: No name provided."); return
         tpl_name = tpl_name_input.strip()
-        if any(t.get("name") == tpl_name for t in self.profile_data.get("templates", [])):
-            messagebox.showerror("Name Error", f"Template '{tpl_name}' already exists.", parent=self)
-            return
-        if not self.current_profile_path:
-            messagebox.showerror("Error", "Profile path error for template.", parent=self)
-            return
+
+        if any(t.get("name") == tpl_name for t in self.profile_data.get("templates",[])):
+            messagebox.showerror("Name Error", f"Template name '{tpl_name}' already exists.", parent=self); return
+
+        if not self.current_profile_path: # Should be set by now due to initial checks
+            messagebox.showerror("Error", "Profile path is unexpectedly not set. Cannot save template.", parent=self); return
 
         profile_dir = os.path.dirname(self.current_profile_path)
-        templates_subdir = os.path.join(profile_dir, TEMPLATES_SUBDIR_NAME)  # Use constant
+        templates_subdir_path = os.path.join(profile_dir, TEMPLATES_SUBDIR_NAME)
         try:
-            os.makedirs(templates_subdir, exist_ok=True)
-            base_fn, ext = os.path.splitext(os.path.basename(img_path))
-            sane_base = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in tpl_name).rstrip().replace(" ", "_")
-            sane_base = sane_base or "template"
-            target_fn = f"{sane_base}{ext}"
-            target_path = os.path.join(templates_subdir, target_fn)
+            os.makedirs(templates_subdir_path, exist_ok=True)
+            _base_fn_orig, ext_orig = os.path.splitext(os.path.basename(img_path))
+            sane_base_for_fn = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in tpl_name).rstrip().replace(" ", "_")
+            sane_base_for_fn = sane_base_for_fn or "template" # Ensure not empty
+            target_filename = f"{sane_base_for_fn}{ext_orig if ext_orig else '.png'}" # Default to png if no ext
+            target_full_path = os.path.join(templates_subdir_path, target_filename)
             counter = 1
-            while os.path.exists(target_path):
-                target_fn = f"{sane_base}_{counter}{ext}"
-                target_path = os.path.join(templates_subdir, target_fn)
+            while os.path.exists(target_full_path): # Ensure unique filename in target dir
+                target_filename = f"{sane_base_for_fn}_{counter}{ext_orig if ext_orig else '.png'}"
+                target_full_path = os.path.join(templates_subdir_path, target_filename)
                 counter += 1
-            shutil.copy2(img_path, target_path)
-            logger.info(f"Copied template from '{img_path}' to '{target_path}'.")
-            new_tpl = {"name": tpl_name, "filename": target_fn, "comment": ""}
-            self.profile_data.setdefault("templates", []).append(new_tpl)
+
+            shutil.copy2(img_path, target_full_path)
+            logger.info(f"Copied template from '{img_path}' to '{target_full_path}'.")
+
+            new_tpl_data = {"name": tpl_name, "filename": target_filename, "comment": ""}
+            self.profile_data.setdefault("templates",[]).append(new_tpl_data)
             if self.templates_list_scroll_frame and self.btn_remove_template:
-                self._populate_specific_list_frame(
-                    "template", self.templates_list_scroll_frame, self.profile_data["templates"], lambda item, idx: f"{item.get('name')}({item.get('filename')})", self.btn_remove_template
-                )
+                self._populate_specific_list_frame("template", self.templates_list_scroll_frame, self.profile_data["templates"], lambda item,idx: f"{item.get('name')}({item.get('filename')})", self.btn_remove_template)
             self._set_dirty_status(True)
-            messagebox.showinfo("Template Added", f"Template '{tpl_name}' ({target_fn}) added.", parent=self)
+            messagebox.showinfo("Template Added", f"Template '{tpl_name}' (filename: {target_filename}) added successfully.", parent=self)
         except Exception as e:
             logger.error(f"Error adding template '{tpl_name}': {e}", exc_info=True)
             messagebox.showerror("Add Template Error", f"Could not add template '{tpl_name}':\n{e}", parent=self)
 
     def _add_new_rule(self):
-        if not self.profile_data:
-            self._new_profile(prompt_save=False)
-        name_dialog = ctk.CTkInputDialog(text="Enter unique name for new rule:", title="New Rule Name")
+        if not self.profile_data: self._new_profile(prompt_save=False) # Should not happen if app is running
+
+        name_dialog = ctk.CTkInputDialog(text="Enter unique name for new rule:", title="New Rule Name", parent=self)
         rule_name_input = name_dialog.get_input()
         if not rule_name_input or not rule_name_input.strip():
-            logger.info("Add new rule cancelled: No name.")
-            return
+            logger.info("Add new rule cancelled: No name provided."); return
         rule_name = rule_name_input.strip()
-        if any(r.get("name") == rule_name for r in self.profile_data.get("rules", [])):
-            messagebox.showerror("Name Error", f"Rule name '{rule_name}' already exists.", parent=self)
-            return
-        new_rule = {
+
+        if any(r.get("name") == rule_name for r in self.profile_data.get("rules",[])):
+            messagebox.showerror("Name Error", f"Rule name '{rule_name}' already exists.", parent=self); return
+
+        new_rule_data = {
             "name": rule_name,
-            "region": "",
-            "condition": {"type": "always_true"},
-            "action": {"type": "log_message", "message": f"Rule '{rule_name}' triggered.", "level": "INFO"},
-            "comment": "",
+            "region": "", # User should select region in DetailsPanel
+            "condition": {"type": "always_true"}, # Default to a simple condition
+            "action": {"type": "log_message", "message": f"Rule '{rule_name}' triggered.", "level": "INFO"}, # Default action
+            "comment": ""
         }
-        self.profile_data.setdefault("rules", []).append(new_rule)
+        self.profile_data.setdefault("rules",[]).append(new_rule_data)
         if self.rules_list_scroll_frame and self.btn_remove_rule:
-            self._populate_specific_list_frame("rule", self.rules_list_scroll_frame, self.profile_data["rules"], lambda item, idx: item.get("name", f"Rule{idx}"), self.btn_remove_rule)
+            self._populate_specific_list_frame("rule", self.rules_list_scroll_frame, self.profile_data["rules"], lambda item, idx: item.get("name",f"Rule{idx}"), self.btn_remove_rule)
         self._set_dirty_status(True)
-        messagebox.showinfo("Rule Added", f"Rule '{rule_name}' added.", parent=self)
+        messagebox.showinfo("Rule Added", f"Rule '{rule_name}' added successfully.", parent=self)
 
     def _on_rule_part_type_change(self, part_changed: str, new_type_selected: str):
         self._set_dirty_status(True)
-        if self.selected_rule_index is None or self.details_panel_instance is None:
-            return
-        if not (0 <= self.selected_rule_index < len(self.profile_data.get("rules", []))):
-            return
+        if self.selected_rule_index is None or self.details_panel_instance is None: return
+        if not (0 <= self.selected_rule_index < len(self.profile_data.get("rules",[]))): return
+
         current_rule_data_model = self.profile_data["rules"][self.selected_rule_index]
         logger.info(f"Rule part type change for rule '{current_rule_data_model.get('name')}': part '{part_changed}' to type '{new_type_selected}' in data model.")
+
         target_data_block: Optional[Dict] = None
         param_group_key_for_config = ""
         widget_prefix_for_dp = ""
         target_frame_in_dp: Optional[ctk.CTkFrame] = None
+
         if part_changed == "condition":
             param_group_key_for_config = "conditions"
-            is_compound_in_model = "logical_operator" in current_rule_data_model.get("condition", {})
-            if self.details_panel_instance.parent_app.selected_sub_condition_index is not None and is_compound_in_model:
-                sub_conds = current_rule_data_model.get("condition", {}).get("sub_conditions", [])
-                if 0 <= self.details_panel_instance.parent_app.selected_sub_condition_index < len(sub_conds):
-                    target_data_block = sub_conds[self.details_panel_instance.parent_app.selected_sub_condition_index]
+            is_compound_in_model = "logical_operator" in current_rule_data_model.get("condition",{})
+            # If editing a sub-condition
+            if self.selected_sub_condition_index is not None and is_compound_in_model:
+                sub_conds = current_rule_data_model.get("condition",{}).get("sub_conditions",[])
+                if 0 <= self.selected_sub_condition_index < len(sub_conds):
+                    target_data_block = sub_conds[self.selected_sub_condition_index]
                     widget_prefix_for_dp = "subcond_"
                     target_frame_in_dp = self.details_panel_instance.sub_condition_params_frame
-                else:
-                    logger.error("Selected sub-condition index out of bounds.")
-                    return
-            elif not is_compound_in_model:
-                target_data_block = current_rule_data_model.get("condition", {})
+                else: logger.error("Selected sub-condition index out of bounds."); return
+            elif not is_compound_in_model: # Editing a single condition
+                target_data_block = current_rule_data_model.get("condition",{})
                 widget_prefix_for_dp = "cond_"
                 target_frame_in_dp = self.details_panel_instance.condition_params_frame
-            else:
-                logger.error("Cannot determine target condition block for type change.")
-                return
+            else: logger.error("Cannot determine target condition block for type change (is compound but no sub-cond selected?)."); return
         elif part_changed == "action":
             param_group_key_for_config = "actions"
-            target_data_block = current_rule_data_model.get("action", {})
+            target_data_block = current_rule_data_model.get("action",{})
             widget_prefix_for_dp = "act_"
             target_frame_in_dp = self.details_panel_instance.action_params_frame
-        else:
-            logger.error(f"Unknown rule part '{part_changed}'.")
-            return
+        else: logger.error(f"Unknown rule part '{part_changed}'."); return
+
         if target_data_block is not None and target_frame_in_dp is not None:
             if target_data_block.get("type") != new_type_selected:
+                # Preserve essential fields if they are relevant to the new type or all types
                 preserved_fields = {"type": new_type_selected}
                 if param_group_key_for_config == "conditions" and "region" in target_data_block:
                     preserved_fields["region"] = target_data_block["region"]
-                new_type_param_defs = UI_PARAM_CONFIG.get(param_group_key_for_config, {}).get(new_type_selected, [])
-                if "capture_as" in target_data_block and any(p.get("id") == "capture_as" for p in new_type_param_defs):
+                # Check if new type supports 'capture_as' and old type had it
+                new_type_param_defs = UI_PARAM_CONFIG.get(param_group_key_for_config,{}).get(new_type_selected,[])
+                if "capture_as" in target_data_block and any(p.get("id")=="capture_as" for p in new_type_param_defs):
                     preserved_fields["capture_as"] = target_data_block["capture_as"]
-                target_data_block.clear()
-                target_data_block.update(preserved_fields)
+
+                target_data_block.clear() # Clear old params
+                target_data_block.update(preserved_fields) # Set type and preserved fields
                 logger.debug(f"Data model for '{part_changed}' (prefix '{widget_prefix_for_dp}') reset for new type '{new_type_selected}': {target_data_block}")
-            self.details_panel_instance._render_dynamic_parameters(
-                param_group_key_for_config, new_type_selected, target_data_block, target_frame_in_dp, start_row=1, widget_prefix=widget_prefix_for_dp
-            )
+
+            # Re-render the dynamic parameters for this part in the DetailsPanel
+            self.details_panel_instance._render_dynamic_parameters(param_group_key_for_config, new_type_selected, target_data_block, target_frame_in_dp, start_row=1, widget_prefix=widget_prefix_for_dp)
             logger.info(f"DetailsPanel display for '{part_changed}' (prefix '{widget_prefix_for_dp}') updated for type '{new_type_selected}'.")
         else:
             logger.error(f"Could not find target data block or UI frame for '{part_changed}' type change to '{new_type_selected}'.")
 
     def _add_sub_condition_to_rule(self):
-        if self.selected_rule_index is None or not (0 <= self.selected_rule_index < len(self.profile_data.get("rules", []))):
-            return
+        if self.selected_rule_index is None or not (0 <= self.selected_rule_index < len(self.profile_data.get("rules",[]))): return
         rule = self.profile_data["rules"][self.selected_rule_index]
-        cond_block = rule.get("condition", {})
-        if "logical_operator" not in cond_block:
+        cond_block = rule.get("condition",{})
+        if "logical_operator" not in cond_block: # If it's currently a single condition
             current_single = copy.deepcopy(cond_block)
-            cond_block.clear()
-            cond_block["logical_operator"] = "AND"
-            cond_block["sub_conditions"] = [current_single if current_single.get("type") else {"type": "always_true"}]
-        cond_block.setdefault("sub_conditions", []).append({"type": "always_true"})
-        rule["condition"] = cond_block
+            cond_block.clear() # Remove single condition keys
+            cond_block["logical_operator"] = "AND" # Default to AND
+            cond_block["sub_conditions"] = [current_single if current_single.get("type") else {"type":"always_true"}] # Keep existing as first sub
+        cond_block.setdefault("sub_conditions",[]).append({"type":"always_true"}) # Add new default sub-condition
+        rule["condition"] = cond_block # Update rule model
         self._set_dirty_status(True)
         if self.details_panel_instance:
-            self.details_panel_instance.update_display(copy.deepcopy(rule), "rule")
+            self.details_panel_instance.update_display(copy.deepcopy(rule), "rule") # Refresh DetailsPanel
         logger.info(f"Added new sub-condition to rule '{rule.get('name')}'.")
 
     def _remove_selected_sub_condition(self):
-        if self.selected_rule_index is None or self.details_panel_instance is None or self.details_panel_instance.parent_app.selected_sub_condition_index is None:
-            return
-        if not (0 <= self.selected_rule_index < len(self.profile_data.get("rules", []))):
-            return
+        if self.selected_rule_index is None or self.details_panel_instance is None or self.selected_sub_condition_index is None: return
+        if not (0 <= self.selected_rule_index < len(self.profile_data.get("rules",[]))): return
+
         rule = self.profile_data["rules"][self.selected_rule_index]
-        cond_block = rule.get("condition", {})
+        cond_block = rule.get("condition",{})
         sub_list = cond_block.get("sub_conditions")
-        sel_sub_idx = self.details_panel_instance.parent_app.selected_sub_condition_index
+        sel_sub_idx = self.selected_sub_condition_index
+
         if sub_list and isinstance(sub_list, list) and 0 <= sel_sub_idx < len(sub_list):
             removed = sub_list.pop(sel_sub_idx)
             logger.info(f"Removed sub-cond at index {sel_sub_idx} (type: {removed.get('type')}) from rule '{rule.get('name')}'.")
-            if len(sub_list) == 1 and messagebox.askyesno("Convert to Single?", "Only one sub-condition remains. Convert rule to single condition?", parent=self):
-                rule["condition"] = copy.deepcopy(sub_list[0])
-            elif not sub_list:
-                rule["condition"] = {"type": "always_true"}
-            self.details_panel_instance.parent_app.selected_sub_condition_index = None
+
+            if len(sub_list) == 1: # Only one sub-condition remains
+                if messagebox.askyesno("Convert to Single Condition?", "Only one sub-condition remains. Convert rule to a single condition structure?", parent=self):
+                    rule["condition"] = copy.deepcopy(sub_list[0]) # Replace compound with the single remaining sub
+            elif not sub_list: # No sub-conditions left
+                rule["condition"] = {"type":"always_true"} # Default to always_true
+
+            self.selected_sub_condition_index = None # Clear selection
             self._set_dirty_status(True)
             if self.details_panel_instance:
-                self.details_panel_instance.update_display(copy.deepcopy(rule), "rule")
+                self.details_panel_instance.update_display(copy.deepcopy(rule), "rule") # Refresh DetailsPanel
         else:
             logger.warning(f"Cannot remove sub-cond: Invalid index {sel_sub_idx} or sub_conditions list error.")
 
     def _convert_condition_structure(self):
-        if self.selected_rule_index is None or not (0 <= self.selected_rule_index < len(self.profile_data.get("rules", []))):
-            return
+        if self.selected_rule_index is None or not (0 <= self.selected_rule_index < len(self.profile_data.get("rules",[]))): return
         rule = self.profile_data["rules"][self.selected_rule_index]
-        cond = rule.get("condition", {})
+        cond = rule.get("condition",{})
         is_compound = "logical_operator" in cond
-        if is_compound:
-            subs = cond.get("sub_conditions", [])
-            new_single = copy.deepcopy(subs[0]) if subs else {"type": "always_true"}
-            if len(subs) > 1 and not messagebox.askyesno("Confirm Conversion", "Convert to single condition? Only first sub-condition kept. Others lost. Continue?", parent=self):
-                return
-            rule["condition"] = new_single
-        else:
-            curr_single = copy.deepcopy(cond)
-            rule["condition"] = {"logical_operator": "AND", "sub_conditions": [curr_single if curr_single.get("type") else {"type": "always_true"}]}
-        if self.details_panel_instance:
-            self.details_panel_instance.parent_app.selected_sub_condition_index = None
+
+        if is_compound: # Convert from Compound to Single
+            subs = cond.get("sub_conditions",[])
+            new_single_cond_data = copy.deepcopy(subs[0]) if subs else {"type":"always_true"}
+            if len(subs) > 1:
+                if not messagebox.askyesno("Confirm Conversion", "Convert to single condition? Only the first sub-condition will be kept. Others will be lost. Continue?", parent=self):
+                    return
+            rule["condition"] = new_single_cond_data
+        else: # Convert from Single to Compound
+            current_single_cond_data = copy.deepcopy(cond)
+            rule["condition"] = {
+                "logical_operator": "AND", # Default to AND
+                "sub_conditions": [current_single_cond_data if current_single_cond_data.get("type") else {"type":"always_true"}]
+            }
+        self.selected_sub_condition_index = None # Clear sub-selection after structure change
         self._set_dirty_status(True)
         if self.details_panel_instance:
-            self.details_panel_instance.update_display(copy.deepcopy(rule), "rule")
+            self.details_panel_instance.update_display(copy.deepcopy(rule), "rule") # Refresh

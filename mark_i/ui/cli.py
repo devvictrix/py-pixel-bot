@@ -1,10 +1,9 @@
-# File: mark_i/ui/cli.py
 import argparse
 import logging
 import os
 import sys
 import time  # For simple sleep in run command
-from typing import Optional # Added this line
+from typing import Optional 
 
 # --- Placeholder Command Handlers ---
 # Logger for this module, using hierarchical naming
@@ -143,7 +142,7 @@ def handle_edit(args):
         logger.info("MainAppWindow initialized. Starting GUI main loop...")
         app_gui.mainloop()
         logger.info("GUI main loop finished.")
-    except SystemExit:
+    except SystemExit: # NOSONAR
         logger.warning(f"GUI initiated a system exit (e.g., user closed window prompting save).")
         # Allow system exit to propagate
     except Exception as e:
@@ -172,13 +171,8 @@ def handle_add_region(args):  # Legacy, MainAppWindow's "Add Region" is preferre
 
     try:
         logger.info(f"Loading profile {resolved_profile_path} for region selection tool.")
-        # RegionSelectorWindow needs a ConfigManager for the profile being edited.
-        # It doesn't save directly TO this CM, but uses it for context (e.g., existing region names if needed).
-        # The MainAppWindow now handles saving changes made via RegionSelector.
         cm_for_region_selector_context = ConfigManager(profile_name_or_path=resolved_profile_path, create_if_missing=False)
 
-        # RegionSelectorWindow typically needs a master CTk window.
-        # For CLI invocation, we can create a temporary hidden root.
         import customtkinter as ctk  # Local import for this specific use
 
         temp_root = ctk.CTk()
@@ -186,24 +180,13 @@ def handle_add_region(args):  # Legacy, MainAppWindow's "Add Region" is preferre
 
         logger.info("Initializing RegionSelectorWindow...")
         region_selector_app = RegionSelectorWindow(
-            master=temp_root, config_manager_for_saving_path_only=cm_for_region_selector_context, existing_region_data=None  # Pass the CM  # For 'add new' via CLI, no existing data to pre-fill
+            master=temp_root, config_manager_context=cm_for_region_selector_context, existing_region_data=None
         )
-        # region_selector_app.mainloop() # This blocks and is not ideal for CLI.
-        # RegionSelectorWindow is modal (grab_set). It should handle its own loop if shown.
-        # The main use case for RegionSelectorWindow is now from MainAppWindow, which handles the modal loop.
-        # For CLI, this interaction model is a bit broken as it expects a GUI loop.
-        # A true CLI region add would need a different non-GUI mechanism or different GUI interaction.
         logger.warning("CLI 'add-region' is deprecated. RegionSelectorWindow will likely not function as expected without a parent GUI managing its lifecycle. Use 'edit' command.")
 
-        # Simulate a short display if it were to run, then destroy.
-        # This is mostly for conceptual completeness of the handler, though its utility is low.
-        temp_root.deiconify()  # Show it briefly
-        temp_root.after(3000, temp_root.destroy)  # Auto-close after 3s for demo
-        temp_root.mainloop()  # Start its loop
-
-        # Logic to actually get data back and save it to the profile via ConfigManager would be here,
-        # but RegionSelectorWindow is designed to be called by MainAppWindow which handles the data.
-        # e.g., if region_selector_app.saved_region_info: ... cm_for_region_selector_context.add_region(...).save_current_profile()
+        temp_root.deiconify()
+        temp_root.after(3000, temp_root.destroy)
+        temp_root.mainloop()
 
         logger.info("RegionSelectorWindow (legacy CLI call) finished or timed out.")
     except Exception as e:
