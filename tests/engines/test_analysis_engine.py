@@ -97,7 +97,7 @@ class TestAnalysisEngineOcr:
         assert result["text"] == "Hello World"
         assert pytest.approx(result["average_confidence"]) == (90.0 + 85.5) / 2
 
-    @patch('pytesseract.image_to_data', side_effect=pytesseract.TesseractNotFoundError("Mock Tesseract Not Found"))
+    @patch('pytesseract.image_to_data', side_effect=pytesseract.TesseractNotFoundError("Mock Tesseract Not Found Error"))
     def test_ocr_tesseract_not_found(self, mock_image_to_data: MagicMock, analysis_engine_instance: AnalysisEngine):
         result = analysis_engine_instance.ocr_extract_text(dummy_image_bgr_ae)
         assert result is None

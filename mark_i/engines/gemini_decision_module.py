@@ -6,7 +6,8 @@ import os
 
 import numpy as np
 
-from mark_i.engines.gemini_analyzer import GeminiAnalyzer, DEFAULT_NLU_PLANNING_MODEL, DEFAULT_VISUAL_REFINE_MODEL
+# DEFAULT_NLU_PLANNING_MODEL and DEFAULT_VISUAL_REFINE_MODEL are defined here
+from mark_i.engines.gemini_analyzer import GeminiAnalyzer # No need to import constants from here
 from mark_i.engines.action_executor import ActionExecutor
 from mark_i.core.config_manager import ConfigManager
 
@@ -22,6 +23,10 @@ from mark_i.engines.primitive_executors import (
 from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
 
 logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_decision_module")
+
+# Constants moved here as they are specific to GDM's logic
+DEFAULT_NLU_PLANNING_MODEL = "gemini-1.5-flash-latest"
+DEFAULT_VISUAL_REFINE_MODEL = "gemini-1.5-flash-latest"
 
 PREDEFINED_ALLOWED_SUB_ACTIONS: Dict[str, Dict[str, Any]] = {
     "CLICK_DESCRIBED_ELEMENT": {"description": "Clicks an element described textually.", "executor_class": ClickDescribedElementExecutor},
@@ -54,7 +59,7 @@ class GeminiDecisionModule:
         self.config_manager = config_manager
 
         self._primitive_executors: Dict[str, PrimitiveSubActionExecutorBase] = self._initialize_primitive_executors()
-        self._executed_steps_log_during_task: List[str] = []  # For accumulating step logs during a single NLU task
+        self._executed_steps_log_during_task: List[str] = []
 
         logger.info("GeminiDecisionModule (NLU Task Orchestrator & Goal Executor) initialized.")
 
@@ -78,7 +83,6 @@ class GeminiDecisionModule:
         return executors
 
     def _construct_nlu_parse_prompt(self, natural_language_command: str) -> str:
-        # Unchanged
         nlu_schema_description = """
 You are an NLU (Natural Language Understanding) parser for a desktop automation tool named Mark-I.
 Your task is to analyze the user's natural language command and convert it into a structured JSON plan.
@@ -126,23 +130,16 @@ Expected "parsed_task" for example:
         return prompt
 
     def _map_nlu_intent_to_allowed_sub_action(self, nlu_intent_verb: Optional[str]) -> Optional[str]:
-        # Unchanged
-        if not nlu_intent_verb or not isinstance(nlu_intent_verb, str):
-            return None
+        if not nlu_intent_verb or not isinstance(nlu_intent_verb, str): return None
         verb = nlu_intent_verb.strip().upper()
-        if "CLICK" in verb or ("PRESS" in verb and "BUTTON" in verb) or "SELECT" in verb:
-            return "CLICK_DESCRIBED_ELEMENT"
-        if "TYPE" in verb or ("ENTER" in verb and "KEY" not in verb and "TEXT" in verb) or "FILL" in verb or "INPUT" in verb:
-            return "TYPE_IN_DESCRIBED_FIELD"
-        if ("PRESS" in verb and "KEY" in verb) or verb in ["HIT_ENTER", "SUBMIT_FORM_WITH_ENTER", "PRESS_ENTER", "PRESS_TAB", "PRESS_ESCAPE"]:
-            return "PRESS_KEY_SIMPLE"
-        if "CHECK" in verb or "VERIFY" in verb or "IS" in verb and ("VISIBLE" in verb or "PRESENT" in verb or "ENABLED" in verb or "DISABLED" in verb) or "IF" in verb and "STATE" in verb:
-            return "CHECK_VISUAL_STATE"
+        if "CLICK" in verb or ("PRESS" in verb and "BUTTON" in verb) or "SELECT" in verb: return "CLICK_DESCRIBED_ELEMENT"
+        if "TYPE" in verb or ("ENTER" in verb and "KEY" not in verb and "TEXT" in verb) or "FILL" in verb or "INPUT" in verb: return "TYPE_IN_DESCRIBED_FIELD"
+        if ("PRESS" in verb and "KEY" in verb) or verb in ["HIT_ENTER", "SUBMIT_FORM_WITH_ENTER", "PRESS_ENTER", "PRESS_TAB", "PRESS_ESCAPE"]: return "PRESS_KEY_SIMPLE"
+        if "CHECK" in verb or "VERIFY" in verb or "IS" in verb and ("VISIBLE" in verb or "PRESENT" in verb or "ENABLED" in verb or "DISABLED" in verb) or "IF" in verb and "STATE" in verb: return "CHECK_VISUAL_STATE"
         logger.warning(f"NLU Intent verb '{nlu_intent_verb}' (normalized to '{verb}') could not be mapped to a predefined sub-action type.")
         return None
 
     def _refine_target_description_to_bbox(self, target_description: str, context_image_np: np.ndarray, context_image_region_name: str, task_rule_name_for_log: str) -> Optional[Dict[str, Any]]:
-        # Unchanged
         log_prefix = f"R '{task_rule_name_for_log}', NLU Task TargetRefine"
         logger.info(f"{log_prefix}: Refining target: '{target_description}' in rgn '{context_image_region_name}'")
         prompt = (
@@ -150,43 +147,29 @@ Expected "parsed_task" for example:
             f'If found, respond ONLY with JSON: {{"found": true, "box": [x,y,w,h], "element_label": "{target_description}", "confidence_score": 0.0_to_1.0}}. The box coordinates [x,y,w,h] must be integers relative to the top-left of the provided image. Ensure width and height are positive.\n'
             f'If not found or ambiguous, respond ONLY with JSON: {{"found": false, "box": null, "element_label": "{target_description}", "reasoning": "why_not_found_or_ambiguous"}}.'
         )
+        # DEFAULT_VISUAL_REFINE_MODEL is now defined in this module
         response = self.gemini_analyzer.query_vision_model(prompt=prompt, image_data=context_image_np, model_name_override=DEFAULT_VISUAL_REFINE_MODEL)
         if response["status"] == "success" and response["json_content"]:
             data = response["json_content"]
             if isinstance(data, dict) and "found" in data:
-                if (
-                    data["found"]
-                    and isinstance(data.get("box"), list)
-                    and len(data["box"]) == 4
-                    and all(isinstance(n, (int, float)) for n in data["box"])
-                    and data["box"][2] > 0
-                    and data["box"][3] > 0
-                ):
+                if data["found"] and isinstance(data.get("box"), list) and len(data["box"]) == 4 and all(isinstance(n, (int, float)) for n in data["box"]) and data["box"][2] > 0 and data["box"][3] > 0:
                     box = [int(round(n)) for n in data["box"]]
                     logger.info(f"{log_prefix}: Target '{target_description}' refined to bbox: {box}. Confidence: {data.get('confidence_score', 'N/A')}")
-                    return {
-                        "value": {"box": box, "found": True, "element_label": data.get("element_label", target_description), "confidence": data.get("confidence_score", 1.0)},
-                        "_source_region_for_capture_": context_image_region_name,
-                    }
-                elif not data["found"]:
-                    logger.info(f"{log_prefix}: Target '{target_description}' not found by Gemini. Reasoning: {data.get('reasoning', 'N/A')}")
-                else:
-                    logger.warning(f"{log_prefix}: Refined box data for '{target_description}' invalid. Data: {data}")
-            else:
-                logger.warning(f"{log_prefix}: Refinement JSON structure unexpected: {data}")
-        else:
-            logger.error(f"{log_prefix}: Refinement query failed. Status: {response['status']}, Err: {response.get('error_message')}")
+                    return {"value": {"box": box, "found": True, "element_label": data.get("element_label", target_description), "confidence": data.get("confidence_score", 1.0)}, "_source_region_for_capture_": context_image_region_name}
+                elif not data["found"]: logger.info(f"{log_prefix}: Target '{target_description}' not found by Gemini. Reasoning: {data.get('reasoning', 'N/A')}")
+                else: logger.warning(f"{log_prefix}: Refined box data for '{target_description}' invalid. Data: {data}")
+            else: logger.warning(f"{log_prefix}: Refinement JSON structure unexpected: {data}")
+        else: logger.error(f"{log_prefix}: Refinement query failed. Status: {response['status']}, Err: {response.get('error_message')}")
         return None
 
     def _execute_primitive_sub_action(
-        self, step_instruction_details: Dict, current_visual_context_images: Dict, primary_context_region_name: str, task_rule_name_for_log: str, task_parameters_from_rule: Dict
+        self, step_instruction_details: Dict, current_visual_context_images: Dict,
+        primary_context_region_name: str, task_rule_name_for_log: str,
+        task_parameters_from_rule: Dict
     ) -> PrimitiveSubActionExecuteResult:
-        # Now uses Strategy Pattern
         intent_verb = step_instruction_details.get("intent_verb")
         log_prefix_base = f"R '{task_rule_name_for_log}', NLU SubStep"
-        logger.info(
-            f"{log_prefix_base}: Executing primitive. Intent='{intent_verb}', TargetDesc='{step_instruction_details.get('target_description')}', NLU Params={step_instruction_details.get('parameters', {})}"
-        )
+        logger.info(f"{log_prefix_base}: Executing primitive. Intent='{intent_verb}', TargetDesc='{step_instruction_details.get('target_description')}', NLU Params={step_instruction_details.get('parameters', {})}")
         primitive_action_type = self._map_nlu_intent_to_allowed_sub_action(intent_verb)
         if not primitive_action_type:
             logger.error(f"{log_prefix_base}: Could not map NLU intent '{intent_verb}' to primitive. Step failed.")
@@ -201,202 +184,120 @@ Expected "parsed_task" for example:
             logger.error(f"{log_prefix_base}: Unexpected error during primitive '{primitive_action_type}': {e}", exc_info=True)
             return PrimitiveSubActionExecuteResult(success=False, boolean_eval_result=False)
 
-    # --- Refactored NLU Task Execution Helpers ---
     def _handle_single_instruction_node(
-        self, instruction_details: Dict[str, Any], current_images: Dict[str, np.ndarray], primary_rgn_name: str, task_rule_name: str, task_parameters: Dict[str, Any], branch_prefix: str
+        self, instruction_details: Dict[str, Any], current_images: Dict[str, np.ndarray],
+        primary_rgn_name: str, task_rule_name: str, task_parameters: Dict[str, Any], branch_prefix: str
     ) -> bool:
-        log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd"  # Base for logging
         exec_result = self._execute_primitive_sub_action(instruction_details, current_images, primary_rgn_name, f"{task_rule_name}_{branch_prefix}Single", task_parameters)
         self._executed_steps_log_during_task.append(f"{branch_prefix}Single '{instruction_details.get('intent_verb')}': {'OK' if exec_result.success else 'FAIL'}")
         return exec_result.success
 
     def _handle_sequential_instructions_node(
-        self, steps_list: List[Dict[str, Any]], current_images: Dict[str, np.ndarray], primary_rgn_name: str, task_rule_name: str, task_parameters: Dict[str, Any], branch_prefix: str
+        self, steps_list: List[Dict[str, Any]], current_images: Dict[str, np.ndarray],
+        primary_rgn_name: str, task_rule_name: str, task_parameters: Dict[str, Any], branch_prefix: str
     ) -> bool:
-        log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd"  # Base for logging
+        log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd"
         if not isinstance(steps_list, list) or not steps_list:
             logger.error(f"{log_prefix_task}: {branch_prefix}Sequence node missing 'steps' or steps list is empty.")
             self._executed_steps_log_during_task.append(f"{branch_prefix}Sequence: FormatFAIL (No steps)")
             return False
-
         max_s = task_parameters.get("max_steps", len(steps_list))
         for i, step_item_data in enumerate(steps_list):
-            if i >= max_s:
-                logger.info(f"{log_prefix_task}: {branch_prefix}Sequence node reached max_steps ({max_s}).")
-                break
+            if i >= max_s: logger.info(f"{log_prefix_task}: {branch_prefix}Sequence node reached max_steps ({max_s})."); break
             if not isinstance(step_item_data, dict) or "instruction_details" not in step_item_data:
                 logger.error(f"{log_prefix_task}: {branch_prefix}Sequence node invalid step data at index {i}: {step_item_data}.")
-                self._executed_steps_log_during_task.append(f"{branch_prefix}SeqStep{i+1}: FormatFAIL (Invalid data)")
-                return False
-
-            instr_details = step_item_data["instruction_details"]
-            step_num = step_item_data.get("step_number", i + 1)
+                self._executed_steps_log_during_task.append(f"{branch_prefix}SeqStep{i+1}: FormatFAIL (Invalid data)"); return False
+            instr_details = step_item_data["instruction_details"]; step_num = step_item_data.get("step_number", i + 1)
             logger.info(f"{log_prefix_task}: {branch_prefix}SeqStep {step_num}/{len(steps_list)}: Intent='{instr_details.get('intent_verb')}' Target='{instr_details.get('target_description')}'")
-
-            current_images_for_step = current_images  # TODO: Implement context refresh logic if needed for sequential steps
+            current_images_for_step = current_images
             exec_result = self._execute_primitive_sub_action(instr_details, current_images_for_step, primary_rgn_name, f"{task_rule_name}_{branch_prefix}SeqStep{step_num}", task_parameters)
             self._executed_steps_log_during_task.append(f"{branch_prefix}SeqStep{step_num} '{instr_details.get('intent_verb')}': {'OK' if exec_result.success else 'FAIL'}")
-            if not exec_result.success:
-                return False
+            if not exec_result.success: return False
             time.sleep(float(task_parameters.get("delay_between_nlu_steps_sec", 0.3)))
         return True
 
     def _handle_conditional_instruction_node(
-        self,
-        cond_desc: str,
-        then_plan_node: Dict[str, Any],
-        else_plan_node: Optional[Dict[str, Any]],
-        current_images: Dict[str, np.ndarray],
-        primary_rgn_name: str,
-        task_rule_name: str,
-        task_parameters: Dict[str, Any],
-        depth: int,
-        branch_prefix: str,
+        self, cond_desc: str, then_plan_node: Dict[str, Any], else_plan_node: Optional[Dict[str, Any]],
+        current_images: Dict[str, np.ndarray], primary_rgn_name: str, task_rule_name: str,
+        task_parameters: Dict[str, Any], depth: int, branch_prefix: str
     ) -> bool:
-        log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd"  # Base for logging
+        log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd"
         eval_instr = {"intent_verb": "CHECK_VISUAL_STATE", "target_description": cond_desc, "parameters": {"condition_description": cond_desc}}
         logger.info(f"{log_prefix_task}: {branch_prefix}Evaluating IF: '{cond_desc}'")
-
         condition_exec_result = self._execute_primitive_sub_action(eval_instr, current_images, primary_rgn_name, f"{task_rule_name}_{branch_prefix}IF_Check", task_parameters)
         condition_met_bool = condition_exec_result.boolean_eval_result if condition_exec_result.success else False
         self._executed_steps_log_during_task.append(f"{branch_prefix}IF '{cond_desc}': {'TRUE' if condition_met_bool else 'FALSE'} (ExecSuccess: {condition_exec_result.success})")
-
-        if not condition_exec_result.success:  # If the check itself failed
-            return False
-
-        target_branch_plan_node_to_execute = None
-        new_branch_prefix_for_log_recursive = ""
-        if condition_met_bool:
-            logger.info(f"{log_prefix_task}: {branch_prefix}IF TRUE. Executing THEN branch.")
-            target_branch_plan_node_to_execute = then_plan_node
-            new_branch_prefix_for_log_recursive = f"{branch_prefix}THEN."
-        elif isinstance(else_plan_node, dict):
-            logger.info(f"{log_prefix_task}: {branch_prefix}IF FALSE. Executing ELSE branch.")
-            target_branch_plan_node_to_execute = else_plan_node
-            new_branch_prefix_for_log_recursive = f"{branch_prefix}ELSE."
-        else:
-            logger.info(f"{log_prefix_task}: {branch_prefix}IF FALSE. No ELSE branch. Conditional complete.")
-            return True  # No further branch to execute, considered successful completion of conditional
-
+        if not condition_exec_result.success: return False
+        target_branch_plan_node_to_execute = None; new_branch_prefix_for_log_recursive = ""
+        if condition_met_bool: logger.info(f"{log_prefix_task}: {branch_prefix}IF TRUE. Executing THEN branch."); target_branch_plan_node_to_execute = then_plan_node; new_branch_prefix_for_log_recursive = f"{branch_prefix}THEN."
+        elif isinstance(else_plan_node, dict): logger.info(f"{log_prefix_task}: {branch_prefix}IF FALSE. Executing ELSE branch."); target_branch_plan_node_to_execute = else_plan_node; new_branch_prefix_for_log_recursive = f"{branch_prefix}ELSE."
+        else: logger.info(f"{log_prefix_task}: {branch_prefix}IF FALSE. No ELSE branch. Conditional complete."); return True
         if target_branch_plan_node_to_execute:
-            return self._recursive_execute_plan_node(
-                target_branch_plan_node_to_execute, current_images, primary_rgn_name, depth + 1, new_branch_prefix_for_log_recursive, task_rule_name, task_parameters
-            )
-        return True  # Should be reached if no branch was taken or taken branch was empty
+            return self._recursive_execute_plan_node(target_branch_plan_node_to_execute, current_images, primary_rgn_name, depth + 1, new_branch_prefix_for_log_recursive, task_rule_name, task_parameters)
+        return True
 
     def _recursive_execute_plan_node(
-        self,
-        plan_node_data: Dict[str, Any],
-        current_images: Dict[str, np.ndarray],
-        primary_rgn_name: str,
-        depth: int,
-        branch_prefix: str,
-        task_rule_name: str,
-        task_parameters: Dict[str, Any],  # Pass these through
+        self, plan_node_data: Dict[str, Any], current_images: Dict[str, np.ndarray],
+        primary_rgn_name: str, depth: int, branch_prefix: str,
+        task_rule_name: str, task_parameters: Dict[str, Any]
     ) -> bool:
-        log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd"  # Base for logging
+        log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd"
         if depth > task_parameters.get("max_recursion_depth_nlu", 5):
             logger.error(f"{log_prefix_task}: Max recursion depth ({depth}) reached at: {branch_prefix}")
-            self._executed_steps_log_during_task.append(f"Error: Max recursion at {branch_prefix}")
-            return False
-
-        node_type = plan_node_data.get("command_type")
-        node_log_id = f"{branch_prefix}Type'{node_type}'"
-        logger.debug(f"{log_prefix_task}: Recursive exec {node_log_id} depth {depth}.")
-
+            self._executed_steps_log_during_task.append(f"Error: Max recursion at {branch_prefix}"); return False
+        node_type = plan_node_data.get("command_type"); node_log_id = f"{branch_prefix}Type'{node_type}'"; logger.debug(f"{log_prefix_task}: Recursive exec {node_log_id} depth {depth}.")
         if node_type == "SINGLE_INSTRUCTION":
             instr_details = plan_node_data.get("instruction_details")
-            if not isinstance(instr_details, dict):
-                logger.error(f"{log_prefix_task}: {node_log_id} missing 'instruction_details'.")
-                self._executed_steps_log_during_task.append(f"{branch_prefix}Single: FormatFAIL")
-                return False
+            if not isinstance(instr_details, dict): logger.error(f"{log_prefix_task}: {node_log_id} missing 'instruction_details'."); self._executed_steps_log_during_task.append(f"{branch_prefix}Single: FormatFAIL"); return False
             return self._handle_single_instruction_node(instr_details, current_images, primary_rgn_name, task_rule_name, task_parameters, branch_prefix)
         elif node_type == "SEQUENTIAL_INSTRUCTIONS":
             steps_list = plan_node_data.get("steps", [])
             return self._handle_sequential_instructions_node(steps_list, current_images, primary_rgn_name, task_rule_name, task_parameters, branch_prefix)
         elif node_type == "CONDITIONAL_INSTRUCTION":
-            cond_desc = plan_node_data.get("condition_description")
-            then_node = plan_node_data.get("then_branch")
-            else_node = plan_node_data.get("else_branch")  # Can be None
-            if not cond_desc or not isinstance(then_node, dict):
-                logger.error(f"{log_prefix_task}: {node_log_id} missing 'condition_description' or 'then_branch'.")
-                self._executed_steps_log_during_task.append(f"{branch_prefix}Condition: FormatFAIL")
-                return False
+            cond_desc = plan_node_data.get("condition_description"); then_node = plan_node_data.get("then_branch"); else_node = plan_node_data.get("else_branch")
+            if not cond_desc or not isinstance(then_node, dict): logger.error(f"{log_prefix_task}: {node_log_id} missing 'condition_description' or 'then_branch'."); self._executed_steps_log_during_task.append(f"{branch_prefix}Condition: FormatFAIL"); return False
             return self._handle_conditional_instruction_node(cond_desc, then_node, else_node, current_images, primary_rgn_name, task_rule_name, task_parameters, depth, branch_prefix)
-        else:
-            logger.error(f"{log_prefix_task}: {node_log_id} Unknown 'command_type'.")
-            self._executed_steps_log_during_task.append(f"{branch_prefix}UnknownTypeFAIL")
-            return False
+        else: logger.error(f"{log_prefix_task}: {node_log_id} Unknown 'command_type'."); self._executed_steps_log_during_task.append(f"{branch_prefix}UnknownTypeFAIL"); return False
 
-    def execute_nlu_task(self, task_rule_name: str, natural_language_command: str, initial_context_images: Dict[str, np.ndarray], task_parameters: Dict[str, Any]) -> Dict[str, Any]:
-        self._executed_steps_log_during_task = []  # Clear log for this new task
+    def execute_nlu_task(
+        self, task_rule_name: str, natural_language_command: str,
+        initial_context_images: Dict[str, np.ndarray], task_parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        self._executed_steps_log_during_task = []
         overall_task_result = {"status": "failure", "message": "NLU task initiated.", "executed_steps_summary": self._executed_steps_log_during_task}
         log_prefix_task = f"R '{task_rule_name}', NLU Task Cmd='{natural_language_command[:60].replace(os.linesep,' ')}...'"
         logger.info(f"{log_prefix_task}: Starting execution.")
-
         if not self.gemini_analyzer or not self.gemini_analyzer.client_initialized:
-            overall_task_result["message"] = "GeminiAnalyzer not available."
-            logger.error(f"{log_prefix_task}: {overall_task_result['message']}")
-            return overall_task_result
-
+            overall_task_result["message"] = "GeminiAnalyzer not available."; logger.error(f"{log_prefix_task}: {overall_task_result['message']}"); return overall_task_result
         nlu_parse_prompt = self._construct_nlu_parse_prompt(natural_language_command)
         nlu_context_image_for_parsing = next(iter(initial_context_images.values()), None) if initial_context_images else None
-        nlu_response = self.gemini_analyzer.query_vision_model(
-            prompt=nlu_parse_prompt, image_data=nlu_context_image_for_parsing, model_name_override=task_parameters.get("nlu_model_override", DEFAULT_NLU_PLANNING_MODEL)
-        )
-
+        # DEFAULT_NLU_PLANNING_MODEL is now defined in this module
+        nlu_response = self.gemini_analyzer.query_vision_model(prompt=nlu_parse_prompt, image_data=nlu_context_image_for_parsing, model_name_override=task_parameters.get("nlu_model_override", DEFAULT_NLU_PLANNING_MODEL))
         if nlu_response["status"] != "success" or not nlu_response["json_content"]:
             overall_task_result["message"] = f"NLU parsing query failed. Status: {nlu_response['status']}, Err: {nlu_response.get('error_message', 'No JSON')}"
-            logger.error(f"{log_prefix_task}: {overall_task_result['message']}. Raw NLU Response Text: {nlu_response.get('text_content')}")
-            return overall_task_result
-
+            logger.error(f"{log_prefix_task}: {overall_task_result['message']}. Raw NLU Response Text: {nlu_response.get('text_content')}"); return overall_task_result
         parsed_task_plan_from_nlu: Optional[Dict[str, Any]] = None
         try:
             json_response_content = nlu_response["json_content"]
-            if not isinstance(json_response_content, dict) or "parsed_task" not in json_response_content:
-                raise ValueError("NLU JSON missing 'parsed_task'")
+            if not isinstance(json_response_content, dict) or "parsed_task" not in json_response_content: raise ValueError("NLU JSON missing 'parsed_task'")
             parsed_task_plan_from_nlu = json_response_content["parsed_task"]
-            if not isinstance(parsed_task_plan_from_nlu, dict):
-                raise ValueError("'parsed_task' not a dict.")
+            if not isinstance(parsed_task_plan_from_nlu, dict): raise ValueError("'parsed_task' not a dict.")
             logger.info(f"{log_prefix_task}: NLU parsed. Plan Type: {parsed_task_plan_from_nlu.get('command_type')}")
             logger.debug(f"{log_prefix_task}: Full NLU parsed plan: {json.dumps(parsed_task_plan_from_nlu, indent=2)}")
         except Exception as e_nlu_parse:
             overall_task_result["message"] = f"Error processing NLU JSON: {e_nlu_parse}. Resp: {nlu_response['json_content']}"
-            logger.error(f"{log_prefix_task}: {overall_task_result['message']}", exc_info=True)
-            return overall_task_result
-
-        current_visual_context_for_steps = initial_context_images
-        primary_context_region_name_for_steps = ""
+            logger.error(f"{log_prefix_task}: {overall_task_result['message']}", exc_info=True); return overall_task_result
+        current_visual_context_for_steps = initial_context_images; primary_context_region_name_for_steps = ""
         if task_parameters.get("context_region_names") and isinstance(task_parameters["context_region_names"], list) and task_parameters["context_region_names"]:
             primary_context_region_name_for_steps = task_parameters["context_region_names"][0]
-            if primary_context_region_name_for_steps not in current_visual_context_for_steps:
-                logger.warning(f"{log_prefix_task}: Specified primary context region '{primary_context_region_name_for_steps}' not in images. Will try first available.")
-                primary_context_region_name_for_steps = ""
-        if not primary_context_region_name_for_steps and current_visual_context_for_steps:
-            primary_context_region_name_for_steps = list(current_visual_context_for_steps.keys())[0]
+            if primary_context_region_name_for_steps not in current_visual_context_for_steps: logger.warning(f"{log_prefix_task}: Specified primary context region '{primary_context_region_name_for_steps}' not in images. Will try first available."); primary_context_region_name_for_steps = ""
+        if not primary_context_region_name_for_steps and current_visual_context_for_steps: primary_context_region_name_for_steps = list(current_visual_context_for_steps.keys())[0]
         if not primary_context_region_name_for_steps:
-            overall_task_result["message"] = "NLU Task: No primary context region image available."
-            logger.error(f"{log_prefix_task}: {overall_task_result['message']}")
-            return overall_task_result
+            overall_task_result["message"] = "NLU Task: No primary context region image available."; logger.error(f"{log_prefix_task}: {overall_task_result['message']}"); return overall_task_result
         logger.info(f"{log_prefix_task}: Primary context region for steps: '{primary_context_region_name_for_steps}'.")
-
-        final_success = self._recursive_execute_plan_node(
-            parsed_task_plan_from_nlu,
-            current_visual_context_for_steps,
-            primary_context_region_name_for_steps,
-            depth=0,
-            branch_prefix="",
-            task_rule_name=task_rule_name,
-            task_parameters=task_parameters,  # Pass these explicitly
-        )
-
+        final_success = self._recursive_execute_plan_node(parsed_task_plan_from_nlu, current_visual_context_for_steps, primary_context_region_name_for_steps, depth=0, branch_prefix="", task_rule_name=task_rule_name, task_parameters=task_parameters)
         overall_task_result["status"] = "success" if final_success else "failure"
-        overall_task_result["message"] = (
-            "NLU task executed all steps successfully."
-            if final_success
-            else (overall_task_result.get("message") if overall_task_result.get("message") != "NLU task initiated." else "NLU task failed at one or more steps.")
-        )
-        # The self._executed_steps_log_during_task is already assigned to overall_task_result["executed_steps_summary"] by reference
+        overall_task_result["message"] = ("NLU task executed all steps successfully." if final_success else (overall_task_result.get("message") if overall_task_result.get("message") != "NLU task initiated." else "NLU task failed at one or more steps."))
         logger.info(f"{log_prefix_task}: Final NLU task status: {overall_task_result['status']}. Msg: {overall_task_result['message']}")
         logger.debug(f"{log_prefix_task}: Executed steps log: {self._executed_steps_log_during_task}")
         return overall_task_result

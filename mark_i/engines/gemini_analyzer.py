@@ -1,6 +1,3 @@
-# Correcting the import for Content based on common patterns or assuming it's available at top level
-# This is speculative; the actual location depends on the google-generativeai SDK version.
-# If this still fails, 'Content' might need to be 'Any' or its true location found.
 import logging
 import time
 import json
@@ -10,35 +7,36 @@ import os
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig, HarmCategory, HarmBlockThreshold
 from google.generativeai.types import BlockedPromptException, StopCandidateException
-# Try importing Content from google.generativeai directly
-try:
-    from google.generativeai import Content
-    logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_analyzer") # Define logger earlier
-    logger.debug("Imported 'Content' from 'google.generativeai'")
-except ImportError:
-    logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_analyzer")
-    logger.warning("'Content' type not found in 'google.generativeai.types' or 'google.generativeai'. Using 'Any'.")
-    Content = Any # Fallback if direct import fails
-
+# Removed direct import of Content from google.generativeai.types as it was causing issues.
+# Will use Any or rely on SDK's internal typing for Content where possible for responses.
 from google.api_core import exceptions as google_api_exceptions
 
 from PIL import Image
 import cv2
 import numpy as np
 
+# IMPORTANT: Ensure APP_ROOT_LOGGER_NAME is imported *before* it's used.
 from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
-# Logger definition moved up to handle Content import logging
+logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_analyzer")
 
+
+# Fallback for Part type if specific import paths change or fail
 try:
     from google.generativeai.types import Part
     logger.debug("Imported 'Part' from 'google.generativeai.types'")
 except ImportError:
     try:
-        from google.generativeai import Part
+        from google.generativeai import Part # Try from top level of the package
         logger.debug("Imported 'Part' from 'google.generativeai'")
     except ImportError:
         logger.warning("'Part' type not found. Using 'Any' for type hints involving 'Part'.")
-        Part = Any
+        Part = Any # Fallback
+
+# Fallback for Content type
+# The Content type is mainly for type hinting the response from generate_content.
+# If it's not easily importable, using 'Any' for the hint is acceptable for now,
+# as the code primarily interacts with its attributes (candidates, parts, text).
+Content = Any # Using Any as a robust fallback for Content type
 
 DEFAULT_SAFETY_SETTINGS_DATA: List[Dict[str, Any]] = [
     {"category": HarmCategory.HARM_CATEGORY_HARASSMENT, "threshold": HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE},
@@ -117,7 +115,7 @@ class GeminiAnalyzer:
 
     def _execute_sdk_call(
         self, model_instance: genai.GenerativeModel, api_contents: List[Union[str, Image.Image]], log_prefix: str
-    ) -> Tuple[Optional[Content], Optional[Dict[str, Any]]]: # type: ignore # Content might be Any
+    ) -> Tuple[Optional[Content], Optional[Dict[str, Any]]]: # Using Content as Any
         try:
             api_sdk_response: Content = model_instance.generate_content(api_contents, stream=False) # type: ignore
             return api_sdk_response, None
@@ -154,7 +152,7 @@ class GeminiAnalyzer:
             logger.error(f"{log_prefix}: API call failed. Error: {error_msg}", exc_info=True)
             return None, {"status": "error_api", "error_message": error_msg, "raw_gemini_response": str(e_general_api)}
 
-    def _process_sdk_response(self, api_sdk_response: Optional[Content], log_prefix: str) -> Dict[str, Any]: # type: ignore
+    def _process_sdk_response(self, api_sdk_response: Optional[Content], log_prefix: str) -> Dict[str, Any]: # Using Content as Any
         processed_result: Dict[str, Any] = {
             "status": "error_api", "text_content": None, "json_content": None,
             "error_message": "Failed to process SDK response or response was None.",
