@@ -1,6 +1,6 @@
 # Development Configuration & Choices
 
-This document outlines key development choices, current phase settings, and environment setup for the **Mark-I** project. **Version 4.0.0 (Gemini-Powered Visual Intelligence) is now COMPLETE.**
+This document outlines key development choices, current phase settings, and environment setup for the **Mark-I** project. Version 4.0.0 is complete. **Focus is now on planning v5.0.0 (AI-Driven Profile Generation).**
 
 ## 1. Core Project Setup
 *   **Project Name (Informal):** Mark-I
@@ -24,28 +24,26 @@ This document outlines key development choices, current phase settings, and envi
 *   **`.gitignore`:** The `.env` file **MUST** be added to `.gitignore` to prevent committing environment-specific or sensitive settings (like API keys). The `logs/` directory should also be ignored.
 
 ## 2. Current Development Phase Focus
-*   **Overall Goal for Fourth Major Deliverable:** `v4.0.0 (Gemini-Powered Visual Intelligence)` - **COMPLETED**
-    *   Phase 1: Core Gemini Integration - `COMPLETED`
-    *   Phase 1.5: Bounding Box Actions - `COMPLETED`
-    *   Phase 2: Gemini-Informed Decision Making - `COMPLETED`
-    *   Phase 3: Natural Language Command Interface - `COMPLETED`
-*   **Active Version (Current Focus):** `v4.0.0 (Release Finalization & v5.0.0 Planning)`
-    *   *Current activities involve finalizing all documentation for v4.0.0, DevLead preparing for a potential release tag, and initiating discussions for prioritizing features for v5.0.0 from the "vFuture" list in `FEATURE_ROADMAP.MD`.*
+*   **Overall Goal for Fourth Major Deliverable:** `v4.0.0 (Gemini-Powered Visual Intelligence)` - **COMPLETED.**
+*   **Overall Goal for Fifth Major Deliverable (Current Target):** `v5.0.0 (AI-Driven Profile Generation)`
+    *   This version aims to enable Mark-I to assist users in creating automation profiles by understanding high-level goals and translating them into Mark-I configurations.
+*   **Active Version (Current Focus for Design & Planning):** `v5.0.0 (Phase 1 Design: AI Profile Creator - Scoping & ADR)`
+    *   *This version, set here, dictates the immediate design tasks for the AI collaborator, contributing towards the larger v5.0.0 goal.*
 *   **Primary Goal for Active Version:**
-    1.  **Finalize all v4.0.0 documentation** (`README.MD`, `CHANGELOG.MD` if used, ensuring all technical docs are accurate).
-    2.  **DevLead to perform final review and consider tagging v4.0.0 release.**
-    3.  **Begin planning and prioritizing features for v5.0.0.**
-*   **Testing Strategy:** Focus on regression testing for v4.0.0 if any patches are made. New feature testing will apply to v5.0.0 development.
+    1.  **AI Collaborator to draft a new Architectural Decision Record (ADR) for the "AI Profile Creator / Strategy Learning Mode."** This ADR will define the high-level architecture, approaches, key components, and interaction flows.
+    2.  **AI Collaborator to propose initial updates to `TECHNICAL_DESIGN.MD`** to integrate this new capability conceptually.
+    3.  **DevLead to review and approve the ADR and initial technical design direction.**
+*   **Testing Strategy for v5.0.0:** Will require extensive testing of the AI's ability to generate valid and useful profiles, and the usability of the generation/refinement process. Mocking Gemini for plan generation will be important.
 *   **Linting/Formatting Setup:**
     *   **Flake8 (Linter):** Enabled (Configured for Black compatibility via `.flake8`).
     *   **Black (Formatter):** Enabled (Configured via `pyproject.toml`).
     *   Manual adherence to PEP 8 encouraged.
 
 ## 3. Architectural & Design Approach
-*   **Overall Architectural Style:** Modular, with agent-like capabilities introduced in v4.0.0 Phase 3.
-    *   *Details in `TECHNICAL_DESIGN.MD`.*
-*   **Logging Strategy:** Comprehensive and persistent logging using Python's `logging` module (per ADR-007).
-*   **Code Design Principles:** Readability, Simplicity, Modularity, Testability, Diagnosability (via logs). Adherence to Black/Flake8.
+*   **Overall Architectural Style:** Modular. v5.0.0 will introduce new modules for AI-driven profile generation, possibly a "StrategyPlanner" or similar, interacting with existing engines.
+    *   *Details to be defined in new ADR and `TECHNICAL_DESIGN.MD` updates.*
+*   **Logging Strategy:** Comprehensive logging will be essential for diagnosing the AI profile generation process.
+*   **Code Design Principles:** Readability, Simplicity, Modularity, Testability, Diagnosability.
 
 ## 4. Tooling Choices (Key Tools - per ADRs)
 *   **Environment Management:** `python-dotenv`
@@ -66,20 +64,17 @@ This document outlines key development choices, current phase settings, and envi
 ## 5. Version Control
 *   **System:** Git
 *   **Branching (Simplified Strategy):**
-    *   `main`: Represents the latest stable release (to be tagged as v4.0.0).
-    *   `develop`: Base for any v4.0.x patches or for starting v5.0.0 development.
+    *   `main`: Represents latest stable release (v4.0.0).
+    *   `develop`: Active development branch for v5.0.0. Feature branches (e.g., `feature/ai-profile-creator`) created from `develop`.
 *   **Commit Messages:** Aim for conventional commit style.
 
 ## 6. Documentation
 *   **Docstring Style:** Google Python Style.
 *   **Project Documentation Status:**
-    *   **`CHANGELOG.MD`:** Needs final entries for v4.0.0 release (if DevLead decides to maintain it).
-        *   **Status:** `Pending Update for v4.0.0 release content`
-    *   **`CONTRIBUTING.MD`:** Deferred.
-        *   **Status:** `Pending DevLead Enablement`
-    *   **Core Docs:** `TECHNICAL_DESIGN.MD`, `FUNCTIONAL_REQUIREMENTS.MD`, `NON_FUNCTIONAL_REQUIREMENTS.MD`, `ADR-008`, `PROJECT_OVERVIEW.MD`, `AI_INSTRUCTIONS.MD`, `STATUS_LEGEND.MD` are considered final and accurate for v4.0.0.
-*   **README.md (Project Root):** Requires comprehensive update to reflect all v4.0.0 features.
-    *   **Status:** `Pending Update for v4.0.0 release content` (AI Collaborator will provide a draft).
+    *   All v4.0.0 documentation considered complete and finalized (pending `README.MD` and optional `CHANGELOG.MD` final pass).
+    *   **New ADR required for v5.0.0 AI Profile Creator.**
+    *   `TECHNICAL_DESIGN.MD`, `FUNCTIONAL_REQUIREMENTS.MD`, `NON_FUNCTIONAL_REQUIREMENTS.MD` will require significant updates for v5.0.0 features.
+*   **README.md (Project Root):** Updated for v4.0.0. Will need updates again for v5.0.0.
 
 ## 7. Development Environment
 *   **Target OS for Bot Runtime:** **Windows** (Primary initial focus).

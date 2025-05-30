@@ -1,416 +1,325 @@
 # Technical Design Document: Mark-I
 
-This document outlines the technical design and architectural considerations for the Mark-I visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status. **Version 4.0.0 (Gemini-Powered Visual Intelligence), including all its sub-phases (Phase 1: Core Vision Query, Phase 1.5: Bounding Box Actions, Phase 2: Gemini-Informed Decision Making, and Phase 3: Natural Language Command Interface), is now considered functionally complete.**
+This document outlines the technical design and architectural considerations for the Mark-I visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status.
+Version 4.0.0 (Gemini-Powered Visual Intelligence), including all its sub-phases, is functionally complete.
+**This document now incorporates the design for v5.0.0, focusing on AI-Driven Profile Generation as per ADR-009.**
 
 ## 1. Core Architecture
 
-The tool is modular, comprising several key Python components, all residing within the main `mark_i` package located at the project root:
+The tool is modular, comprising several key Python components, all residing within the main `mark_i` package:
 
 - **`core.config_manager` Module:**
-  - `load_environment_variables()` function: Called at application startup to load `.env` (containing `APP_ENV` and `GEMINI_API_KEY` for v4.0.0+) using `python-dotenv` (per ADR-007, ADR-008).
-  - `ConfigManager` class: Responsible for loading, validating (basic structure), providing access to, and saving bot profiles (JSON files from the `profiles/` directory, per ADR-003). It also provides the base path for profile-related assets like templates.
-  - Utilized by the `MainAppWindow` (GUI) for loading, saving, and path resolution for profiles and associated template images.
+  - `load_environment_variables()`: Loads `.env` (for `APP_ENV`, `GEMINI_API_KEY`).
+  - `ConfigManager` class: Manages loading, validation, access, and saving of JSON bot profiles. Handles path resolution for profiles and templates.
 - **`core.logging_setup` Module:**
-  - `setup_logging()` function: Called after environment variables are loaded. Initializes Python's `logging` system based on `APP_ENV`, configuring handlers (console, date-stamped rotating file), formatters, and log levels (per ADR-007). CLI flags can override console log level. The `APP_ROOT_LOGGER_NAME` is "mark_i".
+  - `setup_logging()`: Initializes Python's `logging` system based on `APP_ENV` and CLI flags. Root logger: `mark_i`.
 - **`engines.capture_engine.CaptureEngine` Class:**
-  - Responsible for capturing image data from specified screen regions using `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` for Windows capture (per ADR-001).
-  - Converts captured Pillow Image objects to OpenCV BGR NumPy arrays for consistent use by the `AnalysisEngine` and `GeminiAnalyzer`.
+  - Captures screen regions (uses `Pillow.ImageGrab` on Windows). Converts to OpenCV BGR NumPy arrays.
 - **`engines.analysis_engine.AnalysisEngine` Class:**
-  - Performs various **local** visual analyses on captured image regions (NumPy BGR arrays).
-  - Provides methods for:
-    - Pixel color analysis (`analyze_pixel_color`).
-    - Average color calculation (`analyze_average_color`).
-    - Template matching (`match_template`) using OpenCV (per ADR-001).
-    - OCR text extraction (`ocr_extract_text`) using `pytesseract`, returning a dictionary with extracted `text` and an `average_confidence` score.
-    - Dominant color analysis (`analyze_dominant_colors`) using k-means clustering.
+  - Performs local visual analyses (pixel color, average color, template matching, OCR, dominant colors) on BGR NumPy arrays.
 - **`engines.gemini_analyzer.GeminiAnalyzer` Class (v4.0.0+):**
-  - Responsibility: Handles all direct communication with the Google Gemini API for advanced visual understanding (per ADR-008), supporting both vision and text model interactions as needed.
-  - Initialization: Takes API key (from `.env` via `os.getenv`) and optional default model name (from profile settings via `ConfigManager`).
-  - Key Methods: Provides `query_vision_model(image_data, prompt, [model_name])` which sends image/prompt to the API and returns a structured response (including parsed text/JSON and status/error info). Can also be used for text-only prompts by providing minimal/no image data if the underlying model supports it.
-  - Configuration: API key loaded from `.env`. Default model configurable via profile settings (`settings.gemini_default_model_name`).
-  - Logging: Comprehensive logging of API interactions, errors, and latency.
+  - Handles all direct communication with Google Gemini APIs (both vision and text models as needed).
+  - Manages API key, request formation (image/text prompts), response parsing (text/JSON), error handling, and detailed logging of API interactions.
+  - Used by `RulesEngine` (for `gemini_vision_query`), `GeminiDecisionModule` (for NLU and step-specific visual queries), and **`StrategyPlanner` (for v5.0.0 AI Profile Generation)**.
   - _Details in Section 10._
 - **`engines.rules_engine.RulesEngine` Class:**
-  - Evaluates rules based on analysis results (from `AnalysisEngine` for local checks, or from `GeminiAnalyzer` for Gemini-powered `gemini_vision_query` conditions).
-  - Supports single conditions, compound conditions (AND/OR logic per ADR-004), and rule-scoped variable capture and substitution.
-  - Instantiates its own `GeminiAnalyzer` (for v4.0.0+) for handling `gemini_vision_query` conditions.
+  - Evaluates rules based on analysis results.
+  - Supports single/compound conditions, variable capture/substitution.
+  - Handles `gemini_vision_query` conditions by invoking `GeminiAnalyzer`.
   - For actions of type `gemini_perform_task`, it invokes the `GeminiDecisionModule` to handle NLU commands and goal-oriented task execution.
   - _Details in Section 5._
 - **`engines.action_executor.ActionExecutor` Class:**
-  - Simulates mouse and keyboard actions using `pyautogui` (per ADR-002).
-  - Calculates target coordinates for actions, including those derived from Gemini bounding boxes (v4.0.0 Phase 1.5).
-  - Called by `RulesEngine` for standard actions (if `RulesEngine` directly executes them, or prepares specs for `MainController`) and by `GeminiDecisionModule` for executing primitive steps of an NLU-driven task.
+  - Simulates mouse and keyboard actions using `pyautogui`.
+  - Calculates target coordinates, including for Gemini-identified bounding boxes.
+  - Called by `RulesEngine` for standard actions and by `GeminiDecisionModule` for executing primitive steps of an NLU-driven task.
 - **`engines.gemini_decision_module.GeminiDecisionModule` Class (v4.0.0 Phase 2 & 3):**
-  - **NLU Task Orchestrator:** Parses natural language user commands (received via the `gemini_perform_task` action's `natural_language_command` parameter).
-  - Decomposes these commands into a sequence of manageable steps/sub-goals using Gemini for NLU.
-  - For each decomposed step, uses `GeminiAnalyzer` for visual analysis (if needed) and action refinement (e.g., finding specific elements, getting bounding boxes for described targets).
+  - NLU Task Orchestrator: Parses natural language user commands.
+  - Decomposes commands into a sequence of manageable steps/sub-goals using Gemini for NLU.
+  - For each decomposed step, uses `GeminiAnalyzer` for visual analysis and action refinement.
   - Manages basic state across steps of a single NLU task.
-  - Orchestrates execution of these steps by constructing specifications for and calling `ActionExecutor`.
-  - Implements safety measures like using a predefined set of allowed sub-actions and optional user confirmation per step.
+  - Orchestrates execution of these steps by calling `ActionExecutor`.
   - _Details extensively in Section 14._
+- **`generation.strategy_planner.StrategyPlanner` Module (NEW - v5.0.0):**
+  - Takes a high-level user goal for automation.
+  - Uses `GeminiAnalyzer` to interact with Gemini to break this goal down into an "intermediate plan" (a sequence of logical, human-understandable sub-steps or sub-goals).
+  - _Details in Section 15._
+- **`generation.profile_generator.ProfileGenerator` Module (NEW - v5.0.0):**
+  - Takes the "intermediate plan" from the `StrategyPlanner`.
+  - Iterates through plan steps, interacting with the user (via GUI) and `GeminiAnalyzer` (for visual suggestions) to define concrete Mark-I profile elements (regions, conditions, actions, templates).
+  - Assembles these elements into a Mark-I JSON profile structure.
+  - _Details in Section 15._
 - **`main_controller.MainController` Class:**
-  - Orchestrates the main bot operation loop for rule-based profile execution.
-  - Runs the monitoring loop in a separate thread (per ADR-006).
-  - Instantiates all engine components: `CaptureEngine`, `AnalysisEngine`, `ActionExecutor`, a shared `GeminiAnalyzer` (primarily for `GeminiDecisionModule`), and `GeminiDecisionModule`. It then passes these to `RulesEngine` (which also instantiates its own `GeminiAnalyzer` for `gemini_vision_query` conditions, ensuring modularity).
-  - For each monitored region in a profile:
-    - Instructs `CaptureEngine` to capture the image.
-    - Selectively instructs `AnalysisEngine` to perform required **local** general analyses based on `RulesEngine`'s pre-parsed dependencies.
-  - Passes collected region data to `RulesEngine.evaluate_rules()`. The `RulesEngine` then handles dispatching actions to `ActionExecutor` or `GeminiDecisionModule`.
+  - Orchestrates the main bot loop for rule-based profile execution.
+  - Instantiates core engine components.
+  - **(v5.0.0 Consideration):** A new controller or mode might be needed to manage the AI Profile Generation workflow, distinct from the runtime bot loop.
 - **`ui.cli` Module:**
-  - Provides the Command-Line Interface using `argparse` (per ADR-005).
-  - Handles subcommands: `run <profile>`, `add-region <profile>`, and `edit [profile]`.
-  - **(v4.0.0 Phase 3):** A direct CLI command for NLU tasks (e.g., `mark_i nlu-task "command" --profile <p>`) is a future consideration but not part of the initial Phase 3 GUI-driven implementation. NLU tasks are invoked via profiles.
-- **`ui.gui.*` Modules (`MainAppWindow`, `DetailsPanel`, `RegionSelectorWindow`, `gui_config.py`, `gui_utils.py`):**
-  - Provide the comprehensive GUI editor using `CustomTkinter`.
-  - The GUI supports configuration of all features, including:
-    - `gemini_vision_query` conditions.
-    - `gemini_perform_task` actions, with parameters for `natural_language_command`, `context_region_names`, `allowed_actions_override`, `require_confirmation_per_step`, and `max_steps`.
-  - _Details in Section 9 and 11._
-- **`mark_i/__main__.py`:**
-  - Application entry point. Initializes core components (Env Vars, Logging, Config) and dispatches CLI commands.
+  - Provides CLI using `argparse`.
+  - **(v5.0.0 Consideration):** May require a new CLI command (e.g., `mark_i generate-profile --goal "my goal"`) to trigger AI profile generation.
+- **`ui.gui.*` Modules:**
+  - `MainAppWindow`, `DetailsPanel`, etc., provide the GUI editor.
+  - **(v5.0.0 Consideration):** Significant new GUI components will be needed for the AI Profile Generation workflow (goal input, plan review, interactive element definition guided by AI).
+  - _Details in Section 9 and 11 (for existing features) and Section 15.4 (for new GUI)._
+- **`mark_i/__main__.py`:** Application entry point.
 
 ## 2. Key Libraries & Justifications (Summary from ADRs)
-
--   **Environment Management:** `python-dotenv` (ADR-007)
--   **Logging:** Python `logging` module (ADR-007)
--   **Screen Capture:** `Pillow` (`ImageGrab` for Windows), `OpenCV-Python` (for conversion and potential alternatives) (ADR-001).
--   **Image Processing & Analysis (Local):** `OpenCV-Python` (cv2), `NumPy`, `Pillow` (ADR-001).
--   **OCR (Local):** `pytesseract` (ADR-001).
--   **Remote Advanced Visual Analysis & Decision Support (v4.0.0+):** `google-generativeai` (Python SDK for Gemini) (ADR-008).
--   **Input Simulation:** `pyautogui` (ADR-002).
--   **Configuration Storage:** `json` (Python built-in) (ADR-003).
--   **CLI Framework:** `argparse` (Python built-in) (ADR-005).
--   **GUI Framework:** `CustomTkinter` (and its dependency `Pillow` for `CTkImage`) (ADR-005).
--   **Concurrency (Bot Runtime):** Python `threading` module (ADR-006).
+*(No changes to core library stack from v4.0.0)*
+-   **Environment Management:** `python-dotenv`
+-   **Logging:** Python `logging` module
+-   **Screen Capture:** `Pillow` (`ImageGrab`), `OpenCV-Python`
+-   **Image Processing & Analysis (Local):** `OpenCV-Python`, `NumPy`, `Pillow`
+-   **OCR (Local):** `pytesseract`
+-   **Remote Advanced Visual Analysis, NLU, Decision Support, Plan Generation (v4.0.0+):** `google-generativeai`
+-   **Input Simulation:** `pyautogui`
+-   **Configuration Storage:** `json`
+-   **CLI Framework:** `argparse`
+-   **GUI Framework:** `CustomTkinter`
+-   **Concurrency (Bot Runtime):** Python `threading` module
 
 ## 3. Defining and Capturing Regions
-
--   Regions are defined in the JSON profile with `name, x, y, width, height`.
--   The GUI (`MainAppWindow` using `RegionSelectorWindow`) allows users to define/edit these graphically.
--   `CaptureEngine.capture_region(region_spec)` uses `Pillow.ImageGrab.grab(bbox=(x, y, x + width, y + height))` on Windows. The result (Pillow Image) is converted to an OpenCV BGR NumPy array.
--   This captured BGR image is then available for local analysis by `AnalysisEngine`, remote analysis by `GeminiAnalyzer` (for `gemini_vision_query` conditions), and as visual context for the `GeminiDecisionModule`'s NLU tasks.
+*(No fundamental changes. For v5.0.0 AI Profile Generation, region *suggestion* by AI and confirmation/drawing by user will be a new interaction, but the underlying region definition structure remains.)*
 
 ## 4. "Reading" from the Region - Analysis Strategies
-
-1.  **Local Selective Pre-emptive Analysis (by `MainController` via `AnalysisEngine`):**
-    -   `RulesEngine.__init__` pre-parses rules, creating `_analysis_requirements_per_region` for **local** analysis types (OCR, dominant color, average color).
-    -   `MainController` selectively calls `AnalysisEngine` methods based on these requirements for specified regions.
-2.  **Local On-Demand Analysis (by `RulesEngine` via `AnalysisEngine`):**
-    -   Conditions like `pixel_color` and `template_match_found` are evaluated directly by `RulesEngine._evaluate_single_condition_logic` using the `captured_image` from the data packet passed by `MainController`.
-3.  **Remote On-Demand Analysis for Vision Queries (by `RulesEngine` via `GeminiAnalyzer` - v4.0.0 Phase 1+):**
-    -   When a `gemini_vision_query` condition is evaluated by `RulesEngine._evaluate_single_condition_logic`, it calls `GeminiAnalyzer.query_vision_model()` with the relevant image and prompt.
-4.  **Remote NLU Processing and Contextual Visual Analysis for Task Orchestration (by `GeminiDecisionModule` via `GeminiAnalyzer` - v4.0.0 Phase 3):**
-    -   The `GeminiDecisionModule`, when executing an NLU task:
-        *   First calls `GeminiAnalyzer` with a text-based prompt (and potentially an initial overview image) to parse the `natural_language_command` into a structured plan.
-        *   Then, for each decomposed step in the plan, it may call `GeminiAnalyzer` again with specific visual context (images of relevant regions for that step) and prompts to:
-            *   Suggest a primitive action (from `PREDEFINED_ALLOWED_SUB_ACTIONS`).
-            *   Refine a `target_description` into precise bounding box coordinates.
-            *   Evaluate a `CHECK_VISUAL_STATE` condition.
+*(Existing strategies remain. For v5.0.0 AI Profile Generation, `GeminiAnalyzer` will be heavily used by `StrategyPlanner` and `ProfileGenerator` to understand context and suggest elements for the profile.)*
 
 ## 5. Rules Engine & Evaluation (`RulesEngine`)
 
 ### 5.1. Rule Structure in JSON Profiles
+*(Existing structure for conditions and actions remains. The AI Profile Generator (v5.0.0) will *output* profiles adhering to this established structure.)*
 
--   **Condition Object:**
-    -   **Single Condition (Local Types):** `{"type": "local_condition_name", "param1": value1, ...}`. May include `"capture_as": "var_name"` and `"region": "override_region_name"`.
-    -   **Compound Condition (Local Types):** `{"logical_operator": "AND" | "OR", "sub_conditions": [list_of_single_local_condition_objects]}`. Each sub-condition can also have its own `"region"`.
-    -   **`gemini_vision_query` type (Single Condition Structure - v4.0.0 Phase 1+):**
-        ```json
-        {
-          "type": "gemini_vision_query",
-          "region": "optional_region_name_override",
-          "prompt": "Describe this image. Is there a red button?",
-          "expected_response_contains": "red button",
-          "capture_as": "gemini_description",
-          "model_name": "gemini-1.5-flash-latest" // Optional
-        }
-        ```
--   **Action Object:**
-    *   Standard types: `click`, `type_text`, `press_key`, `log_message`.
-    *   The `click` action supports `target_relation` values like `center_of_gemini_element` and `top_left_of_gemini_element`, requiring a `gemini_element_variable` parameter that references a variable holding bounding box data (captured via `gemini_vision_query`). (v4.0.0 Phase 1.5).
-    *   **`gemini_perform_task` type (v4.0.0 Phase 2 & 3 - NLU Task Execution):**
-        ```json
-        {
-          "type": "gemini_perform_task",
-          "natural_language_command": "Find the 'File' menu, click it, then click 'Open'.",
-          "context_region_names": ["main_app_area", "menu_bar_area"], // Optional, list of region names
-          "allowed_actions_override": ["CLICK_DESCRIBED_ELEMENT"], // Optional, list of allowed sub-action types
-          "require_confirmation_per_step": true, // Optional, boolean
-          "max_steps": 5, // Optional, integer
-          "pyautogui_pause_before": 0.2 // Standard action pause
-        }
-        ```
-        *(Note: `goal_prompt` was the Phase 2 design name for the primary textual input; Phase 3 standardizes on `natural_language_command` for clarity. `RulesEngine` might handle both for backward compatibility if needed, but `gui_config.py` uses `natural_language_command` for new configurations.)*
+-   **Condition Object:** Single local, compound local, `gemini_vision_query`.
+-   **Action Object:** `click` (with Gemini bounding box support), `type_text`, `press_key`, `log_message`, `gemini_perform_task` (for NLU runtime execution).
 
 ### 5.2. `RulesEngine` Evaluation Logic
-
--   **`_parse_rule_analysis_dependencies()`:** Pre-parses rules at initialization to determine which **local** analyses (`ocr`, `dominant_color`, `average_color`) are required for each region, enabling `MainController` to perform them selectively once per cycle. `gemini_vision_query` and `gemini_perform_task` do not add to these *pre-emptive local* requirements as their Gemini calls are on-demand.
--   **`_evaluate_single_condition_logic(...)`:** Handles evaluation of individual condition specifications (local types and `gemini_vision_query`). For `gemini_vision_query`, it invokes `self.gemini_analyzer`.
--   **`_check_condition(...)`:** Handles single vs. compound condition logic, including short-circuiting for AND/OR.
--   **`evaluate_rules(...)`:**
-    *   Iterates through all defined rules in the profile.
-    *   For each rule, calls `_check_condition()` to evaluate its conditional part, managing `rule_variable_context`.
-    *   If a rule's condition is met:
-        *   Substitutes variables into the rule's action specification.
-        *   **If action type is `gemini_perform_task`:**
-            *   Extracts `natural_language_command` and other task parameters.
-            *   Gathers current images for the specified `context_region_names` from `all_region_data`.
-            *   Calls `self.gemini_decision_module.execute_nlu_task()` with these inputs. The `GeminiDecisionModule` then handles the entire NLU task lifecycle.
-        *   **For other standard action types:**
-            *   Constructs a `full_action_to_execute` spec including context.
-            *   Calls `self.action_executor.execute_action()` directly to perform the action. (This implies `MainController` no longer queues actions from `RulesEngine` but `RulesEngine` executes them directly upon condition met).
+*(No fundamental changes for v5.0.0. The RulesEngine executes profiles; the AI Profile Generator creates them.)*
 
 ### 5.3. Variable Handling (`RulesEngine`)
+*(No fundamental changes for v5.0.0.)*
 
--   Rule-scoped variables are created during `evaluate_rules` for each rule via the `capture_as` parameter in conditions.
--   Supported capture types include OCR text, template match details (dictionary with `x,y,width,height,confidence`), and Gemini responses (text, full JSON object, or specific JSON-extracted value).
--   For Gemini captures (both `gemini_vision_query` and bounding boxes refined within `GeminiDecisionModule` steps), the captured variable is structured as `{"value": <actual_captured_data>, "_source_region_for_capture_": "region_name_of_query"}` to ensure relative coordinates from bounding boxes can be correctly translated to absolute screen coordinates by `ActionExecutor`.
--   The `_substitute_variables` method uses regex (`\{([\w_]+)((\.[\w_]+)*)\}`) to find and replace placeholders (e.g., `{my_var}`, `{my_var.value.box.0}`) in action parameter strings with their corresponding values from the `rule_variable_context`.
-
-## 6. Data Flow Example for NLU Task (`gemini_perform_task` - Phase 3)
-
-1.  **`MainController` Loop:**
-    a.  Captures images for all monitored regions (e.g., `full_app_window`, `dialog_area`) into `all_region_data`.
-    b.  Calls `RulesEngine.evaluate_rules(all_region_data)`.
-2.  **`RulesEngine.evaluate_rules()`:**
-    a.  A rule "AutomateLoginViaNLU" has its condition met.
-    b.  Action spec is: `{"type": "gemini_perform_task", "natural_language_command": "Enter username 'dev' and password 'secret', then click login", "context_region_names": ["full_app_window"]}`.
-    c.  `RulesEngine` calls `self.gemini_decision_module.execute_nlu_task("Enter username...", {"full_app_window": image_data}, task_params)`.
-3.  **`GeminiDecisionModule.execute_nlu_task()`:**
-    a.  **NLU Parse:** Sends "Enter username..." and the `full_app_window` image (as general context) to `GeminiAnalyzer` with an NLU parsing prompt.
-    b.  Gemini (text/multimodal model) returns JSON like:
-        ```json
-        { "parsed_task": { "command_type": "SEQUENTIAL_INSTRUCTIONS", "steps": [
-            {"step_number": 1, "instruction_details": {"intent_verb": "TYPE", "target_description": "the username field", "parameters": {"text_to_type": "dev"}}},
-            {"step_number": 2, "instruction_details": {"intent_verb": "TYPE", "target_description": "the password field", "parameters": {"text_to_type": "secret"}}},
-            {"step_number": 3, "instruction_details": {"intent_verb": "CLICK", "target_description": "the login button", "parameters": {}}}
-        ]}}
-        ```
-    c.  **Loop through steps:**
-        i.  **Step 1 (Type username):**
-            *   `GeminiDecisionModule` takes "Type 'dev' in 'the username field'". `current_image` is `full_app_window` image.
-            *   It maps "TYPE" to `TYPE_IN_DESCRIBED_FIELD`.
-            *   Calls `_refine_target_description_to_bbox("the username field", current_image, "full_app_window", ...)`. `GeminiAnalyzer` (vision) returns `{"value": {"box": [x1,y1,w1,h1], "found": true}, "_source_region_for_capture_": "full_app_window"}`.
-            *   If confirmation enabled, prompts user.
-            *   Calls `ActionExecutor` to first click `[x1,y1,w1,h1]` center, then type "dev".
-            *   (Future: re-capture screen for next step's context).
-        ii. **Step 2 (Type password):** Similar flow for password field.
-        iii. **Step 3 (Click login):** Similar flow for login button.
-    d.  Returns overall task status (success/failure) to `RulesEngine`.
-4.  `RulesEngine` logs result. Loop continues.
+## 6. Data Flow Example for NLU Task (`gemini_perform_task` - v4.0.0 Phase 3)
+*(This existing data flow remains valid for *runtime execution* of NLU tasks. Section 15.3 will detail the new data flow for *AI-driven profile generation*.)*
 
 ## 7. Logging System (per ADR-007)
-
--   Uses Python's built-in `logging`, configured by `core.logging_setup`. Root logger for Mark-I is `mark_i`.
--   Format includes timestamp, logger name, level, module:func:lineno, and message for files.
--   **v4.0.0+ Specifics:**
-    -   `GeminiAnalyzer` logs API requests (prompt summary, model used), API responses (status, success/error, latency), and any errors.
-    -   `RulesEngine` logs when it's invoking `GeminiAnalyzer` for `gemini_vision_query`, the prompt used, and the outcome. It also logs invocation of `GeminiDecisionModule`.
-    -   `ActionExecutor` logs details when targeting Gemini-identified elements, including variable name, relative box, base region, and final absolute coordinates.
-    -   **`GeminiDecisionModule` (Phase 3 NLU):** Logs received natural language command, NLU parsing prompts/responses, decomposed plan steps, sub-step visual refinement prompts/responses, user confirmations (if enabled), final actions sent to `ActionExecutor`, and overall task/step success/failure.
+- Root logger: `mark_i`.
+- **(v5.0.0 Enhancement):** Logging for `StrategyPlanner` and `ProfileGenerator` will be critical:
+    *   User's input goal.
+    *   Prompts to Gemini for plan generation.
+    *   Gemini's raw and parsed intermediate plan.
+    *   For each plan step: prompts for element/region suggestions, AI's suggestions, user's confirmations/modifications.
+    *   Details of the generated profile elements.
+    *   Errors or ambiguities encountered during the generation process.
 
 ## 8. Error Handling
-
--   Extensive `try-except` blocks. User-facing errors via `messagebox` or stderr. Detailed exceptions logged.
--   **v4.0.0+ Specifics:**
-    -   `GeminiAnalyzer` robustly handles API errors (authentication, rate limits, invalid requests, network issues, content blocking) and returns structured error info.
-    -   `RulesEngine` gracefully handles failures from `GeminiAnalyzer` for `gemini_vision_query` conditions (evaluates to `False`).
-    -   `ActionExecutor` gracefully handles malformed or missing bounding box data from Gemini variables for targeted clicks (action skipped, error logged).
-    -   **`GeminiDecisionModule` (Phase 3 NLU):**
-        *   Handles NLU parsing failures (e.g., Gemini returns non-JSON or unparseable plan). Task fails with error.
-        *   Handles task decomposition failures (e.g., NLU step intent doesn't map to an allowed sub-action). Task fails.
-        *   Handles sub-step target refinement failures (e.g., Gemini can't find the described element for a bounding box). Current sub-step fails, potentially halting the overall NLU task.
-        *   Handles `ActionExecutor` errors during sub-step execution. Halts task.
-        *   Uses `max_steps` to prevent infinite loops if task decomposition is flawed.
+- **(v5.0.0 Enhancement):**
+    *   **`StrategyPlanner`:** Must handle Gemini failures in generating a coherent plan (e.g., API errors, unusable output). Fallback: notify user, suggest rephrasing goal.
+    *   **`ProfileGenerator`:** Must handle failures in suggesting specific profile elements (e.g., Gemini can't identify a relevant region for a step, or a user rejects all suggestions). Allow user to skip a step, manually define the element, or abandon generation.
+    *   Ensure generated profiles are structurally valid JSON.
 
 ## 9. Full GUI Architecture (`MainAppWindow` using `CustomTkinter`)
+*(Existing GUI architecture for profile editing remains.)*
 
-### 9.1. Overall Structure
-(Main window with Left Panel for settings/regions/templates, Center Panel for rules list, Right Panel (`DetailsPanel`) for editing selected item – as previously defined.)
+### 9.x. (NEW - v5.0.0): GUI for AI-Driven Profile Generation
+-   **Invocation:** A new menu item (e.g., "File > New AI-Generated Profile...") or a button in `MainAppWindow`.
+-   **Workflow Stages:**
+    1.  **Goal Input:** A dialog or dedicated panel with a `CTkTextbox` for the user to type their high-level automation goal. Option to provide an initial full screenshot or select an application window for context.
+    2.  **Plan Review & Confirmation (Optional but Recommended):** Display the intermediate plan (sequence of steps) generated by `StrategyPlanner` (from Gemini). Allow user to review, possibly reorder or remove steps, or ask for regeneration.
+    3.  **Interactive Element Definition:** For each step in the (confirmed) plan:
+        *   **Region Focus:** The GUI might highlight a suggested screen area (based on AI suggestion) or ask the user to draw/confirm a region relevant to the current step (using a `RegionSelector`-like overlay).
+        *   **Condition/Action Suggestion:** Display AI's suggestion for how to implement the step (e.g., "Condition: OCR text 'Username:' is present. Action: Click nearby field.").
+        *   **Element Grounding:** If AI suggests interacting with "the username field," it might overlay bounding box suggestions on the screen capture. User clicks to confirm the correct one.
+        *   **Template Capture Prompt:** If AI suggests a template is needed (e.g., "Look for this icon: [description]"), prompt the user to capture that template image from the screen.
+        *   **Parameter Input:** Prompt for any parameters AI cannot infer (e.g., "What username should I type?").
+    4.  **Profile Summary & Save:** Once all steps are processed, show a summary of the generated profile structure (regions, rules). Allow user to save it as a new `.json` file, which can then be opened in the standard editor for further refinement.
+-   This interactive GUI will be a major new component, likely managed by a new top-level window or a dedicated mode within `MainAppWindow`.
 
-### 9.2. File Operations (Menu)
-(New, Open, Save, Save As – as previously defined.)
-
-### 9.3. Core Data Model (`self.profile_data` in `MainAppWindow`)
-(Mirrors the JSON profile structure. Changes in UI update this dictionary.)
-
-### 9.4. Core Functionality Logic (`MainAppWindow` and `DetailsPanel`)
-
--   **Settings Panel:** Includes fields for `gemini_default_model_name` and read-only status of `GEMINI_API_KEY`.
--   **Rule Editor (`DetailsPanel`):**
-    *   Dynamically renders parameters for selected condition types (including `gemini_vision_query`) and action types (including `gemini_perform_task`).
-    *   For `gemini_vision_query`: `CTkTextbox` for `prompt`, entries for expectations, etc.
-    *   For `gemini_perform_task` (Phase 3):
-        *   `CTkTextbox` for `natural_language_command`.
-        *   `CTkEntry` for `context_region_names` (expects CSV, parsed by `_get_parameters_from_ui`).
-        *   `CTkEntry` for `allowed_actions_override` (expects CSV of valid `PREDEFINED_ALLOWED_SUB_ACTIONS` keys, parsed).
-        *   `CTkCheckBox` for `require_confirmation_per_step`.
-        *   `CTkEntry` for `max_steps`.
-    *   Handles conditional visibility of parameters (e.g., `gemini_element_variable` for click actions).
--   Input validation via `gui_utils.validate_and_get_widget_value`.
--   `DetailsPanel._get_parameters_from_ui` parses CSV string inputs for `list_str_csv` types into Python lists.
-
-### 9.5. Item Lists (Regions, Templates, Rules, Sub-Conditions)
-(Managed via `_populate_specific_list_frame` and `_highlight_selected_list_item` – as previously defined.)
-
-### 9.6. Dynamic Parameter Rendering (`DetailsPanel._render_dynamic_parameters`)
-(Reads `UI_PARAM_CONFIG` to create widgets. Handles `condition_show` for dynamic visibility. Stores a list of currently rendered dynamic widgets (`self.param_widgets_and_defs_for_current_view`) to allow `_update_conditional_visibility` to function correctly when controller widgets change.)
-
-### 9.7. Data Persistence (Saving/Loading)
-(Handled by `MainAppWindow` calling `ConfigManager`.)
-
-### 9.8. Component Refactoring (v3.0.x - Done)
-(Refactoring of `MainAppWindow` and `DetailsPanel` into smaller components is complete.)
-
-## 10. Gemini API Interaction (`GeminiAnalyzer` - v4.0.0 Phase 1+)
-
-### 10.1. Class Structure and Initialization
--   `mark_i.engines.gemini_analyzer.GeminiAnalyzer`
--   `__init__(self, api_key: str, default_model_name: str)`: Configures `genai` client.
-
-### 10.2. Core Method: `query_vision_model`
--   `query_vision_model(self, image_data: np.ndarray, prompt: str, model_name: Optional[str] = None) -> Dict[str, Any]`
--   Handles BGR to PIL Image conversion, constructs request, calls `genai.GenerativeModel().generate_content()`.
--   Parses response text, attempts JSON parsing, handles API errors, content blocking, and returns a structured dictionary: `{"status": ..., "text_content": ..., "json_content": ..., "error_message": ..., "model_used": ..., "latency_ms": ...}`.
--   Can be used for text-only NLU prompts by `GeminiDecisionModule` if `image_data` is minimal/None and the model endpoint supports it (e.g., "gemini-pro" for text, or multimodal models can also take text-only prompts).
+## 10. Gemini API Interaction (`GeminiAnalyzer` - v4.0.0+)
+*(No fundamental changes to `GeminiAnalyzer` itself. For v5.0.0, it will be used by `StrategyPlanner` for goal-to-plan generation (likely text/multimodal prompts) and by `ProfileGenerator` for suggesting visual elements/regions for specific plan steps (likely vision prompts).)*
 
 ### 10.3. Prompting for Bounding Boxes (v4.0.0 Phase 1.5+)
--   Used by `RulesEngine` (for `gemini_vision_query` `capture_as` a box) and `GeminiDecisionModule` (for refining `target_description` from NLU steps).
--   Strategy: Prompt Gemini to return JSON with `box: [x_rel, y_rel, width, height]` and `found: true/false` for a described element within a given image.
--   The `_source_region_for_capture_` key is added by the calling module (`RulesEngine` or `GeminiDecisionModule`) to the captured/refined data to ensure correct interpretation of relative box coordinates.
+*(This existing capability will be crucial for the `ProfileGenerator` in v5.0.0 to help ground AI's textual descriptions of UI elements to actual screen locations for the generated profile.)*
 
 ## 11. GUI Configuration for Gemini (v4.0.0+)
+*(Existing GUI config for `gemini_vision_query` and `gemini_perform_task` remains. For v5.0.0, new UI elements for the AI Profile Generation workflow will not be part of `UI_PARAM_CONFIG` but rather a new GUI view/dialog system.)*
 
--   **`gui_config.py` (`UI_PARAM_CONFIG`):**
-    *   Defines all parameters for `gemini_vision_query` condition.
-    *   Defines parameters for `gemini_perform_task` action:
-        *   `natural_language_command` (textbox, required).
-        *   `context_region_names` (entry, `type: "list_str_csv"`).
-        *   `allowed_actions_override` (entry, `type: "list_str_csv"`).
-        *   `require_confirmation_per_step` (checkbox).
-        *   `max_steps` (entry, int).
-    *   `CLICK_TARGET_RELATIONS` includes `center_of_gemini_element`, `top_left_of_gemini_element`.
-    *   `click` action has `gemini_element_variable` parameter with `condition_show` logic.
--   **`DetailsPanel._render_dynamic_parameters`:** Creates UI elements based on `UI_PARAM_CONFIG`.
--   **`DetailsPanel._get_parameters_from_ui`:** Retrieves and validates values, parsing `list_str_csv` input from `CTkEntry` into Python lists of strings.
+## 12. `ActionExecutor`
+*(No fundamental changes. It will execute actions defined in the AI-generated profiles just like any other profile.)*
 
-## 12. `ActionExecutor` - Handling Actions
-
--   `_get_target_coords()`: Calculates click coordinates. Extended in Phase 1.5 to handle `gemini_element_variable` by parsing the wrapped bounding box data ( `{"value": {"box": [...]}, "_source_region_for_capture_": "..."}` ) and using `_source_region_for_capture_` to get the base screen coordinates of the region the Gemini query was performed on.
--   `execute_action()`: Takes a full action specification (including context with variables) and performs the PyAutoGUI simulation.
--   It is called by `RulesEngine` for standard rule actions and by `GeminiDecisionModule` for primitive sub-steps of NLU tasks.
-
-## 13. Testing Strategy (v4.0.0 Overall)
-
--   **Manual Integration Testing (Primary for Gemini Features):**
-    *   Test `gemini_vision_query` with diverse prompts and image conditions.
-    *   Test actions on Gemini-identified bounding boxes: accuracy, error handling.
-    *   Test `gemini_perform_task` (goal-driven single actions - Phase 2): various goals, visual contexts, validation of `PREDEFINED_ALLOWED_ACTIONS`.
-    *   Test `gemini_perform_task` (NLU-driven multi-step tasks - Phase 3):
-        *   Variety of natural language commands (simple, sequential, basic conditional).
-        *   NLU parsing accuracy and task decomposition logic.
-        *   Execution of multi-step plans, including target refinement for each step.
-        *   State management (basic).
-        *   Error handling at NLU, decomposition, and step execution stages.
-        *   User confirmation flows (`require_confirmation_per_step`).
-        *   `max_steps` enforcement.
-    *   Verify GUI configuration for all Gemini-related features.
-    *   Extensive log review for all Gemini interactions and decision processes.
--   **Automated Testing (Future Enhancement - `pytest`):**
-    *   Unit tests for non-Gemini components.
-    *   Mock `GeminiAnalyzer` to test `RulesEngine` (`gemini_vision_query`), `GeminiDecisionModule` (NLU parsing, step logic, refinement calls), and `ActionExecutor` (bounding box coordinate calculation) without actual API calls. Mock responses should cover success, failure, various JSON structures, and content blocking scenarios.
+## 13. Testing Strategy
+### 13.x. (NEW - v5.0.0): Testing AI-Driven Profile Generation
+-   **Goal-to-Plan Generation:**
+    *   Test with diverse high-level goals.
+    *   Mock `GeminiAnalyzer` to simulate various plan structures (correct, incomplete, illogical) from Gemini.
+    *   Verify `StrategyPlanner` correctly parses plans and handles errors.
+-   **Plan-to-Profile Element Generation:**
+    *   For each type of plan step, test the `ProfileGenerator`'s ability to:
+        *   Suggest relevant regions (mock visual context).
+        *   Suggest appropriate condition/action types.
+        *   Guide user through template capture or parameter input.
+        *   Correctly assemble the JSON for that rule/element.
+-   **End-to-End Profile Generation:**
+    *   Manual testing with real Gemini API.
+    *   Provide a goal, go through the interactive GUI workflow.
+    *   Evaluate the quality, correctness, and efficiency of the generated Mark-I profile.
+    *   Test if the generated profile actually works when run by Mark-I's execution engine.
+-   **Usability:** Test the intuitiveness and helpfulness of the AI-assisted profile creation GUI.
 
 ---
 ## 14. Gemini Decision Module & NLU Task Orchestration (v4.0.0 Phase 2 & 3 - Final)
 
-This section details the architecture and operation of the `GeminiDecisionModule`.
-For Phase 2, it handled single goal-to-action translations.
-**For Phase 3 (and the final v4.0.0 state), it is enhanced into an NLU Task Orchestrator, responsible for understanding natural language commands, decomposing them into steps, and managing their execution.**
+*(This entire section, as detailed in the previous response where Phase 3 was completed, remains valid. It describes the runtime NLU capabilities of Mark-I v4.0.0. For v5.0.0, this module's visual refinement capabilities might be leveraged by the `ProfileGenerator`.)*
 
 ### 14.1. Overview and Purpose (Final v4.0.0)
-
-*   **Goal:** To enable users to issue high-level commands in natural language (via the `gemini_perform_task` action's `natural_language_command` parameter). The `GeminiDecisionModule` parses these commands, decomposes them into a sequence of executable sub-steps, and orchestrates their execution. Each sub-step typically involves using Gemini for precise visual targeting and action selection from a predefined set of primitive capabilities.
-*   **Operation:** It acts as an intermediary between a high-level natural language instruction and a sequence of concrete, low-level UI interactions performed by `ActionExecutor`. It leverages `GeminiAnalyzer` for NLU and for visual analysis/refinement during step execution.
+*   **Goal:** Enables users to issue high-level commands via the `gemini_perform_task` action's `natural_language_command` parameter. The `GeminiDecisionModule` parses these, decomposes them, and orchestrates execution. Each sub-step uses Gemini for precise visual targeting and action selection from `PREDEFINED_ALLOWED_SUB_ACTIONS`.
+*   **Operation:** Acts as an intermediary between an NLU instruction and a sequence of UI interactions.
 
 ### 14.2. Module Architecture and Components (Final v4.0.0)
-
 *   **`mark_i.engines.gemini_decision_module.GeminiDecisionModule` Class:**
-    *   **Core Responsibilities (Phase 3 Enhancements):**
-        1.  **Natural Language Command Parsing (`execute_nlu_task` primary entry point):** Receives `natural_language_command` string. Calls `_construct_nlu_parse_prompt()` and uses `GeminiAnalyzer` to parse the command into a structured JSON plan (intents, steps, parameters).
-        2.  **Task Decomposition & Planning:** Converts the structured NLU JSON output into an internal executable plan (e.g., a list of step dictionaries). Validates that decomposed step intents can map to `PREDEFINED_ALLOWED_SUB_ACTIONS`.
-        3.  **Step Execution Orchestration (`execute_nlu_task` loop, calling `_execute_single_parsed_instruction`):** Iterates through the planned steps. For each step:
-            *   Gathers/updates visual context from provided `context_images`.
-            *   The `instruction_details` from the NLU plan (intent, target description, parameters) form the sub-goal for the current step.
-            *   Calls `_map_nlu_intent_to_allowed_action()` to determine the primitive action type.
-            *   If the primitive action requires visual target refinement (e.g., `CLICK_DESCRIBED_ELEMENT`), calls `_refine_target_description_to_bbox()` using `GeminiAnalyzer` to get precise coordinates.
-            *   Handles `require_confirmation_per_step` by logging (actual GUI dialog is a UI concern if this module needs to signal).
-            *   Constructs the final specification for `ActionExecutor` and invokes `self.action_executor.execute_action()`.
-        4.  **State Management (Basic for v4.0.0):** Manages progression through the decomposed step list. Does not carry complex data payloads between steps beyond what's implicit in sequential execution on the same UI.
-        5.  **Error Handling & Reporting:** Manages errors from NLU parsing, decomposition, Gemini API calls for sub-steps, target refinement, and action execution. Halts the NLU task on critical errors and returns a failure status.
-*   **`PREDEFINED_ALLOWED_SUB_ACTIONS` Constant:** Defines primitive actions Gemini can be guided to use for decomposed steps (e.g., `CLICK_DESCRIBED_ELEMENT`, `TYPE_IN_DESCRIBED_FIELD`, `PRESS_KEY_SIMPLE`, `CHECK_VISUAL_STATE`). Each maps to an `ActionExecutor` type or internal logic.
-*   **Internal Task Plan:** Generated from NLU, typically a list of step objects, each specifying an `intent_verb`, `target_description`, and `parameters`.
+    *   **Responsibilities:** NLU & Command Parsing, Task Decomposition & Planning, Step Execution Orchestration (calling `_execute_primitive_sub_action`), State Management (basic), Error Handling.
+*   **`PREDEFINED_ALLOWED_SUB_ACTIONS` Constant:** Defines primitive actions (e.g., `CLICK_DESCRIBED_ELEMENT`, `TYPE_IN_DESCRIBED_FIELD`, `PRESS_KEY_SIMPLE`, `CHECK_VISUAL_STATE`).
+*   **Internal Task Plan:** List of step objects from NLU.
 
 ### 14.3. Data Flow and Interaction for NLU Task (Final v4.0.0)
-
-*(The Mermaid diagram and textual flow description from the "Design for Phase 3" proposal accurately represent this section and are considered part of this final design.)*
-
-**Simplified Flow:**
-`Rule Trigger` -> `RulesEngine` (detects `gemini_perform_task`) -> `RulesEngine` calls `GeminiDecisionModule.execute_nlu_task(natural_language_command, initial_context_images, task_params)` ->
-`GDM` uses `GeminiAnalyzer` (text prompt for NLU) -> `GDM` gets NLU JSON plan (sequence of steps) ->
-`GDM` loops through steps:
-  For each step:
-    `GDM` forms sub-goal from step plan.
-    If step involves visual target (e.g., "click 'button X'"):
-      `GDM` uses `GeminiAnalyzer` (vision prompt with current screen image + sub-goal's `target_description`) to call `_refine_target_description_to_bbox()`.
-      Gets `box` coordinates.
-    `GDM` (optionally logs confirmation intent).
-    `GDM` constructs final primitive action spec.
-    `GDM` calls `ActionExecutor.execute_action()`.
-    If step fails, GDM halts NLU task.
-`GDM` returns overall task status to `RulesEngine`.
+*   `Rule Trigger` -> `RulesEngine` (`gemini_perform_task`) -> `GeminiDecisionModule.execute_nlu_task()` -> `GDM` uses `GA` for NLU -> `GDM` gets plan -> Loop steps: `GDM` uses `GA` for sub-step action/refinement -> `GDM` (optional confirm) -> `GDM` calls `AE`.
 
 ### 14.4. Prompt Engineering Strategies (Final v4.0.0)
-
 #### 14.4.1. Prompts for NLU & Task Decomposition (`_construct_nlu_parse_prompt`)
-
-*   **Strategy:** Provide Gemini with the raw natural language command and a detailed JSON schema it must adhere to for its output. The schema defines how to represent single actions, sequences, and basic conditionals (if supported), including intents, target descriptions, and parameters.
-*   **Key elements of the prompt:**
-    *   System role: "You are an NLU parser for a desktop automation tool..."
-    *   User's raw command.
-    *   Detailed instructions on the desired JSON output structure (`parsed_task` with `command_type`, `instruction_details` or `steps`, parameters for each step like `intent_verb`, `target_description`, `text_to_type`, `key_name`).
-    *   Few-shot examples demonstrating command-to-JSON mapping.
-*   **Model Choice:** A capable text model (e.g., Gemini Pro) or a multimodal model if initial screen context aids NLU. `GeminiAnalyzer` handles the call.
-
+*   System role, user command, detailed JSON output schema instructions, few-shot examples.
 #### 14.4.2. Prompts for Per-Step Visual Target Refinement (`_refine_target_description_to_bbox`)
-
-*   **Strategy:** Given a textual `target_description` for a UI element (derived from an NLU step) and an image of the relevant screen region, prompt Gemini Vision to locate this element and return its bounding box.
-*   **Key elements of the prompt:**
-    *   Role: "You are a precise visual element locator."
-    *   Instruction: "Identify the element best described as: `'{target_description}'`. Respond ONLY with JSON: `{\"found\": true/false, \"box\": [x,y,w,h_or_null]}`."
-    *   Few-shot examples of image descriptions and expected JSON output for `box`.
+*   Role ("precise visual element locator"), target description, JSON output instructions for `box` and `found`.
 
 ### 14.5. Safety, Control, and Limitations (Final v4.0.0)
-
-*   **Restricted Sub-Action Space:** The NLU-decomposed steps are mapped to and executed as one of the `PREDEFINED_ALLOWED_SUB_ACTIONS`. This list is intentionally small and simple.
-*   **Validation:** `GeminiDecisionModule` validates that NLU outputs and sub-step suggestions conform to expected structures and action types.
-*   **`max_steps` Parameter:** Enforced for `gemini_perform_task` to prevent runaway NLU-driven sequences.
-*   **`require_confirmation_per_step` Parameter:** Provides user oversight for each AI-decided sub-step in an NLU task. Default is `True` for safety.
-*   **NLU Accuracy & Ambiguity:** The system's ability to correctly interpret and execute complex or ambiguous natural language commands is limited by Gemini's NLU capabilities and the robustness of the prompt engineering. Failures in NLU or decomposition will result in task failure. Advanced clarification dialogs are not part of v4.0.0.
-*   **State Management:** Basic sequential step progression. No complex memory of past interactions or data passing between NLU task steps is explicitly designed in v4.0.0, beyond what Gemini might infer from sequential prompting for sub-steps (if implemented that way).
-*   **Error Recovery:** Basic: halt overall NLU task on sub-step failure. No automated error recovery or re-planning by Gemini within a single `gemini_perform_task` invocation.
+*   Adherence to `PREDEFINED_ALLOWED_SUB_ACTIONS`.
+*   Validation of NLU outputs.
+*   `max_steps` and `require_confirmation_per_step` parameters.
+*   NLU accuracy dependent on Gemini and prompt quality. Basic error handling.
 
 ### 14.6. GUI Integration (Final v4.0.0)
-
-*   The `gemini_perform_task` action type in the `DetailsPanel` is configured via `gui_config.py` to accept:
-    *   `natural_language_command` (multi-line `CTkTextbox`).
-    *   `context_region_names` (`CTkEntry` for CSV, parsed to list).
-    *   `allowed_actions_override` (`CTkEntry` for CSV of `PREDEFINED_ALLOWED_SUB_ACTIONS` keys, parsed to list).
-    *   `require_confirmation_per_step` (`CTkCheckBox`).
-    *   `max_steps` (`CTkEntry` for integer).
-*   Runtime feedback primarily relies on detailed logs. If `require_confirmation_per_step` is true, the current implementation relies on logging the intent to confirm, as direct GUI dialog invocation from `GeminiDecisionModule` is complex; a production system would need a callback or event mechanism to the GUI.
+*   `gemini_perform_task` action in `DetailsPanel` configured via `gui_config.py` (parameters: `natural_language_command`, `context_region_names`, `allowed_actions_override`, `require_confirmation_per_step`, `max_steps`).
 
 ### 14.7. Invocation from `RulesEngine` (Final v4.0.0)
+*   `RulesEngine` calls `GeminiDecisionModule.execute_nlu_task()` when `gemini_perform_task` action is triggered.
 
-*   When a rule action `type: "gemini_perform_task"` is triggered, `RulesEngine` extracts its parameters.
-*   It calls `self.gemini_decision_module.execute_nlu_task()` with the `natural_language_command`, relevant `initial_context_images` (gathered by `MainController` and passed to `RulesEngine`), and other task parameters (`max_steps`, `require_confirmation_per_step`, etc.).
-*   The `GeminiDecisionModule` then manages the entire lifecycle of that NLU task.
+---
+## 15. AI-Driven Profile Generation (`StrategyPlanner` & `ProfileGenerator` - v5.0.0)
+
+This new system, introduced in v5.0.0 as per ADR-009, aims to assist users in creating Mark-I profiles from high-level goals. It involves AI for strategic planning and AI-assistance for defining profile elements interactively.
+
+### 15.1. Overview and Purpose (v5.0.0)
+
+*   **Goal:** To significantly reduce the manual effort of creating Mark-I profiles. Users will state a high-level automation goal (e.g., "Automate login to MyApp," "Extract data from the daily report PDF and enter it into the web form"). Mark-I, using Gemini, will generate an initial "strategic plan" and then guide the user through an interactive process to translate this plan into a concrete Mark-I JSON profile.
+*   **Paradigm:** "Goal -> AI-Generated Plan -> AI-Assisted Interactive Profile Element Definition -> Usable Mark-I Profile."
+*   **Output:** A standard Mark-I `.json` profile that can be run by the existing v4.0.0 execution engine (`MainController`, `RulesEngine`, etc.) or further edited in the standard GUI.
+
+### 15.2. System Architecture and New Components (v5.0.0)
+
+*   **New Package: `mark_i.generation`** (or similar)
+    *   **`generation.strategy_planner.StrategyPlanner` Class:**
+        *   **Input:** User's high-level goal (natural language), optional initial full-screen screenshot or application context.
+        *   **Process:** Uses `GeminiAnalyzer` to send the goal and context to a Gemini model (likely a powerful one like Gemini 1.5 Pro). Prompts Gemini to break down the goal into a sequence of logical, human-understandable sub-steps or sub-goals. This output is the "intermediate plan."
+        *   **Output:** The intermediate plan (e.g., a list of dictionaries, each describing a step's intent and general target).
+        *   **Error Handling:** Manages failures from Gemini in generating a coherent plan.
+    *   **`generation.profile_generator.ProfileGenerator` Class:**
+        *   **Input:** The intermediate plan from `StrategyPlanner`, access to `GeminiAnalyzer`, and a mechanism to interact with the user via a new GUI workflow.
+        *   **Process:**
+            1.  Iterates through each step of the intermediate plan.
+            2.  For each step (e.g., "Find the 'username' input field"):
+                *   **Region Suggestion/Definition:** May prompt Gemini (via `GeminiAnalyzer` with a current screenshot) to suggest a screen area relevant to this step. Shows this suggestion to the user. The user confirms, adjusts, or manually draws the region using a `RegionSelector`-like interface. The defined region is added to the profile-in-progress.
+                *   **Condition/Action Logic Suggestion:** Based on the plan step's intent, suggests a Mark-I condition type and/or action type. E.g., for "Find 'username' input field," might suggest an OCR condition looking for "Username:" label or a `gemini_vision_query` to locate it semantically. For "Type 'admin'," suggests a `type_text` action.
+                *   **Interactive Element Grounding:** If the step involves interacting with a specific UI element (e.g., "click the 'Login' button"), it uses `GeminiAnalyzer` (similar to `_refine_target_description_to_bbox` logic) to visually highlight potential candidates on the current screen. The user clicks to confirm the correct element.
+                *   **Template Prompting:** If the AI suggests a template would be best (e.g., for a unique icon), it prompts the user: "I need a template for 'the login icon'. Please capture it now." The GUI facilitates this capture, and the template is added to the profile-in-progress.
+                *   **Parameter Elicitation:** Prompts the user for any parameters that cannot be inferred by AI (e.g., "What username should I type into this field?").
+            3.  Assembles the confirmed and defined regions, rules (conditions + actions), and templates into a `profile_data` dictionary.
+        *   **Output:** The complete `profile_data` dictionary.
+*   **New GUI Workflow (`generation_ui.ProfileGenerationWizard` or similar):**
+    *   A new set of GUI views/dialogs to manage the interactive profile generation process.
+    *   See Section 9.x for more GUI details.
+
+### 15.3. Data Flow for AI Profile Generation (v5.0.0)
+
+1.  **User Initiates:** User selects "AI Create Profile" in GUI, enters high-level goal (e.g., "Log me into MyApp"). Provides initial screen context (e.g., MyApp is open).
+2.  **`StrategyPlanner.generate_plan(goal, initial_screenshot)`:**
+    a.  `StrategyPlanner` crafts a prompt for `GeminiAnalyzer` containing the goal and instructions to output a step-by-step plan.
+    b.  `GeminiAnalyzer` calls Gemini (text/multimodal model).
+    c.  Gemini returns a structured "intermediate plan" (e.g., JSON list of steps).
+    d.  `StrategyPlanner` parses and validates this plan.
+3.  **`ProfileGenerator.build_profile_from_plan(intermediate_plan, interactive_gui_callback_handler)`:**
+    a.  `ProfileGenerator` iterates through plan steps.
+    b.  **For each step:**
+        i.  GUI displays current plan step to user (e.g., "Step 1: Locate Username Field").
+        ii. `ProfileGenerator` (using `GeminiAnalyzer` + current screen capture) suggests a region. GUI shows it; user confirms/adjusts. Defined region added to profile draft.
+        iii. `ProfileGenerator` suggests a condition (e.g., OCR for "Username:" near the field). GUI shows it; user confirms/edits parameters.
+        iv. `ProfileGenerator` suggests an action (e.g., "Click this field"). GUI shows visual highlight (from Gemini); user confirms.
+        v. If template needed, GUI prompts user to capture it.
+        vi. Necessary rule with condition/action added to profile draft.
+    c.  Loop continues for all steps.
+4.  **Finalization:**
+    a.  User reviews the complete generated profile structure (list of regions, rules, templates).
+    b.  User saves the profile via `ConfigManager`.
+    c.  The saved profile can then be opened in the standard editor or run.
+
+**Diagram: AI Profile Generation High-Level Flow (v5.0.0)**
+```mermaid
+sequenceDiagram
+    participant UserGUI
+    participant StrategyPlanner as SP
+    participant ProfileGenerator as PG
+    participant GeminiAnalyzer as GA
+    participant RegionSelectorTool as RST # For user drawing regions
+    participant ConfigManager as CM
+
+    UserGUI->>SP: Start AI Profile Generation (User Goal, Initial Screen Context)
+    SP->>GA: query_model(goal_to_plan_prompt, initial_context)
+    GA-->>SP: GeminiResponse (Intermediate Plan JSON)
+    SP->>SP: Parse & Validate Plan
+    SP-->>UserGUI: Display Intermediate Plan (Optional Review Step)
+    UserGUI-->>PG: Proceed with Plan / User Confirmed Plan
+
+    loop For each Step in Intermediate Plan
+        UserGUI->>PG: Request processing for current_step
+        PG->>UserGUI: Display current_step_description
+        
+        alt Region Definition for step
+            PG->>GA: query_model(suggest_region_prompt, current_screen_capture)
+            GA-->>PG: SuggestedRegionCoords
+            PG->>UserGUI: DisplaySuggestedRegion(SuggestedRegionCoords)
+            UserGUI->>RST: User Confirms/Adjusts/Draws Region
+            RST-->>PG: FinalRegionSpec
+            PG->>PG: Add Region to profile_in_progress
+        end
+
+        alt Condition & Action Definition for step
+            PG->>GA: query_model(suggest_condition_action_prompt, current_screen_capture, step_description)
+            GA-->>PG: SuggestedConditionActionLogic
+            PG->>UserGUI: DisplaySuggestions(Logic, PotentialVisualTargets)
+            UserGUI->>PG: User Confirms/Edits/ProvidesParams (e.g. text for OCR, template capture if prompted)
+            PG->>PG: Add Rule (Condition+Action) to profile_in_progress
+        end
+    end
+
+    PG-->>UserGUI: DisplayGeneratedProfileSummary
+    UserGUI->>CM: SaveProfile(generated_profile_data, chosen_filepath)
+    CM-->>UserGUI: SaveStatus
+```
+
+### 15.4. Prompt Engineering for Profile Generation (v5.0.0)
+
+*   **Goal-to-Intermediate-Plan (`StrategyPlanner`):**
+    *   **System Role:** "You are an expert automation planner. Given a user's high-level goal for desktop automation and an optional screenshot, break it down into a logical sequence of distinct, human-understandable sub-steps. Each sub-step should describe a simple user interaction or observation."
+    *   **Output Format:** Request JSON output, e.g., `{"plan_name": "User Goal Summary", "steps": [{"step_id": 1, "description": "Locate the username input field on the login screen."}, {"step_id": 2, "description": "Type the provided username into the username field."}, ...]}`.
+*   **Plan-Step-to-Profile-Element-Suggestion (`ProfileGenerator` interacting with user & Gemini):**
+    *   For "Locate the username input field":
+        *   To suggest region: "Based on the current screen and the task 'Locate username input field', suggest a bounding box for the most relevant area to search." (Returns box)
+        *   To suggest condition: "To implement 'Locate username input field' in region X, what's a good visual condition? E.g., OCR for label 'Username', template match for an input field icon, or a semantic search for 'an input field typically used for usernames'?" (Returns suggested method and parameters).
+    *   These will be highly interactive and context-dependent.
+
+### 15.5. Safety, Control, and Limitations (v5.0.0 AI Profile Creator)
+
+*   **User-in-the-Loop (Critical):** The user MUST confirm/define key visual elements like regions and templates. AI suggests, user validates.
+*   **Transparency:** The intermediate plan and suggested profile elements should be visible to the user.
+*   **Generated Profile Quality:** The initial generated profile is a "best effort" starting point. Users should expect to review and potentially refine it using the standard editor.
+*   **Complexity Handling:** Very complex or ambiguous goals may result in poor plans or profile suggestions.
+*   **No Direct Execution During Generation:** The generation phase does not execute actions on the live system; it only builds the profile structure.
+
+### 15.6. GUI for AI Profile Generation Workflow (v5.0.0)
+*(As outlined in Section 9.x. This will be a new major UI component/wizard.)*
+
+---

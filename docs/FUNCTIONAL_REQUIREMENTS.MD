@@ -1,112 +1,92 @@
 # Functional Requirements for Mark-I
 
-This document outlines the functional requirements for the Mark-I visual automation tool, describing *what* the system will do. **This version reflects the completed capabilities of v4.0.0, including Phase 1 (Core Gemini Vision Query), Phase 1.5 (Bounding Box Actions), Phase 2 (Gemini-Informed Decision Making), and Phase 3 (Natural Language Command Interface).**
+This document outlines the functional requirements for the Mark-I visual automation tool, describing *what* the system will do.
+**This version reflects the completed capabilities of v4.0.0 (including all Gemini integration phases) and incorporates requirements for the planned v5.0.0 feature: AI-Driven Profile Generation.**
 
 ## FR-CORE: Core System
 
-*   **FR-CORE-001: Cross-Platform Operation:** The bot's core engine (capture, analysis, action) SHOULD operate on Windows, macOS, and Linux. The GUI (`CustomTkinter`) is also designed to be cross-platform. (Primary development and testing on Windows per `DEV_CONFIG.MD`).
-*   **FR-CORE-002: Configuration Files (JSON):** The system MUST use JSON for saving and loading bot configurations (profiles). These profiles MUST store:
-    *   General profile settings (e.g., description, monitoring interval, analysis parameters like `analysis_dominant_colors_k`, `gemini_default_model_name`).
-    *   Definitions of screen regions to monitor (name, x, y, width, height).
-    *   Definitions of template images (name, relative filename for images stored in a `templates/` subdirectory next to the profile JSON file).
-    *   A list of rules, where each rule includes:
-        *   A unique name.
-        *   A default region for its conditions (can be empty if sub-conditions all specify their own, or if the condition type like `gemini_vision_query` specifies its own region).
-        *   A condition block, which can be:
-            *   A single condition with a `type` (e.g., "pixel_color", "ocr_contains_text", "gemini_vision_query") and specific parameters relevant to that type. This single condition can specify its own `region` to override the rule's default.
-            *   A compound condition with a `logical_operator` ("AND" or "OR") and a list of `sub_conditions` (each sub-condition being a single condition structure, capable of specifying its own `region`).
-        *   Parameters for capturing results into variables within conditions (e.g., `capture_as` field for `ocr_contains_text`, `template_match_found`, `gemini_vision_query`).
-        *   An action block with a `type` (e.g., "click", "type_text", "gemini_perform_task") and specific parameters relevant to that type, which can use captured variables via placeholder substitution.
-*   **FR-CORE-003: Environment Configuration:** The system MUST read environment variables (e.g., from a `.env` file via `python-dotenv`) to determine its operational environment (`APP_ENV`) and sensitive configurations like the `GEMINI_API_KEY`, primarily influencing logging configuration and external API access.
-*   **FR-CORE-004: Logging:** The system MUST implement comprehensive and persistent logging for all significant operations, decisions, errors, and state changes in both the backend engine and the GUI editor. Log levels and destinations MUST be configurable based on `APP_ENV` and CLI flags, as detailed in `adrs/ADR-007-Logging-Strategy-and-Environment-Configuration.md`.
-    *   **(v4.0.0):** Logging MUST include details of Gemini API interactions for `gemini_vision_query` (requests, responses, errors, latency).
-    *   **(v4.0.0 Phase 2 & 3):** Logging MUST extend to cover the `GeminiDecisionModule`'s operations, including input goals/NLU commands, prompts to Gemini for action suggestions/NLU parsing, Gemini's raw suggestions/parsed plans, validation outcomes, refinement steps, decomposed task steps, and final executed actions or failure reasons.
+*   **FR-CORE-001: Cross-Platform Operation:** The bot's core runtime engine and GUI editor SHOULD operate on Windows, macOS, and Linux. (Primary development and testing on Windows).
+*   **FR-CORE-002: Configuration Files (JSON):** The system MUST use JSON for saving and loading bot configurations (profiles). These profiles MUST store all necessary data for bot operation, including settings, region definitions, template metadata, and rule definitions (conditions and actions with their parameters, including complex AI-driven action types like `gemini_perform_task`).
+*   **FR-CORE-003: Environment Configuration:** The system MUST read environment variables (e.g., from `.env` file) for `APP_ENV` (logging control) and sensitive data like `GEMINI_API_KEY`.
+*   **FR-CORE-004: Logging:** The system MUST implement comprehensive, persistent, and configurable logging for all significant operations, decisions, errors, AI interactions (Gemini API calls for queries, NLU, decision-making, and profile generation assistance), and state changes.
 
-## FR-CAPTURE: Screen Region Capture Module (Bot Runtime)
+## FR-CAPTURE: Screen Region Capture Module (Bot Runtime & Profile Generation)
 
-*   **FR-CAPTURE-001: Define Target Region:** The user MUST be able to define one or more named rectangular regions on the screen (x, y, width, height) to be monitored. This definition is stored in the profile and manageable via the GUI.
-*   **FR-CAPTURE-002: Capture Specified Region:** The system MUST be able to capture image data exclusively from the defined target region(s) during bot runtime.
-*   **FR-CAPTURE-003: Real-time Capture:** The system MUST support continuous real-time capture of defined regions at a user-configurable interval (FPS/delay) during bot operation.
+*   **FR-CAPTURE-001: Define Target Region:** The user MUST be able to define one or more named rectangular regions on the screen (x, y, width, height) to be monitored or analyzed. This definition is stored in the profile and manageable via the GUI.
+*   **FR-CAPTURE-002: Capture Specified Region:** The system MUST be able to capture image data exclusively from user-defined target region(s) during bot runtime.
+*   **FR-CAPTURE-003: Real-time Capture (Bot Runtime):** The system MUST support continuous real-time capture of defined regions at a user-configurable interval.
+*   **FR-CAPTURE-004: Full Screen Capture (for AI Profile Generation - v5.0.0):** The system (specifically for the AI Profile Generation mode) MUST be able to capture an image of the full screen (or a user-selected application window) to provide initial visual context to the `StrategyPlanner` and `ProfileGenerator` AI components.
 
-## FR-ANALYZE: Region Analysis Module (Bot Runtime & Decision Support)
+## FR-ANALYZE: Region Analysis & AI Understanding Module
 
-*   **FR-ANALYZE-001: Pixel Color Analysis:** The system MUST allow rules to check for specific pixel colors (BGR) at relative coordinates within a region, with a configurable tolerance.
-*   **FR-ANALYZE-001B: Average Color Analysis:** The system MUST allow rules to check the average color (BGR) of a region against an expected color, with a configurable tolerance.
-*   **FR-ANALYZE-002: Template Matching Analysis:** The system MUST allow rules to check if a user-provided template image is present within a region, with a configurable minimum confidence threshold. Match details (location, confidence, dimensions) can be captured into a variable.
-*   **FR-ANALYZE-003: OCR Text Extraction & Analysis:** The system MUST be able to extract text from a region using Tesseract OCR. The analysis result MUST include both the extracted text string and an average word confidence score. The full extracted text can be captured into a variable.
-*   **FR-ANALYZE-003B: OCR-Based Conditions:** Rules MUST support conditions based on OCR results, including:
-    *   Checking if the extracted text contains specific substring(s) (case-sensitive or insensitive, comma-separated for OR logic on keywords).
-    *   Checking if the average OCR confidence meets a minimum threshold (if specified).
-*   **FR-ANALYZE-004: Configurable Analysis Rules:** Users MUST be able to define rules that link analysis outcomes to actions. Rules MUST support:
-    *   Single conditions with various types and parameters.
-    *   Compound conditions using "AND" or "OR" logical operators on a list of sub-conditions. Each sub-condition can target the rule's default region or specify its own.
-*   **FR-ANALYZE-005: Dominant Color Analysis:** The system MUST allow rules to check if one of the top N dominant colors (found via k-means, with configurable 'k' for analysis) in a region matches an expected BGR color (with tolerance) and optionally meets a minimum percentage of occurrence.
-*   **FR-ANALYZE-006: Selective Analysis (Performance):** The bot runtime (`MainController`) MUST optimize performance by only executing general pre-emptive **local** analyses (e.g., OCR, dominant color, average color) on a given region if at least one rule in the active profile explicitly requires that type of analysis for that region. Image capture for all monitored regions always occurs. Gemini analysis (for `gemini_vision_query` or by `GeminiDecisionModule`) is performed on-demand.
-*   **FR-ANALYZE-007: Gemini Vision Query (v4.0.0 Phase 1+):** The system MUST provide a condition type (`gemini_vision_query`) that allows rules to:
-    *   Send the captured image data of a specified region and a user-defined text prompt to the configured Google Gemini Vision API endpoint.
-    *   Optionally specify a Gemini model name to override the profile's default model.
-    *   Evaluate the condition based on the Gemini API's response (checking text content or JSON path values).
-    *   Capture the Gemini API's response (text, full JSON object, or specific JSON-extracted value) into a rule-scoped variable structured as `{"value": <data>, "_source_region_for_capture_": "region_name"}`.
-    *   Handle API errors gracefully.
-*   **FR-ANALYZE-008: Gemini-Informed Action Suggestion (v4.0.0 Phase 2):** The `GeminiDecisionModule` MUST:
-    *   Accept a user-defined goal/task description and visual context (images of relevant regions).
-    *   Utilize `GeminiAnalyzer` to prompt Gemini to suggest a single, simple action from a predefined, limited set of allowed actions, based on the goal and visual context.
-    *   Parse and validate Gemini's suggested action.
-    *   If needed, use `GeminiAnalyzer` again to refine a textual target description from Gemini into precise bounding box coordinates.
-*   **FR-ANALYZE-009: Natural Language Command Understanding & Decomposition (v4.0.0 Phase 3):** The `GeminiDecisionModule` MUST:
-    *   Accept a user-provided natural language command (string).
-    *   Utilize `GeminiAnalyzer` (with appropriate NLU-focused prompting) to parse this command into a structured representation (e.g., identifying main intent, sequence of sub-intents/steps, key entities, and parameters).
-    *   Decompose the parsed command into an internal plan or sequence of executable sub-steps if the command is multi-step or conditional (basic conditionals).
-    *   Validate that decomposed steps map to known, simple capabilities (ultimately relying on `PREDEFINED_ALLOWED_SUB_ACTIONS`).
-    *   Manage basic state and context progression through the sequence of decomposed steps.
+*   **FR-ANALYZE-001: Pixel Color Analysis:** Rules/conditions MUST support checking specific pixel colors (BGR) with tolerance.
+*   **FR-ANALYZE-001B: Average Color Analysis:** Rules/conditions MUST support checking the average color (BGR) of a region with tolerance.
+*   **FR-ANALYZE-002: Template Matching Analysis:** Rules/conditions MUST support checking for template image presence with a confidence threshold. Match details MUST be capturable.
+*   **FR-ANALYZE-003: OCR Text Extraction & Analysis:** System MUST extract text from regions using Tesseract. Results MUST include text and average confidence. Text MUST be capturable.
+*   **FR-ANALYZE-003B: OCR-Based Conditions:** Rules MUST support conditions based on OCR text content and confidence.
+*   **FR-ANALYZE-004: Configurable Analysis Rules (Runtime):** Users MUST define rules linking analysis outcomes to actions, supporting single and compound (AND/OR) conditions.
+*   **FR-ANALYZE-005: Dominant Color Analysis:** Rules/conditions MUST support checking dominant colors and their percentage.
+*   **FR-ANALYZE-006: Selective Local Analysis (Performance - Runtime):** `MainController` MUST optimize by only running specific local analyses if an active rule requires it.
+*   **FR-ANALYZE-007: Gemini Vision Query (v4.0.0 Phase 1+ - Runtime):** The `gemini_vision_query` condition type MUST allow rules to send image data and a text prompt to Gemini, evaluate responses (text/JSON), and capture results.
+*   **FR-ANALYZE-008: Gemini-Informed Action Suggestion (v4.0.0 Phase 2 - Runtime):** The `GeminiDecisionModule` (invoked by `gemini_perform_task` action) MUST accept a user goal, use `GeminiAnalyzer` to suggest a primitive action from a predefined set, validate it, and refine targets using vision if needed.
+*   **FR-ANALYZE-009: Natural Language Command Understanding & Decomposition (v4.0.0 Phase 3 - Runtime):** The `GeminiDecisionModule` (invoked by `gemini_perform_task` action with `natural_language_command`) MUST:
+    *   Parse the natural language command into a structured plan (sequence of sub-steps/intents) using `GeminiAnalyzer`.
+    *   Decompose this plan into executable primitive steps, validating against allowed actions.
+    *   Manage basic state and orchestrate the execution of these steps.
+*   **FR-ANALYZE-010: AI Goal-to-Plan Generation (v5.0.0 - Profile Generation):** The `StrategyPlanner` module MUST:
+    *   Accept a high-level user goal (natural language) and optional initial visual context.
+    *   Use `GeminiAnalyzer` to prompt Gemini to break down this goal into an "intermediate plan" (a sequence of logical, human-understandable sub-steps relevant to achieving the automation goal).
+    *   Parse and validate this intermediate plan.
+*   **FR-ANALYZE-011: AI Plan-Step-to-Profile-Element Suggestion (v5.0.0 - Profile Generation):** The `ProfileGenerator` module, for each step in the intermediate plan, MUST:
+    *   Use `GeminiAnalyzer` (with current screen context) to suggest relevant screen regions for the step.
+    *   Use `GeminiAnalyzer` to suggest appropriate Mark-I condition types (e.g., OCR, template, `gemini_vision_query`) and potential parameters to implement the logic of the plan step.
+    *   Use `GeminiAnalyzer` to suggest appropriate Mark-I action types and potential parameters.
+    *   If an interaction with a specific UI element is implied by a plan step, use `GeminiAnalyzer` to visually suggest candidate elements on screen (e.g., by highlighting or returning bounding boxes).
 
-## FR-ACTION: Action Execution Module (Bot Runtime)
+## FR-ACTION: Action Execution & Task Orchestration Module
 
-*   **FR-ACTION-001: Mouse Click Simulation:** The system MUST be able to simulate mouse clicks (left, right, middle, configurable number of clicks, interval between clicks) at:
-    *   Absolute screen coordinates.
-    *   The center of a specified region.
-    *   Coordinates relative to a specified region's top-left corner.
-    *   The center of the last successfully matched template.
-    *   **(v4.0.0 Phase 1.5+)** Coordinates derived from bounding box data (captured from `gemini_vision_query` or refined by `GeminiDecisionModule`), using `gemini_element_variable` parameter.
-*   **FR-ACTION-002: Keyboard Input Simulation:** The system MUST be able to simulate typing strings, pressing individual special keys, and hotkey combinations.
-*   **FR-ACTION-003: Conditional Actions:** Actions (including `gemini_perform_task`) MUST only be triggered if their associated rule's condition evaluates to true.
-*   **FR-ACTION-004: Log Message Action:** The system MUST provide an action to write a custom message to application logs.
-*   **FR-ACTION-005: Dynamic Action Parameters (Variables):** Action parameters MUST be able to utilize values captured into rule-scoped variables.
-*   **FR-ACTION-006: Configurable Pause Before Action:** Actions MUST allow a configurable pause before execution.
-*   **FR-ACTION-007: Execute Gemini-Suggested/Decomposed Actions (v4.0.0 Phase 2+):** The `ActionExecutor` MUST be callable by the `GeminiDecisionModule` to perform primitive actions that are part of a Gemini-suggested plan or a decomposed step from an NLU command. The set of actions executable this way is limited by `GeminiDecisionModule.PREDEFINED_ALLOWED_SUB_ACTIONS`.
-*   **FR-ACTION-008: User Confirmation for AI-Driven Actions (v4.0.0 Phase 2+):** The system (via `GeminiDecisionModule` and configured through `gemini_perform_task` parameters) MUST provide an option to require user confirmation (e.g., via a GUI dialog if applicable, or logged intent otherwise) before executing each action step suggested or derived by Gemini as part of a goal-driven or NLU task.
-*   **FR-ACTION-009: `gemini_perform_task` Action Type (v4.0.0 Phase 2 & 3):** The system MUST support a rule action of type `gemini_perform_task`.
-    *   This action triggers the `GeminiDecisionModule`.
-    *   It MUST accept a `natural_language_command` (string) parameter as the primary input for NLU-driven tasks (Phase 3).
-    *   It MAY accept a simpler `goal_prompt` (string) for single AI-decided actions (Phase 2 legacy, or if `natural_language_command` is empty).
-    *   It MUST accept `context_region_names` (list of strings), `allowed_actions_override` (list of strings), `require_confirmation_per_step` (boolean), and `max_steps` (integer) as parameters to control the behavior of the `GeminiDecisionModule`.
+*   **FR-ACTION-001: Mouse Click Simulation:** System MUST simulate mouse clicks with various options (button, count, interval) at targets including absolute coords, region-relative, template-relative, and **Gemini-identified element coordinates (v4.0.0 Phase 1.5+)**.
+*   **FR-ACTION-002: Keyboard Input Simulation:** System MUST simulate typing text strings, pressing special keys, and hotkeys.
+*   **FR-ACTION-003: Conditional Actions (Runtime):** Actions defined in rules MUST only trigger if their associated rule's condition evaluates to true.
+*   **FR-ACTION-004: Log Message Action:** System MUST provide an action to write custom messages to logs.
+*   **FR-ACTION-005: Dynamic Action Parameters (Variables - Runtime):** Action parameters MUST support variable substitution using values captured from conditions.
+*   **FR-ACTION-006: Configurable Pause Before Action (Runtime):** Actions MUST allow a configurable pause before execution.
+*   **FR-ACTION-007: Execute Gemini-Suggested/Decomposed Actions (v4.0.0 Phase 2+ - Runtime):** `ActionExecutor` MUST execute primitive actions as instructed by `GeminiDecisionModule` (which validates and refines them from Gemini's suggestions or NLU-decomposed steps).
+*   **FR-ACTION-008: User Confirmation for AI-Driven Actions (v4.0.0 Phase 2+ - Runtime):** `GeminiDecisionModule` MUST support an option (`require_confirmation_per_step`) to prompt for user confirmation before executing each AI-decided/NLU-derived action step.
+*   **FR-ACTION-009: `gemini_perform_task` Action Type (v4.0.0 Phase 2 & 3 - Runtime):** This action type MUST trigger `GeminiDecisionModule` to process either a simple `goal_prompt` or a `natural_language_command`, orchestrating AI-driven task execution.
+*   **FR-ACTION-010: Assembling AI-Generated Profile Actions (v5.0.0 - Profile Generation):** The `ProfileGenerator` MUST assemble confirmed and user-refined action specifications (based on AI suggestions for plan steps) into the standard Mark-I action structure within the generated JSON profile.
 
-## FR-CONFIG: Configuration & Management (CLI & GUI)
+## FR-CONFIG: Configuration & Management (CLI, GUI, AI Generation)
 
-*   **FR-CONFIG-001: Save/Load Bot Profile:** Users MUST be able to save/load complete bot setups (profiles) as JSON files.
-*   **FR-CONFIG-002: Variable Capture in Rules:** Conditions (`ocr_contains_text`, `template_match_found`, `gemini_vision_query`) MUST support capturing results into rule-scoped variables structured as `{"value": <data>, "_source_region_for_capture_": "region_name"}`.
-*   **FR-CONFIG-003: Gemini Settings Management (v4.0.0 Phase 1+):**
-    *   System loads `GEMINI_API_KEY` from `.env`.
-    *   Users can configure a default Gemini model name in profile settings.
-*   **FR-CONFIG-004: Gemini NLU Task Definition in Profile (v4.0.0 Phase 3):** Users MUST be able to define tasks to be driven by natural language commands within their profiles, using the `gemini_perform_task` action type and its associated parameters (`natural_language_command`, `context_region_names`, `allowed_actions_override`, `require_confirmation_per_step`, `max_steps`).
+*   **FR-CONFIG-001: Save/Load Bot Profile:** Users MUST be able to save/load complete bot profiles (JSON).
+*   **FR-CONFIG-002: Variable Capture in Rules:** Conditions MUST support capturing results into rule-scoped variables.
+*   **FR-CONFIG-003: Gemini Settings Management (v4.0.0+):** Manage `GEMINI_API_KEY` (via `.env`) and `gemini_default_model_name` (in profile settings).
+*   **FR-CONFIG-004: Gemini NLU Task Definition in Profile (v4.0.0 Phase 3):** Users MUST be able to define NLU-driven tasks using the `gemini_perform_task` action and its parameters (`natural_language_command`, `context_region_names`, etc.) via GUI and JSON.
+*   **FR-CONFIG-005: AI Profile Generation - Goal Input (v5.0.0):** The system MUST provide a mechanism (initially GUI) for users to input a high-level natural language goal to initiate AI-driven profile generation.
+*   **FR-CONFIG-006: AI Profile Generation - Interactive Element Definition (v5.0.0):** During AI profile generation, the system MUST interactively prompt the user to:
+    *   Confirm, adjust, or draw screen regions suggested by the AI for plan steps.
+    *   Confirm or modify AI-suggested condition logic and parameters.
+    *   Confirm or modify AI-suggested action logic and parameters.
+    *   Capture template images if the AI plan suggests a template is necessary and the user agrees.
+    *   Provide any specific data values (e.g., text to type) that the AI cannot infer.
+*   **FR-CONFIG-007: AI Profile Generation - Output (v5.0.0):** The AI Profile Generation process MUST output a standard, valid Mark-I JSON profile file that can be loaded, edited, and run by the existing system.
 
 ## FR-UI: User Interface
 
-*   **FR-UI-001: CLI Control:** The system MUST provide CLI controls for running profiles (`run`), launching the GUI editor (`edit`), and the legacy region adder (`add-region`).
-*   **FR-UI-002: GUI for Region Definition (Component):** `RegionSelectorWindow` MUST allow visual selection/drawing of screen regions.
+*   **FR-UI-001: CLI Control:** Provide CLI for running profiles, launching editor. **(v5.0.0 Consideration):** Potentially a CLI command to trigger AI profile generation.
+*   **FR-UI-002: GUI for Region Definition (Component):** `RegionSelectorWindow` for visual region selection.
 *   **FR-UI-003: Full GUI Profile Editor (`MainAppWindow` - v4.0.0 Complete):**
-    *   **FR-UI-003.1: Profile File Operations:** Create new, open, save, save as for profiles. Manage dirty state.
-    *   **FR-UI-003.2: Settings Editing:** Edit general profile settings, including `gemini_default_model_name`. Display Gemini API key status.
-    *   **FR-UI-003.3: Region Management & Editing:** List, add (invoke `RegionSelectorWindow`), remove, edit regions.
-    *   **FR-UI-003.4: Template Management & Editing:** List, add, remove templates, with image preview.
-    *   **FR-UI-003.5: Rule Management & Editing (Comprehensive):**
-        *   List, add, remove rules. Edit rule name and default region.
-        *   **Condition Editing:** Select condition `type` (including `gemini_vision_query`), dynamically edit parameters, convert between single/compound.
-        *   **Action Editing:** Select action `type` (including `click`, `type_text`, `press_key`, `log_message`, and **`gemini_perform_task`**). Dynamically display and allow editing of all relevant parameters for the selected type, including:
-            *   Parameters for `gemini_element_variable` (for click actions targeting Gemini-identified elements).
-            *   Parameters for `gemini_perform_task`, such as `natural_language_command` (using a `CTkTextbox`), `context_region_names` (as CSV string in `CTkEntry`), `allowed_actions_override` (as CSV string), `require_confirmation_per_step` (`CTkCheckBox`), and `max_steps` (`CTkEntry`).
-        *   Parameter fields SHOULD allow variable placeholders.
-    *   **FR-UI-003.6: Input Validation & Feedback:** GUI MUST validate inputs and provide clear error messages.
-*   **FR-UI-004: User Feedback (General - v4.0.0 Complete):**
-    *   System MUST provide clear feedback on operations, successes, warnings, errors.
-    *   **(v4.0.0):** Includes feedback on Gemini API interactions for `gemini_vision_query` and `gemini_perform_task`. If NLU task confirmation is enabled, GUI should present confirmation dialogs (actual dialog implementation might be basic for v4.0.0, relying on logs for detailed step-by-step if GUI interaction is complex).
+    *   **FR-UI-003.1 - FR-UI-003.4:** (Profile ops, Settings, Region Mgmt, Template Mgmt - as is).
+    *   **FR-UI-003.5: Rule Management & Editing (Comprehensive):** Support for all condition types (including `gemini_vision_query`) and action types (including `gemini_perform_task` with all its NLU parameters like `natural_language_command`).
+    *   **FR-UI-003.6: Input Validation & Feedback:** (As is).
+*   **FR-UI-004: User Feedback (General - v4.0.0 Complete):** Clear feedback for operations, including AI interactions. Confirmation dialogs for AI-driven steps if configured.
+*   **FR-UI-005: GUI for AI Profile Generation Invocation (v5.0.0):** The `MainAppWindow` MUST provide a clear way to initiate the AI Profile Generation mode (e.g., menu item "File > New AI-Generated Profile...").
+*   **FR-UI-006: AI Profile Generation Wizard/Workflow (v5.0.0):** A new set of GUI views or a wizard-like interface MUST guide the user through the AI-driven profile generation process:
+    *   Input for high-level goal.
+    *   (Optional) Display of AI-generated intermediate plan for review.
+    *   Interactive prompts for each plan step, allowing the user to confirm/adjust AI-suggested regions (potentially using an embedded `RegionSelector`-like tool), condition logic, action logic, and provide necessary parameters or capture templates.
+    *   Mechanism to review the constructed profile elements before final generation.
+    *   Option to save the generated profile.
+*   **FR-UI-007: Visual Suggestion Display (v5.0.0 - AI Profile Generation):** During interactive element definition, if the AI suggests visual targets (e.g., candidate bounding boxes for a button), the GUI MUST be able to overlay these suggestions on a relevant screen capture to allow the user to select or confirm.
+
+---
