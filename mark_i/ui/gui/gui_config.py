@@ -230,7 +230,7 @@ UI_PARAM_CONFIG: Dict[str, Dict[str, List[Dict[str, Any]]]] = {
                 "default": "",
                 "required": False,
                 "allow_empty_string": True,
-                "placeholder": "e.g., gemini-1.5-pro-latest",
+                "placeholder": "e.g., gemini-1.5-flash-latest",
             },
             {"id": "region", "label": "Target Region (Override):", "widget": "optionmenu_dynamic", "options_source": "regions", "type": str, "default": "", "required": False},
         ],

@@ -57,7 +57,7 @@ PREDEFINED_ALLOWED_SUB_ACTIONS: Dict[str, Dict[str, Any]] = {
 }
 
 # Default model for NLU parsing and complex planning, can be overridden by profile settings if desired
-DEFAULT_NLU_PLANNING_MODEL = "gemini-1.5-pro-latest"
+DEFAULT_NLU_PLANNING_MODEL = "gemini-1.5-flash-latest"
 # Default model for visual refinement (bounding box) and visual state checks - flash is faster
 DEFAULT_VISUAL_REFINE_MODEL = "gemini-1.5-flash-latest"
 

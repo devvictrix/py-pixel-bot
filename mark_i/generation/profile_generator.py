@@ -28,7 +28,7 @@ DEFAULT_TEMPLATE_STRUCTURE_PG = {"name": "", "filename": "placeholder_template.p
 
 # Models for ProfileGenerator's internal AI assistance calls
 DEFAULT_REGION_SUGGESTION_MODEL = "gemini-1.5-flash-latest"  # Fast for visual box suggestion
-DEFAULT_LOGIC_SUGGESTION_MODEL = "gemini-1.5-pro-latest"  # More reasoning for condition/action
+DEFAULT_LOGIC_SUGGESTION_MODEL = "gemini-1.5-flash-latest"  # More reasoning for condition/action
 DEFAULT_ELEMENT_REFINE_MODEL = "gemini-1.5-flash-latest"  # Fast for targeted visual refinement
 
 

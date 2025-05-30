@@ -28,7 +28,7 @@ IntermediatePlanStep = Dict[str, Any]
 IntermediatePlan = List[IntermediatePlanStep]
 
 # Default model for complex planning, can be overridden
-DEFAULT_STRATEGY_PLANNING_MODEL = "gemini-1.5-pro-latest"  # Or another powerful model suitable for JSON generation and reasoning
+DEFAULT_STRATEGY_PLANNING_MODEL = "gemini-1.5-flash-latest"  # Or another powerful model suitable for JSON generation and reasoning
 
 
 class StrategyPlanner:
