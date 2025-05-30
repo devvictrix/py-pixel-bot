@@ -1,12 +1,25 @@
+# Correcting the import for Content based on common patterns or assuming it's available at top level
+# This is speculative; the actual location depends on the google-generativeai SDK version.
+# If this still fails, 'Content' might need to be 'Any' or its true location found.
 import logging
 import time
 import json
-from typing import Optional, Dict, Any, Union, List, Tuple # Added Tuple
+from typing import Optional, Dict, Any, Union, List, Tuple
 import os
 
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig, HarmCategory, HarmBlockThreshold
-from google.generativeai.types import BlockedPromptException, StopCandidateException, Content
+from google.generativeai.types import BlockedPromptException, StopCandidateException
+# Try importing Content from google.generativeai directly
+try:
+    from google.generativeai import Content
+    logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_analyzer") # Define logger earlier
+    logger.debug("Imported 'Content' from 'google.generativeai'")
+except ImportError:
+    logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_analyzer")
+    logger.warning("'Content' type not found in 'google.generativeai.types' or 'google.generativeai'. Using 'Any'.")
+    Content = Any # Fallback if direct import fails
+
 from google.api_core import exceptions as google_api_exceptions
 
 from PIL import Image
@@ -14,8 +27,7 @@ import cv2
 import numpy as np
 
 from mark_i.core.logging_setup import APP_ROOT_LOGGER_NAME
-
-logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.gemini_analyzer")
+# Logger definition moved up to handle Content import logging
 
 try:
     from google.generativeai.types import Part
@@ -63,8 +75,9 @@ class GeminiAnalyzer:
                 logger.error("'SafetySetting' class not found. Safety settings may not be applied.")
             self.client_initialized = True
             logger.info(f"GeminiAnalyzer initialized. Default model: '{self.default_model_name}'. Client configured.")
-            if self.safety_settings: logger.debug(f"Using safety settings: {[(s.harm_category.name, s.threshold.name) for s in self.safety_settings]}") # type: ignore
-            else: logger.warning("Default safety settings list is empty or None.")
+            if self.safety_settings and hasattr(self.safety_settings[0], 'harm_category') and hasattr(self.safety_settings[0].harm_category, 'name'): # Check if valid
+                 logger.debug(f"Using safety settings: {[(s.harm_category.name, s.threshold.name) for s in self.safety_settings]}") # type: ignore
+            else: logger.warning("Default safety settings list is empty, None or malformed.")
             logger.debug(f"Using default generation config: {self.generation_config}")
         except Exception as e:
             self.client_initialized = False
@@ -73,10 +86,6 @@ class GeminiAnalyzer:
     def _validate_and_prepare_api_input(
         self, prompt: str, image_data: Optional[np.ndarray], log_prefix: str
     ) -> Tuple[Optional[List[Union[str, Image.Image]]], Optional[Dict[str, Any]]]:
-        """
-        Validates inputs and prepares image data for the Gemini API.
-        Returns (api_contents, error_result_if_any).
-        """
         if not prompt or not isinstance(prompt, str) or not prompt.strip():
             error_msg = "Input error: Prompt cannot be empty or just whitespace."
             logger.error(f"{log_prefix}: {error_msg}")
@@ -108,13 +117,9 @@ class GeminiAnalyzer:
 
     def _execute_sdk_call(
         self, model_instance: genai.GenerativeModel, api_contents: List[Union[str, Image.Image]], log_prefix: str
-    ) -> Tuple[Optional[Content], Optional[Dict[str, Any]]]:
-        """
-        Executes the Gemini SDK call and handles direct API exceptions.
-        Returns (sdk_response, error_result_if_any).
-        """
+    ) -> Tuple[Optional[Content], Optional[Dict[str, Any]]]: # type: ignore # Content might be Any
         try:
-            api_sdk_response = model_instance.generate_content(api_contents, stream=False)
+            api_sdk_response: Content = model_instance.generate_content(api_contents, stream=False) # type: ignore
             return api_sdk_response, None
         except BlockedPromptException as e_bp:
             error_msg = f"Gemini SDK: Prompt blocked. {e_bp}"
@@ -149,136 +154,71 @@ class GeminiAnalyzer:
             logger.error(f"{log_prefix}: API call failed. Error: {error_msg}", exc_info=True)
             return None, {"status": "error_api", "error_message": error_msg, "raw_gemini_response": str(e_general_api)}
 
-    def _process_sdk_response(self, api_sdk_response: Optional[Content], log_prefix: str) -> Dict[str, Any]:
-        """
-        Processes the SDK response to extract content and status.
-        Returns a dictionary part for the final result.
-        """
+    def _process_sdk_response(self, api_sdk_response: Optional[Content], log_prefix: str) -> Dict[str, Any]: # type: ignore
         processed_result: Dict[str, Any] = {
             "status": "error_api", "text_content": None, "json_content": None,
             "error_message": "Failed to process SDK response or response was None.",
             "raw_gemini_response": str(api_sdk_response) if api_sdk_response else "None"
         }
-
-        if api_sdk_response is None:
-            return processed_result # Error already logged by _execute_sdk_call or it was an input error.
-
+        if api_sdk_response is None: return processed_result
         processed_result["raw_gemini_response"] = str(api_sdk_response)
 
         if hasattr(api_sdk_response, "prompt_feedback") and api_sdk_response.prompt_feedback and api_sdk_response.prompt_feedback.block_reason:
-            processed_result["status"] = "blocked_prompt"
-            block_reason = api_sdk_response.prompt_feedback.block_reason
-            processed_result["error_message"] = (f"Prompt blocked by API. Reason: {block_reason.name if hasattr(block_reason,'name') else str(block_reason)}. "
-                                                 f"Ratings: {api_sdk_response.prompt_feedback.safety_ratings}")
-            logger.warning(f"{log_prefix}: {processed_result['error_message']}")
-            return processed_result
-
+            processed_result["status"] = "blocked_prompt"; block_reason = api_sdk_response.prompt_feedback.block_reason
+            processed_result["error_message"] = (f"Prompt blocked by API. Reason: {block_reason.name if hasattr(block_reason,'name') else str(block_reason)}. Ratings: {api_sdk_response.prompt_feedback.safety_ratings}")
+            logger.warning(f"{log_prefix}: {processed_result['error_message']}"); return processed_result
         if not api_sdk_response.candidates:
-            processed_result["error_message"] = "No candidates in Gemini response. Prompt might have been silently blocked or another API error."
-            logger.warning(f"{log_prefix}: {processed_result['error_message']}")
-            return processed_result
+            processed_result["error_message"] = "No candidates in Gemini response."; logger.warning(f"{log_prefix}: {processed_result['error_message']}"); return processed_result
 
-        first_candidate = api_sdk_response.candidates[0]
-        finish_reason_val = getattr(first_candidate, "finish_reason", None)
-        is_normal_stop = finish_reason_val is not None and (
-            (hasattr(finish_reason_val, 'name') and finish_reason_val.name.upper() == "STOP") or
-            (isinstance(finish_reason_val, str) and finish_reason_val.upper() == "STOP")
-        )
+        first_candidate = api_sdk_response.candidates[0]; finish_reason_val = getattr(first_candidate, "finish_reason", None)
+        is_normal_stop = finish_reason_val is not None and ((hasattr(finish_reason_val, 'name') and finish_reason_val.name.upper() == "STOP") or (isinstance(finish_reason_val, str) and finish_reason_val.upper() == "STOP"))
 
         if not is_normal_stop and finish_reason_val is not None:
-            processed_result["status"] = "blocked_response"
-            safety_ratings_str = str(getattr(first_candidate, "safety_ratings", "N/A"))
+            processed_result["status"] = "blocked_response"; safety_ratings_str = str(getattr(first_candidate, "safety_ratings", "N/A"))
             processed_result["error_message"] = f"Response generation stopped. Reason: {getattr(finish_reason_val,'name', str(finish_reason_val))}. Safety: {safety_ratings_str}"
             logger.warning(f"{log_prefix}: {processed_result['error_message']}")
-            # Try to get partial content if any
-            if hasattr(first_candidate, "content") and first_candidate.content and first_candidate.content.parts:
-                processed_result["text_content"] = "".join(part.text for part in first_candidate.content.parts if hasattr(part, "text")).strip()
+            if hasattr(first_candidate, "content") and first_candidate.content and first_candidate.content.parts: processed_result["text_content"] = "".join(part.text for part in first_candidate.content.parts if hasattr(part, "text")).strip() # type: ignore
             return processed_result
-
         if finish_reason_val is None and not hasattr(first_candidate, "content"):
-            processed_result["error_message"] = "Response candidate had no finish_reason and no content. API error or unexpected state."
-            logger.warning(f"{log_prefix}: {processed_result['error_message']}")
-            return processed_result
+            processed_result["error_message"] = "Response candidate had no finish_reason and no content."; logger.warning(f"{log_prefix}: {processed_result['error_message']}"); return processed_result
 
-        # Success or normal stop with potentially empty content
-        processed_result["status"] = "success"
-        processed_result["error_message"] = None # Clear error message on success
-
-        if hasattr(first_candidate, "content") and first_candidate.content and first_candidate.content.parts:
-            processed_result["text_content"] = "".join(part.text for part in first_candidate.content.parts if hasattr(part, "text")).strip()
-        else:
-            processed_result["text_content"] = ""
-            if is_normal_stop:
-                logger.info(f"{log_prefix}: Successful response (STOP) but no text parts in candidate content.")
+        processed_result["status"] = "success"; processed_result["error_message"] = None
+        if hasattr(first_candidate, "content") and first_candidate.content and first_candidate.content.parts: processed_result["text_content"] = "".join(part.text for part in first_candidate.content.parts if hasattr(part, "text")).strip() # type: ignore
+        else: processed_result["text_content"] = ""; logger.info(f"{log_prefix}: Successful response (STOP) but no text parts.") if is_normal_stop else None
 
         if processed_result["text_content"]:
             text_for_json = processed_result["text_content"]
-            # Basic cleanup for common markdown JSON blocks
             if text_for_json.startswith("```json"): text_for_json = text_for_json[7:]
             elif text_for_json.startswith("```"): text_for_json = text_for_json[3:]
             if text_for_json.endswith("```"): text_for_json = text_for_json[:-3]
             text_for_json = text_for_json.strip()
-            try:
-                processed_result["json_content"] = json.loads(text_for_json)
-                logger.debug(f"{log_prefix}: Response successfully parsed as JSON.")
-            except json.JSONDecodeError:
-                logger.debug(f"{log_prefix}: Response text content is not valid JSON. Snippet: '{processed_result['text_content'][:150].replace(os.linesep, ' ')}...'")
-                processed_result["json_content"] = None
-        else:
-            processed_result["json_content"] = None
-
-        if processed_result["status"] == "success":
-            logger.info(f"{log_prefix}: Query processing successful. Text snippet: '{str(processed_result['text_content'])[:100].replace(os.linesep, ' ')}...'. JSON detected: {processed_result['json_content'] is not None}.")
+            try: processed_result["json_content"] = json.loads(text_for_json); logger.debug(f"{log_prefix}: Response parsed as JSON.")
+            except json.JSONDecodeError: logger.debug(f"{log_prefix}: Response not valid JSON. Snippet: '{processed_result['text_content'][:150].replace(os.linesep, ' ')}...'"); processed_result["json_content"] = None
+        else: processed_result["json_content"] = None
+        if processed_result["status"] == "success": logger.info(f"{log_prefix}: Query processing successful. Text snippet: '{str(processed_result['text_content'])[:100].replace(os.linesep, ' ')}...'. JSON: {processed_result['json_content'] is not None}.")
         return processed_result
 
     def query_vision_model(
-        self,
-        prompt: str,
-        image_data: Optional[np.ndarray] = None,
-        model_name_override: Optional[str] = None,
-        custom_generation_config: Optional[GenerationConfig] = None,
-        custom_safety_settings: Optional[List[Any]] = None,
+        self, prompt: str, image_data: Optional[np.ndarray] = None, model_name_override: Optional[str] = None,
+        custom_generation_config: Optional[GenerationConfig] = None, custom_safety_settings: Optional[List[Any]] = None,
     ) -> Dict[str, Any]:
-        start_time = time.perf_counter()
-        model_to_use = model_name_override if model_name_override else self.default_model_name
+        start_time = time.perf_counter(); model_to_use = model_name_override if model_name_override else self.default_model_name
         log_prefix = f"GeminiQuery (Model: '{model_to_use}')"
-
-        result: Dict[str, Any] = {
-            "status": "error_client", "text_content": None, "json_content": None,
-            "error_message": "Gemini API client not initialized (e.g., missing or invalid API key).",
-            "model_used": model_to_use, "latency_ms": 0, "raw_gemini_response": None,
-        }
-
-        if not self.client_initialized:
-            logger.error(f"{log_prefix}: {result['error_message']}")
-            result["latency_ms"] = int((time.perf_counter() - start_time) * 1000)
-            return result
+        result: Dict[str, Any] = {"status": "error_client", "text_content": None, "json_content": None, "error_message": "Client not initialized.", "model_used": model_to_use, "latency_ms": 0, "raw_gemini_response": None}
+        if not self.client_initialized: logger.error(f"{log_prefix}: {result['error_message']}"); result["latency_ms"] = int((time.perf_counter() - start_time) * 1000); return result
 
         api_contents, input_error_result = self._validate_and_prepare_api_input(prompt, image_data, log_prefix)
-        if input_error_result:
-            result.update(input_error_result)
-            result["latency_ms"] = int((time.perf_counter() - start_time) * 1000)
-            return result
+        if input_error_result: result.update(input_error_result); result["latency_ms"] = int((time.perf_counter() - start_time) * 1000); return result
 
-        prompt_summary_for_log = (prompt[:150].replace(os.linesep, " ") + "...") if len(prompt) > 153 else prompt.replace(os.linesep, " ")
-        logger.info(f"{log_prefix}: Sending query. Prompt summary: '{prompt_summary_for_log}'. Image provided: {image_data is not None}.")
-
+        prompt_summary = (prompt[:150].replace(os.linesep, " ") + "...") if len(prompt) > 153 else prompt.replace(os.linesep, " ")
+        logger.info(f"{log_prefix}: Sending query. Prompt: '{prompt_summary}'. Image: {image_data is not None}.")
         effective_gen_config = custom_generation_config if custom_generation_config else self.generation_config
         effective_safety_settings = custom_safety_settings if custom_safety_settings is not None else self.safety_settings
-        if effective_safety_settings is None:
-            logger.warning(f"{log_prefix}: No safety settings; API defaults apply.")
-            effective_safety_settings = []
-
+        if effective_safety_settings is None: logger.warning(f"{log_prefix}: No safety settings; API defaults apply."); effective_safety_settings = []
         model_instance = genai.GenerativeModel(model_name=model_to_use, generation_config=effective_gen_config, safety_settings=effective_safety_settings) # type: ignore
-
-        sdk_response, sdk_error_result = self._execute_sdk_call(model_instance, api_contents or [], log_prefix) # api_contents known to be non-None here
-
-        if sdk_error_result:
-            result.update(sdk_error_result)
-        else:
-            processed_response_data = self._process_sdk_response(sdk_response, log_prefix)
-            result.update(processed_response_data)
-
+        sdk_response, sdk_error_result = self._execute_sdk_call(model_instance, api_contents or [], log_prefix)
+        if sdk_error_result: result.update(sdk_error_result)
+        else: result.update(self._process_sdk_response(sdk_response, log_prefix))
         result["latency_ms"] = int((time.perf_counter() - start_time) * 1000)
-        logger.info(f"{log_prefix}: Query finished. Final Status: '{result['status']}'. Latency: {result['latency_ms']}ms.")
+        logger.info(f"{log_prefix}: Query finished. Status: '{result['status']}'. Latency: {result['latency_ms']}ms.")
         return result
