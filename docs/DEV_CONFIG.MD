@@ -38,7 +38,7 @@ Focus will shift to planning for future enhancements (`vFuture`).
   - Phase 4 (Documentation) - `COMPLETED`.
 
 - **Active Version (Current State):** `v5.0.0 (AI-Driven Profile Generation) - STABLE`
-  - **Primary Goal for Active Version:** This version is feature-complete. Current activities involve maintenance, addressing any post-release feedback, and planning for future development cycles (`vFuture`).
+  - **Primary Goal for Active Version:** This version is feature-complete. Current activities involve post-release refactoring, unit test implementation, E2E testing, and planning for future development cycles (`vFuture`).
 - **Next Development Cycle Focus:** `vFuture - Planning Phase`
   - Evaluate features listed under "vFuture" in `FEATURE_ROADMAP.MD`.
   - Gather user feedback on v5.0.0 to inform priorities.
@@ -67,7 +67,7 @@ Focus will shift to planning for future enhancements (`vFuture`).
 - **CLI:** `argparse`.
 - **GUI:** `CustomTkinter`.
 - **AI Vision API (v4.0.0+):** `google-generativeai` (Python SDK for Gemini).
-- **Unit Testing Framework (Future):** `pytest` (Status: `Pending DevLead Enablement`)
+- **Unit Testing Framework:** `pytest` (Status: `Planning` - for v5.0.2 implementation)
 - **Linter:** `Flake8` (Status: `Enabled`)
 - **Formatter:** `Black` (Status: `Enabled`)
 - **Import Sorter (Future):** `isort` (Status: `Pending DevLead Enablement`)
@@ -96,6 +96,6 @@ Focus will shift to planning for future enhancements (`vFuture`).
 - **Key Dependencies Installation (Windows Focus):**
   - Ensure Python 3.9+ is installed and in PATH.
   - Create virtual environment: `python -m venv .venv` & activate.
-  - Install packages: `pip install -r requirements.txt`.
+  - Install packages: `pip install -r requirements.txt`. (Ensure `requirements.txt` is created and maintained).
   - **Tesseract OCR Engine:** Must be installed system-wide and in PATH for OCR features.
   - **(v4.0.0+) Gemini API Key:** Requires a `.env` file with `GEMINI_API_KEY=your_key`.

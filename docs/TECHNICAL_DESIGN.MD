@@ -2,7 +2,7 @@
 
 This document outlines the technical design and architectural considerations for the Mark-I visual automation tool. It reflects decisions made in the Architectural Decision Records (ADRs) and current implementation status.
 Version 4.0.0 (Gemini-Powered Visual Intelligence), including all its sub-phases (Phase 1: Core Vision Query, Phase 1.5: Bounding Box Actions, Phase 2: Gemini-Informed Decision Making, and Phase 3: Natural Language Command Interface), is functionally complete.
-**This document now incorporates the detailed design for v5.0.0, focusing on AI-Driven Profile Generation as per ADR-009, including Phase 2 GUI Workflow and AI-Assisted Element Suggestion details.**
+**This document now incorporates the detailed design for v5.0.0, focusing on AI-Driven Profile Generation as per ADR-009, including Phase 2 GUI Workflow and AI-Assisted Element Suggestion details. It also includes considerations for the upcoming Unit Testing initiative (v5.0.2).**
 
 ## 1. Core Architecture
 
@@ -78,6 +78,7 @@ The tool is modular, comprising several key Python components, all residing with
 - **CLI Framework:** `argparse` (Python built-in) (ADR-005).
 - **GUI Framework:** `CustomTkinter` (and its dependency `Pillow` for `CTkImage`) (ADR-005).
 - **Concurrency (Bot Runtime):** Python `threading` module (ADR-006).
+- **Unit Testing:** `pytest` (and `pytest-cov` for coverage) - to be implemented in v5.0.2.
 
 ## 3. Defining and Capturing Regions
 
@@ -179,10 +180,36 @@ _(As finalized for v4.0.0. It executes primitive actions based on specs from `Ru
 
 ## 13. Testing Strategy
 
+The project employs a multi-layered testing approach to ensure quality and stability.
+
+### 13.1. Manual End-to-End (E2E) Testing
+-   **Description:** Comprehensive manual testing of all user-facing features and workflows, simulating real user scenarios. This includes:
+    -   CLI command execution (`run`, `edit`, legacy `add-region`).
+    -   Full GUI Profile Editor (`MainAppWindow`) functionality: creating, editing, saving, loading profiles with all condition/action types, including Gemini-powered features.
+    -   AI-Driven Profile Generation (`ProfileCreationWizardWindow`): complete workflow from goal input to profile saving and execution of generated profiles.
+-   **Focus:** Validating overall system behavior, usability, integration of components, and correctness of automation outcomes.
+-   **Responsibility:** Primarily DevLead.
+-   **Timing:** Performed for major releases (e.g., v5.0.3) and significant feature additions.
+
+### 13.2. Unit Testing (`pytest`) - (v5.0.2 Initiative)
+-   **Framework:** `pytest` (with `pytest-cov` for coverage reporting).
+-   **Goal:** To test individual units of code (functions, methods, classes) in isolation to verify their correctness.
+-   **Scope:**
+    -   **Core Logic:** Functions within `ConfigManager` (profile parsing, path resolution), `AnalysisEngine` (specific analysis algorithms like pixel color, average color, template matching logic before OpenCV calls), `RulesEngine` (condition evaluation logic, variable substitution), `ActionExecutor` (coordinate calculation logic).
+    -   **Utility Functions:** Any helper functions in modules like `gui_utils.py`.
+    -   **AI Component Logic (Non-API parts):** Internal logic within `StrategyPlanner` (plan parsing/validation), `ProfileGenerator` (profile data assembly, AI suggestion parsing), `GeminiDecisionModule` (NLU plan parsing, sub-action mapping).
+-   **Approach:**
+    -   Tests will be placed in a `tests/` directory at the project root, mirroring the `mark_i/` package structure (e.g., `tests/core/test_config_manager.py`).
+    -   **Mocking:** External dependencies (Gemini API calls via `GeminiAnalyzer`, `pyautogui` calls, `Pillow.ImageGrab`, `cv2` I/O, `pytesseract`) **MUST** be mocked using `unittest.mock.patch` or `pytest-mock` to ensure tests are fast, deterministic, and don't rely on external services or UI.
+    -   Focus on testing different input paths, edge cases, and expected outputs.
+    -   Aim for clear, concise, and readable test cases.
+-   **Benefits:** Early bug detection, easier refactoring, improved code design (testable code is often better designed), documentation via tests.
+-   **Integration with Refactoring:** Unit tests will be written for newly refactored code (v5.0.1) and for new code going forward.
+
 ### 13.x. (NEW - v5.0.0): Testing AI-Driven Profile Generation
 
 - **Unit/Integration for Backend:** Mock `GeminiAnalyzer` for `StrategyPlanner` (test plan parsing) and `ProfileGenerator` (test suggestion parsing and profile data assembly).
-- **End-to-End (Manual with Real API):** Test full workflow from user goal input -> plan generation -> interactive element definition -> final profile saving. Evaluate quality and usability of generated profiles.
+- **End-to-End (Manual with Real API):** Test full workflow from user goal input -> plan generation -> interactive element definition -> final profile saving. Evaluate quality and usability of generated profiles. (This is part of the broader E2E testing for v5.0.3).
 - **GUI Testing:** Test the `ProfileCreationWizardWindow` for usability, correct data flow with backend, and graceful error handling.
 
 ---

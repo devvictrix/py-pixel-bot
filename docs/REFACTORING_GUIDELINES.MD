@@ -90,10 +90,12 @@ Maintainable code is easy to modify, fix, and extend.
 ### 3.5. Testing
 *   **Guideline:** Implement a comprehensive testing strategy.
 *   **Action:**
-    *   **Unit Tests (`pytest`):** Write unit tests for core logic functions, utility classes, and individual methods within engines, especially those with complex calculations or decision trees. (Status: `Pending DevLead Enablement` for `pytest` as per `DEV_CONFIG.MD`).
-    *   **Integration Tests:** Test interactions between modules (e.g., `RulesEngine` with `AnalysisEngine` and `ActionExecutor`). Mock external dependencies like `GeminiAnalyzer` for these tests.
-    *   **End-to-End (E2E) Testing:** Manually test complete user workflows (CLI `run`, GUI profile editing, AI Profile Generation) as outlined in `FEATURE_ROADMAP.MD` (e.g., v5.0.1 Manual E2E Testing).
-    *   Aim for good test coverage of critical components.
+    *   **Unit Tests (`pytest`):** Implement unit tests using `pytest` for core logic, utilities, and isolated components. (This is an **active initiative** as of v5.0.2 - see `FEATURE_ROADMAP.MD`).
+        *   Mock external dependencies (APIs, UI libraries, file system I/O) to ensure tests are isolated and deterministic.
+        *   Focus on testing business logic, calculations, and state changes within individual units.
+    *   **Integration Tests:** Test interactions between modules (e.g., `RulesEngine` with `AnalysisEngine` and `ActionExecutor`). Mock external dependencies like `GeminiAnalyzer` for these tests. (Future goal).
+    *   **End-to-End (E2E) Testing:** Manually test complete user workflows (CLI `run`, GUI profile editing, AI Profile Generation) as outlined in `FEATURE_ROADMAP.MD` (e.g., v5.0.3 Manual E2E Testing).
+    *   Aim for good test coverage of critical components, especially after refactoring and for new features.
 
 ### 3.6. Code-Level Documentation
 *   **Guideline:** Document code to explain its purpose, usage, and complex parts.
@@ -218,10 +220,10 @@ Design patterns are reusable solutions to commonly occurring problems within a g
 
 ### 6.2. Approach
 *   **Small, Incremental Changes:** Avoid large, sweeping refactors that can destabilize the codebase. Make small, testable changes.
-*   **Test-Driven Refactoring (if tests exist):** Ensure existing tests pass after each small refactoring step. If not, write tests first for the area being refactored.
+*   **Test-Driven Refactoring:** Write unit tests for the area being refactored *before* refactoring. Ensure these tests (and any existing relevant tests) pass after each small refactoring step. This provides a safety net. (Unit testing is being introduced in v5.0.2).
 *   **Focus on Pain Points:** Prioritize refactoring areas that are difficult to work with or are frequent sources of bugs.
 *   **Use Existing Documentation:** Refer to ADRs and `TECHNICAL_DESIGN.MD` to ensure refactoring aligns with established architectural decisions.
 
 ## 7. Conclusion
 
-Refactoring for Modularity, Maintainability, and Readability is a continuous investment that pays off in the long run. By applying these guidelines, the Mark-I team can ensure the project remains robust, adaptable, and a pleasure to work on as it grows in capability and complexity.
+Refactoring for Modularity, Maintainability, and Readability is a continuous investment that pays off in the long run. By applying these guidelines, and by incorporating a robust unit testing strategy, the Mark-I team can ensure the project remains robust, adaptable, and a pleasure to work on as it grows in capability and complexity.
