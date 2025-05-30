@@ -1,8 +1,10 @@
+# File: mark_i/ui/cli.py
 import argparse
 import logging
 import os
 import sys
 import time  # For simple sleep in run command
+from typing import Optional # Added this line
 
 # --- Placeholder Command Handlers ---
 # Logger for this module, using hierarchical naming
@@ -173,7 +175,7 @@ def handle_add_region(args):  # Legacy, MainAppWindow's "Add Region" is preferre
         # RegionSelectorWindow needs a ConfigManager for the profile being edited.
         # It doesn't save directly TO this CM, but uses it for context (e.g., existing region names if needed).
         # The MainAppWindow now handles saving changes made via RegionSelector.
-        cm_for_region_selector_context = ConfigManager(profile_path_or_name=resolved_profile_path, create_if_missing=False)
+        cm_for_region_selector_context = ConfigManager(profile_name_or_path=resolved_profile_path, create_if_missing=False)
 
         # RegionSelectorWindow typically needs a master CTk window.
         # For CLI invocation, we can create a temporary hidden root.

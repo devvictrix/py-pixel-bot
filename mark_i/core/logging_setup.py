@@ -1,8 +1,9 @@
 import logging
-import logging.handlers  # For TimedRotatingFileHandler
+import logging.handlers
 import os
 import sys
 from datetime import date  # For default log filename if TimedRotatingFileHandler isn't used (not current)
+from typing import Optional  # Added this line
 
 # This name should be used by all modules in the application when getting a logger
 # e.g., logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.my_module")
