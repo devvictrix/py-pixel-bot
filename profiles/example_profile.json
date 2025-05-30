@@ -26,18 +26,18 @@
         },
         {
             "name": "test",
-            "x": 306,
-            "y": 234,
-            "width": 1205,
-            "height": 696,
+            "x": 288,
+            "y": 268,
+            "width": 902,
+            "height": 414,
             "comment": "12"
         },
         {
-            "name": "test2",
-            "x": 260,
-            "y": 153,
-            "width": 1503,
-            "height": 917,
+            "name": "w",
+            "x": 366,
+            "y": 337,
+            "width": 573,
+            "height": 449,
             "comment": "Region edited: test"
         }
     ],
@@ -111,22 +111,22 @@
                 "type": "always_true"
             },
             "action": {
-                "type": "log_message",
-                "message": "Rule 'test' triggered.",
-                "level": "INFO"
+                "type": "type_text"
             }
         },
         {
-            "name": "w",
+            "name": "ww",
             "region": "",
             "condition": {
-                "type": "always_true"
+                "type": "always_true",
+                "region": ""
             },
             "action": {
                 "type": "log_message",
                 "message": "Rule 'w' triggered.",
                 "level": "INFO"
-            }
+            },
+            "comment": ""
         }
     ]
 }

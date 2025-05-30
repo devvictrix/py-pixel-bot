@@ -8,6 +8,7 @@ import google.generativeai as genai
 # Adjusted imports: Removed 'Part' from here as it causes an ImportError
 from google.generativeai.types import GenerationConfig, HarmCategory, HarmBlockThreshold 
 from google.generativeai.types import BlockedPromptException, StopCandidateException 
+from google.api_core import exceptions as google_api_exceptions # Added this import
 
 from PIL import Image 
 import cv2 

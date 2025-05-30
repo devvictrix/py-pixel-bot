@@ -7,10 +7,11 @@ import copy
 import time 
 import threading 
 from typing import Optional, Dict, Any, List, Union, Callable, Tuple # Added Tuple
-
+ 
 import customtkinter as ctk
 import numpy as np
-from PIL import Image, ImageTk, ImageDraw, UnidentifiedImageError, ImageFont 
+from PIL import Image, ImageTk, ImageDraw, UnidentifiedImageError, ImageFont, ImageGrab # Added ImageGrab
+import cv2 # Added cv2
 
 from mark_i.generation.strategy_planner import StrategyPlanner, IntermediatePlan, IntermediatePlanStep
 from mark_i.generation.profile_generator import ProfileGenerator, DEFAULT_CONDITION_STRUCTURE_PG, DEFAULT_ACTION_STRUCTURE_PG
