@@ -1,3 +1,4 @@
+// File: docs/FEATURE_ROADMAP.MD
 # Feature Roadmap & Status for Mark-I
 
 This document tracks planned features and their status for the Mark-I visual automation tool. Version 4.0.0 (Gemini-Powered Visual Intelligence) is COMPLETE.
@@ -86,6 +87,8 @@ This document tracks planned features and their status for the Mark-I visual aut
 | v5.0.0 (Phase 3 Integration & Refinement)                                               | Done        | High     | AI Profile Generation     | Integration: Full End-to-End AI Profile Generation    | Integrate all components: Goal -> Plan -> Interactive Profile Element Definition (with AI assist & GUI) -> Mark-I JSON Profile Output (including saving staged template images). Thorough testing of entire workflow. **DevLead testing assumed successful.**      | All v5.0.0 modules.                                                                                                                                     |
 | v5.0.0 (Phase 3 Integration & Refinement)                                               | Deferred    | Medium   | AI Profile Generation     | Profile Refinement Loop (Basic)                       | Basic capability for user to provide feedback on a generated plan/profile, triggering a re-prompt to Gemini for refinement.                                                                                                                                 | `StrategyPlanner`, `ProfileGenerator`. **Deferred to post-v5.0.0 to focus core release.**                                                               |
 | v5.0.0 (Phase 4 Documentation)                                                          | Done        | High     | AI Profile Generation     | **Final Documentation for v5.0.0**                    | Update README, User Guides, Technical Design, and other relevant documents for the AI Profile Creator feature.                                                                                                                                              | Markdown, Code Docstrings.                                                                                                                              |
+| **v5.0.x (Post-Release Testing & Refinement)**                                          |
+| v5.0.1                                                                                  | Planning    | Critical | Testing                   | **v5.0.0 Manual End-to-End (E2E) Testing**            | Perform comprehensive manual testing of all v5.0.0 features, including the AI-Driven Profile Generator workflow (goal input, plan generation, interactive element definition with AI-assist, profile saving) and execution of AI-generated profiles. | This is a form of End-to-End (E2E) testing, verifying the entire system flow. Focus on stability, usability, and correctness of generated profiles. |
 | **vFuture (Other Enhancements - Post v5.0.0 or Parallel if scope allows)**              |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis         | Fuzzy Template Matching & Tolerance                   | Allow template matching with varying degrees of tolerance for slight changes in color, rotation, or scale.                                                                                                                                                  | Advanced `OpenCV-Python` techniques.                                                                                                                    |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis         | Motion/Change Detection within Region                 | Detect if any significant visual change or motion occurs within a monitored region, not just static states.                                                                                                                                                 | Frame differencing, background subtraction.                                                                                                             |
@@ -109,9 +112,13 @@ This document tracks planned features and their status for the Mark-I visual aut
 
 **Mark-I v5.0.0, featuring the AI-Driven Profile Generator, is now functionally complete and documented.**
 
-**Future Considerations (Post v5.0.0):**
+**Current Focus (v5.0.x):**
+- **v5.0.1 Manual End-to-End (E2E) Testing:** This phase involves comprehensive manual testing of all v5.0.0 functionalities to ensure stability, usability, and correctness. This is a critical step before considering v5.0.0 fully "battle-tested".
+
+**Future Considerations (Post v5.0.x):**
+- Address any bugs or critical refinements identified during E2E testing.
 - Revisit the deferred "Profile Refinement Loop (Basic)" for the AI Profile Creator.
 - Explore items listed under "vFuture" on the roadmap based on user feedback and project priorities.
-- Continuous performance optimization and bug fixing.
+- Continuous performance optimization.
 
-This marks the successful completion of the planned development for Mark-I v5.0.0.
+This marks the successful completion of the planned development for Mark-I v5.0.0, moving into a dedicated testing and refinement phase.
