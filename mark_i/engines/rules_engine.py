@@ -31,9 +31,9 @@ from mark_i.engines.condition_evaluators import (
 logger = logging.getLogger(f"{APP_ROOT_LOGGER_NAME}.engines.rules_engine")
 
 # Regex for finding placeholders like {var_name} or {var_name.key1.0.key2}
-# Groups: 1: var_name, 2: full_dot_path (e.g., .key1.0.key2) - this is group(2) of the match object
-#         The subsequent groups are internal to group 2's repetition.
-PLACEHOLDER_REGEX = re.compile(r"\{([\w_]+)((\.?[\w_]+)*(\.\d+)*)*\}")
+# Group 1: var_name
+# Group 2: the entire dot path starting with the first dot (e.g., .value.user_list.0.name)
+PLACEHOLDER_REGEX = re.compile(r"\{([\w_]+)((?:\.[\w\d_]+)*)\}")
 TEMPLATES_SUBDIR_NAME = "templates"  # Standard subdirectory for template images
 
 
@@ -210,14 +210,14 @@ class RulesEngine:
             def replace_match(match_obj: re.Match) -> str:
                 full_placeholder = match_obj.group(0)
                 var_name = match_obj.group(1)
-                dot_path_full_segment = match_obj.group(2) # e.g., ".value.user_list.0.name" or None
+                dot_path_full_segment = match_obj.group(2) # This will be like ".value.user_list.0.name"
 
                 if var_name in variable_context:
-                    current_val = variable_context[var_name] # Start with the root of the variable
+                    current_val = variable_context[var_name] 
 
-                    if dot_path_full_segment: # If there's a path like .value.key or .key
+                    if dot_path_full_segment: 
                         path_keys = dot_path_full_segment.strip(".").split(".")
-                        resolved_val = current_val # Start traversal from current_val
+                        resolved_val = current_val 
                         try:
                             for key_part in path_keys:
                                 if resolved_val is None:
@@ -229,23 +229,22 @@ class RulesEngine:
                                     idx = int(key_part)
                                     if 0 <= idx < len(resolved_val):
                                         resolved_val = resolved_val[idx]
-                                    else: # Index out of bounds
+                                    else: 
                                         raise IndexError(f"Index {idx} out of bounds for list of length {len(resolved_val)} in '{var_name}{dot_path_full_segment}'.")
-                                else: # Cannot traverse further (e.g. trying to key into a string or int)
+                                else: 
                                     logger.warning(
                                         f"{log_context_prefix}, Subst: Cannot access '{key_part}' in '{var_name}'. Path: '{dot_path_full_segment}'. Current value type: {type(resolved_val)}. Placeholder left."
                                     )
                                     return full_placeholder
-                            return str(resolved_val) # Successfully traversed
+                            return str(resolved_val) 
                         except (KeyError, IndexError, TypeError) as e:
                             logger.warning(f"{log_context_prefix}, Subst: Path resolution error for '{var_name}{dot_path_full_segment}': {e}. Placeholder left.")
                             return full_placeholder
-                    else: # No dot path, e.g. just {var_name}
-                        # If current_val is a dict that looks like our "wrapped" structure, unwrap its "value"
+                    else: 
                         if isinstance(current_val, dict) and "value" in current_val and "_source_region_for_capture_" in current_val:
                             return str(current_val["value"])
-                        return str(current_val) # Otherwise, just stringify the whole variable
-                else: # Variable not in context
+                        return str(current_val) 
+                else: 
                     logger.warning(f"{log_context_prefix}, Subst: Variable '{var_name}' not in context. Placeholder '{full_placeholder}' left.")
                     return full_placeholder
 
