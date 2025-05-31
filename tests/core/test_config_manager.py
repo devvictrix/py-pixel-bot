@@ -10,7 +10,7 @@ from mark_i.ui.gui.gui_config import DEFAULT_PROFILE_STRUCTURE  # For comparison
 # Define a fixed project root for testing path resolution consistently
 # For Windows, an absolute path starting with a drive letter is more robust for os.path.abspath comparisons
 # Using os.path.join to construct it to be OS-agnostic as much as possible for the test definition itself.
-TEST_PROJECT_ROOT_BASE = "C:" if os.name == "nt" else "/"  # Base for absolute path
+TEST_PROJECT_ROOT_BASE = "C:\\" if os.name == "nt" else "/"  # Ensures C:\ for absolute paths
 TEST_PROJECT_ROOT = os.path.join(TEST_PROJECT_ROOT_BASE, "test_project_root_dir_for_cm_tests")
 EXPECTED_PROFILES_DIR_CM = os.path.join(TEST_PROJECT_ROOT, PROFILES_DIR_NAME)
 
@@ -68,13 +68,13 @@ def test_config_manager_init_create_if_missing_no_path(mock_project_root_cm):
 
 def test_config_manager_init_non_existent_profile_create_false(mock_project_root_cm, monkeypatch):
     non_existent_profile = "non_existent_profile_for_test.json"
-    # ConfigManager will resolve this to be inside EXPECTED_PROFILES_DIR_CM due to mock_project_root_cm
-    expected_full_path_in_cm = os.path.join(EXPECTED_PROFILES_DIR_CM, non_existent_profile)
+    # Ensure expected_full_path_in_cm matches how ConfigManager resolves it
+    expected_full_path_in_cm = os.path.abspath(os.path.join(EXPECTED_PROFILES_DIR_CM, non_existent_profile))
 
     # Mock os.path.exists to return False specifically for the path ConfigManager will try to access
     monkeypatch.setattr(os.path, "exists", lambda path_arg: path_arg != expected_full_path_in_cm)
 
-    with pytest.raises(FileNotFoundError) as excinfo:  # Changed from OSError based on initial traceback showing FileNotFoundError leads to OSError
+    with pytest.raises(FileNotFoundError) as excinfo:
         ConfigManager(profile_path_or_name=non_existent_profile, create_if_missing=False)
     # The error message comes from the FileNotFoundError raised in __init__ by ConfigManager itself.
     assert str(excinfo.value).startswith(f"Profile file not found: {expected_full_path_in_cm}")

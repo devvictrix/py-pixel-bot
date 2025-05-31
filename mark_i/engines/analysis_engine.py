@@ -247,9 +247,10 @@ class AnalysisEngine:
             return None
 
         original_k_requested = num_colors  # For logging
-        if not (isinstance(num_colors, int) and num_colors > 0):
-            logger.warning(f"{log_prefix}: Invalid num_colors '{original_k_requested}'. Using 3.")
-            num_colors = 3
+
+        if not isinstance(num_colors, int) or num_colors <= 0:
+            logger.warning(f"{log_prefix}: Invalid num_colors '{original_k_requested}'. Cannot perform K-Means. Returning empty list.")
+            return []
 
         num_pixels = image_data.shape[0] * image_data.shape[1]
         if num_pixels == 0:
@@ -259,7 +260,7 @@ class AnalysisEngine:
             logger.warning(f"{log_prefix}: Image pixels ({num_pixels}) < k ({num_colors}). Reducing k to {num_pixels}.")
             num_colors = num_pixels
 
-        if num_colors == 0:  # Can happen if original_k_requested was <=0 and defaulted to 3, then num_pixels was 0. Or if num_pixels reduced it to 0.
+        if num_colors == 0:
             logger.warning(f"{log_prefix}: Effective k is 0 after adjustments (original k: {original_k_requested}). Cannot perform K-Means. Returning empty list.")
             return []
 
@@ -273,19 +274,14 @@ class AnalysisEngine:
 
             unique_cluster_indices, pixel_counts_per_cluster = np.unique(labels_flat, return_counts=True)
 
-            # Ensure number of centers matches actual unique clusters found if k was reduced.
-            # If cv2.kmeans returns fewer centers than requested 'num_colors', we should only process those.
             actual_num_centers_found = centers_float_bgr.shape[0]
 
             dominant_colors_list: List[Dict[str, Any]] = []
             for i, cluster_idx_from_unique in enumerate(unique_cluster_indices):
-                # cluster_idx_from_unique is an index into the labels array,
-                # and should also be a valid index for centers_float_bgr if everything aligns.
-                # However, actual_num_centers_found is the robust check.
                 if cluster_idx_from_unique < actual_num_centers_found:
                     bgr_float_components = centers_float_bgr[cluster_idx_from_unique]
                     bgr_int_components = [int(round(c)) for c in bgr_float_components]
-                    occurrence_percentage = (pixel_counts_per_cluster[i] / float(num_pixels)) * 100.0  # Ensure float division
+                    occurrence_percentage = (pixel_counts_per_cluster[i] / float(num_pixels)) * 100.0
                     dominant_colors_list.append({"bgr_color": bgr_int_components, "percentage": float(occurrence_percentage)})
                 else:  # pragma: no cover
                     logger.warning(

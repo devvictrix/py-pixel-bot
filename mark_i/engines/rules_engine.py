@@ -203,58 +203,53 @@ class RulesEngine:
     def _substitute_variables(self, input_value: Any, variable_context: Dict[str, Any], log_context_prefix: str) -> Any:
         if not isinstance(input_value, (str, list, dict)):
             return input_value
-        if not variable_context:
+        if not variable_context: # No variables to substitute
             return input_value
 
         if isinstance(input_value, str):
-
             def replace_match(match_obj: re.Match) -> str:
                 full_placeholder = match_obj.group(0)
                 var_name = match_obj.group(1)
-                dot_path_full_segment = match_obj.group(2)  # This is the full path part like ".key.0.attr"
+                dot_path_full_segment = match_obj.group(2) # e.g., ".value.user_list.0.name" or None
 
                 if var_name in variable_context:
-                    current_val_wrapped = variable_context[var_name]
-                    current_val_to_traverse = None
+                    current_val = variable_context[var_name] # Start with the root of the variable
 
-                    if isinstance(current_val_wrapped, dict) and "value" in current_val_wrapped:
-                        current_val_to_traverse = current_val_wrapped["value"]
-                    else:
-                        current_val_to_traverse = current_val_wrapped  # Could be None or a simple value
-
-                    if current_val_to_traverse is None and dot_path_full_segment:
-                        logger.warning(f"{log_context_prefix}, Subst: Variable '{var_name}' is None, cannot traverse path '{dot_path_full_segment}'. Placeholder left.")
-                        return full_placeholder
-
-                    if dot_path_full_segment:
+                    if dot_path_full_segment: # If there's a path like .value.key or .key
                         path_keys = dot_path_full_segment.strip(".").split(".")
-                        resolved_val = current_val_to_traverse
+                        resolved_val = current_val # Start traversal from current_val
                         try:
                             for key_part in path_keys:
-                                if resolved_val is None:  # Check before trying to access
+                                if resolved_val is None:
                                     logger.warning(f"{log_context_prefix}, Subst: Encountered None while traversing path for '{var_name}{dot_path_full_segment}' at '{key_part}'. Placeholder left.")
                                     return full_placeholder
                                 if isinstance(resolved_val, dict):
                                     resolved_val = resolved_val[key_part]
                                 elif isinstance(resolved_val, list) and key_part.isdigit():
-                                    resolved_val = resolved_val[int(key_part)]
-                                else:
+                                    idx = int(key_part)
+                                    if 0 <= idx < len(resolved_val):
+                                        resolved_val = resolved_val[idx]
+                                    else: # Index out of bounds
+                                        raise IndexError(f"Index {idx} out of bounds for list of length {len(resolved_val)} in '{var_name}{dot_path_full_segment}'.")
+                                else: # Cannot traverse further (e.g. trying to key into a string or int)
                                     logger.warning(
                                         f"{log_context_prefix}, Subst: Cannot access '{key_part}' in '{var_name}'. Path: '{dot_path_full_segment}'. Current value type: {type(resolved_val)}. Placeholder left."
                                     )
                                     return full_placeholder
-                            return str(resolved_val)
+                            return str(resolved_val) # Successfully traversed
                         except (KeyError, IndexError, TypeError) as e:
                             logger.warning(f"{log_context_prefix}, Subst: Path resolution error for '{var_name}{dot_path_full_segment}': {e}. Placeholder left.")
                             return full_placeholder
-                    else:  # No dot path
-                        return str(current_val_to_traverse)  # This handles None correctly by converting to "None"
-                else:
+                    else: # No dot path, e.g. just {var_name}
+                        # If current_val is a dict that looks like our "wrapped" structure, unwrap its "value"
+                        if isinstance(current_val, dict) and "value" in current_val and "_source_region_for_capture_" in current_val:
+                            return str(current_val["value"])
+                        return str(current_val) # Otherwise, just stringify the whole variable
+                else: # Variable not in context
                     logger.warning(f"{log_context_prefix}, Subst: Variable '{var_name}' not in context. Placeholder '{full_placeholder}' left.")
                     return full_placeholder
 
             return PLACEHOLDER_REGEX.sub(replace_match, input_value)
-
         elif isinstance(input_value, list):
             return [self._substitute_variables(item, variable_context, log_context_prefix) for item in input_value]
         elif isinstance(input_value, dict):
