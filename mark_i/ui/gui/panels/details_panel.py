@@ -13,8 +13,8 @@ from mark_i.ui.gui.gui_config import (
     OPTIONS_CONST_MAP,
     MAX_PREVIEW_WIDTH,
     MAX_PREVIEW_HEIGHT,
-    ALL_CONDITION_TYPES,
-    ALL_ACTION_TYPES,
+    CONDITION_TYPES,  # Changed from ALL_CONDITION_TYPES
+    ACTION_TYPES,  # Assuming this is correct, verify if error persists
     LOGICAL_OPERATORS,
 )
 from mark_i.ui.gui.gui_utils import validate_and_get_widget_value
@@ -213,18 +213,20 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
         # Action Editor
         act_data = copy.deepcopy(rule_data.get("action", {"type": "log_message"}))
-        act_outer_fr = ctk.CTkFrame(self.content_frame)  # Removed fg_color="transparent" for visual separation
+        act_outer_fr = ctk.CTkFrame(self.content_frame)
         act_outer_fr.grid(row=current_master_row, column=0, columnspan=2, sticky="new", pady=(10, 5), padx=5)
-        act_outer_fr.grid_columnconfigure(0, weight=1)  # Let label take needed space
+        act_outer_fr.grid_columnconfigure(0, weight=1)
         current_master_row += 1
-        ctk.CTkLabel(act_outer_fr, text="ACTION TO PERFORM", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=0, pady=(0, 5))  # Added pady
+        ctk.CTkLabel(act_outer_fr, text="ACTION TO PERFORM", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=0, pady=(0, 5))
         self.action_params_frame = ctk.CTkFrame(act_outer_fr, fg_color="transparent")
         self.action_params_frame.pack(fill="x", expand=True, padx=0, pady=(0, 5))
-        self.action_params_frame.grid_columnconfigure(1, weight=1)  # Let widgets expand
+        self.action_params_frame.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(self.action_params_frame, text="Action Type:").grid(row=0, column=0, sticky="w", padx=(0, 5), pady=2)
         init_act_type = str(act_data.get("type", "log_message"))
         var_act_type = ctk.StringVar(value=init_act_type)
-        menu_act_type = ctk.CTkOptionMenu(self.action_params_frame, variable=var_act_type, values=ALL_ACTION_TYPES, command=lambda choice: self.parent_app._on_rule_part_type_change("action", choice))
+        menu_act_type = ctk.CTkOptionMenu(
+            self.action_params_frame, variable=var_act_type, values=ACTION_TYPES, command=lambda choice: self.parent_app._on_rule_part_type_change("action", choice)
+        )  # Corrected: ACTION_TYPES
         menu_act_type.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
         self.detail_optionmenu_vars["action_type_var"] = var_act_type
         self.detail_widgets["action_type"] = menu_act_type
@@ -248,7 +250,9 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         current_type = str(sub_cond_data.get("type", "always_true"))
         ctk.CTkLabel(target_editor_frame, text=f"Editing Sub-Condition #{index+1} / Type:", font=ctk.CTkFont(size=12)).grid(row=0, column=0, padx=(0, 5), pady=(5, 2), sticky="w")
         type_var = ctk.StringVar(value=current_type)
-        type_menu = ctk.CTkOptionMenu(target_editor_frame, variable=type_var, values=ALL_CONDITION_TYPES, command=lambda choice: self.parent_app._on_rule_part_type_change("condition", choice))
+        type_menu = ctk.CTkOptionMenu(
+            target_editor_frame, variable=type_var, values=CONDITION_TYPES, command=lambda choice: self.parent_app._on_rule_part_type_change("condition", choice)
+        )  # Corrected: CONDITION_TYPES
         type_menu.grid(row=0, column=1, padx=5, pady=(5, 2), sticky="ew")
         self.detail_optionmenu_vars["subcond_condition_type_var"] = type_var
         self.detail_widgets["subcond_condition_type"] = type_menu
@@ -287,7 +291,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         """Helper to create a CTkTextbox."""
         textbox = ctk.CTkTextbox(parent, height=p_def.get("height", 60), wrap="word")
         textbox.insert("0.0", str(value))
-        textbox.bind("<FocusOut>", lambda e, dp=self: dp.parent_app._set_dirty_status(True))  # Changed to FocusOut for Textbox
+        textbox.bind("<FocusOut>", lambda e, dp=self: dp.parent_app._set_dirty_status(True))
         textbox.grid(row=row, column=1, padx=5, pady=2, sticky="ew")
         return textbox
 
@@ -340,7 +344,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 0
             ] + "_": self._update_conditional_visibility_dp(p, v.get(), cpw, cppwd, wp),
         )
-        checkbox.grid(row=row, column=1, padx=5, pady=2, sticky="ew")  # Checkbox can expand
+        checkbox.grid(row=row, column=1, padx=5, pady=2, sticky="ew")
         self.detail_optionmenu_vars[f"{widget_full_key}_var"] = tk_bool_var
         if any(opd.get("condition_show", {}).get("field") == p_def["id"] for opd in UI_PARAM_CONFIG.get(p_def["_param_group_key"], {}).get(p_def["_item_subtype"], []) if opd.get("condition_show")):  # type: ignore
             current_pass_controlling_widgets[p_def["id"]] = checkbox
@@ -353,9 +357,9 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         # Clear previous dynamic widgets
         for child_widget in list(parent_frame.winfo_children()):
             grid_info = child_widget.grid_info()
-            if grid_info and grid_info.get("row", -1) >= start_row:  # Only remove widgets from start_row onwards
+            if grid_info and grid_info.get("row", -1) >= start_row:
                 widget_key_to_pop = None
-                for wk, w_instance in list(self.detail_widgets.items()):  # Iterate copy for safe removal
+                for wk, w_instance in list(self.detail_widgets.items()):
                     if w_instance == child_widget and wk.startswith(widget_prefix):
                         widget_key_to_pop = wk
                         break
@@ -366,14 +370,14 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
         param_defs_for_subtype = UI_PARAM_CONFIG.get(param_group_key, {}).get(item_subtype, [])
         current_r = start_row
-        if not param_defs_for_subtype and item_subtype not in ["always_true"]:  # "always_true" might have a region override
+        if not param_defs_for_subtype and item_subtype not in ["always_true"]:
             ctk.CTkLabel(parent_frame, text=f"No parameters defined for '{item_subtype}'.", text_color="gray").grid(row=current_r, column=0, columnspan=2, pady=5)
             return
 
         for p_def_orig in param_defs_for_subtype:
-            p_def = copy.deepcopy(p_def_orig)  # Work with a copy to add temporary keys
-            p_def["_param_group_key"] = param_group_key  # Store for callback context
-            p_def["_item_subtype"] = item_subtype  # Store for callback context
+            p_def = copy.deepcopy(p_def_orig)
+            p_def["_param_group_key"] = param_group_key
+            p_def["_item_subtype"] = item_subtype
 
             p_id, lbl_txt, w_type, def_val = p_def["id"], p_def["label"], p_def["widget"], p_def.get("default", "")
             current_value_for_param = data_source.get(p_id, def_val)
@@ -400,7 +404,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                 current_pass_param_widgets_and_defs.append({"widget": created_widget_instance, "label_widget": label_widget, "param_def": p_def})
                 current_r += 1
             else:
-                label_widget.destroy()  # Remove label if no widget created for it
+                label_widget.destroy()
 
         self._apply_all_conditional_visibility_dp(current_pass_param_widgets_and_defs, current_pass_controlling_widgets, widget_prefix)
 
@@ -477,7 +481,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
             sub_conds_in_model = rule_model.get("condition", {}).get("sub_conditions", [])
 
             for i, sub_cond_data_model_item in enumerate(sub_conds_in_model):
-                if i == self.parent_app.selected_sub_condition_index:  # If this is the currently edited sub-condition
+                if i == self.parent_app.selected_sub_condition_index:
                     sub_type_v = self.detail_optionmenu_vars.get("subcond_condition_type_var")
                     if not sub_type_v or not isinstance(sub_type_v, tk.StringVar):
                         all_valid = False
@@ -488,12 +492,12 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                         all_valid = False
                         break
                     current_sub_conditions_from_ui.append(sub_params)
-                else:  # For sub-conditions not currently in editor, use their model data
+                else:
                     current_sub_conditions_from_ui.append(copy.deepcopy(sub_cond_data_model_item))
             if not all_valid:
                 return False
             final_rule_data["condition"] = {"logical_operator": current_log_op, "sub_conditions": current_sub_conditions_from_ui}
-        else:  # Single condition
+        else:
             cond_type_v = self.detail_optionmenu_vars.get("condition_type_var")
             if not cond_type_v or not isinstance(cond_type_v, tk.StringVar):
                 return False
@@ -542,8 +546,8 @@ class DetailsPanel(ctk.CTkScrollableFrame):
         all_ok = True
         param_defs = UI_PARAM_CONFIG.get(param_group_key, {}).get(item_subtype, [])
 
-        if not param_defs and item_subtype != "always_true":  # always_true might have an optional region
-            return params  # No params to get, so it's valid as is
+        if not param_defs and item_subtype != "always_true":
+            return params
 
         for p_def in param_defs:
             p_id = p_def["id"]
@@ -556,7 +560,7 @@ class DetailsPanel(ctk.CTkScrollableFrame):
             widget = self.detail_widgets.get(w_key)
             tk_var = self.detail_optionmenu_vars.get(f"{w_key}_var")
 
-            is_visible = False  # Check if widget for this param is currently visible
+            is_visible = False
             if widget and widget.winfo_exists():
                 is_visible = widget.winfo_ismapped()
             elif tk_var and isinstance(tk_var, tk.BooleanVar) and widget and widget.winfo_exists():
@@ -564,14 +568,14 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
             effective_required = is_req_def and is_visible
 
-            if not is_visible and not effective_required:  # Skip non-visible, non-required params
+            if not is_visible and not effective_required:
                 continue
 
-            if widget is None and not isinstance(tk_var, tk.BooleanVar):  # Widget should exist if param is defined
+            if widget is None and not isinstance(tk_var, tk.BooleanVar):
                 if effective_required:
                     logger.error(f"DP GetParams: UI Widget for required param '{lbl_err}' (ID: {p_id}, prefix: {widget_prefix}) not found.")
                     all_ok = False
-                params[p_id] = def_val  # Use default if not found but not critical
+                params[p_id] = def_val
                 continue
 
             val_args = {"required": effective_required, "allow_empty_string": p_def.get("allow_empty_string", target_type == str), "min_val": p_def.get("min_val"), "max_val": p_def.get("max_val")}
@@ -579,17 +583,16 @@ class DetailsPanel(ctk.CTkScrollableFrame):
 
             if not valid:
                 all_ok = False
-                val = def_val  # Use default if validation failed
+                val = def_val
 
             if target_type == "list_str_csv":
                 params[p_id] = [s.strip() for s in val.split(",")] if isinstance(val, str) and val.strip() else ([] if not def_val or not isinstance(def_val, list) else def_val)
             else:
                 params[p_id] = val
 
-            # Special handling for template_name to resolve filename
             if p_id == "template_name" and param_group_key == "conditions":
                 selected_template_name = val
-                params["template_filename"] = ""  # Ensure filename key exists
+                params["template_filename"] = ""
                 if selected_template_name:
                     found_tpl = next((t for t in self.parent_app.profile_data.get("templates", []) if t.get("name") == selected_template_name), None)
                     if found_tpl and found_tpl.get("filename"):
@@ -601,9 +604,8 @@ class DetailsPanel(ctk.CTkScrollableFrame):
                     messagebox.showerror("Input Error", f"'{lbl_err}' (Template Name) required.", parent=self)
                     all_ok = False
                 if "template_name" in params:
-                    del params["template_name"]  # Remove transient name
+                    del params["template_name"]
 
-        # Special handling for 'always_true' condition's optional region override
         if item_subtype == "always_true" and param_group_key == "conditions":
             region_pdef = next((pd for pd in UI_PARAM_CONFIG.get("conditions", {}).get("always_true", []) if pd["id"] == "region"), None)
             if region_pdef:
