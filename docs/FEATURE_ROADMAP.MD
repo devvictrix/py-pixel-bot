@@ -1,3 +1,5 @@
+// File: docs/FEATURE_ROADMAP.MD
+
 # Feature Roadmap & Status for Mark-I
 
 This document tracks planned features and their status for the Mark-I visual automation tool. Version 4.0.0 (Gemini-Powered Visual Intelligence) is COMPLETE.
@@ -89,7 +91,7 @@ This document tracks planned features and their status for the Mark-I visual aut
 | v5.0.0 (Phase 4 Documentation)                                                          | Done        | High     | AI Profile Generation                 | **Final Documentation for v5.0.0**                                | Update README, User Guides, Technical Design, and other relevant documents for the AI Profile Creator feature.                                                                                                                                              | Markdown, Code Docstrings.                                                                                                                              |
 | **v5.0.x (Post-Release Refinement & Testing)**                                          |
 | v5.0.1                                                                                  | Done        | High     | Code Quality & Maintainability        | Codebase Refactoring (Modularity, Maintainability, Readability)     | Systematic refactoring. **`RulesEngine`, `MainAppWindow`, `DetailsPanel`, `GeminiAnalyzer`, `GeminiDecisionModule` refactored (method decomposition, Strategy Pattern).** Refactoring for v5.0.1 is complete.                                                 | Focus on SRP, file/class sizes, logging, error handling, readability. `REFACTORING_GUIDELINES.MD`.                                                        |
-| v5.0.2                                                                                  | Done        | High     | Testing & DX                          | **Implement Unit Test Infrastructure & Initial Coverage**           | Set up `pytest` framework. Wrote unit tests for: `ConfigManager`, `gui_utils.parse_bgr_string`, all `ConditionEvaluator` classes, all `PrimitiveSubActionExecutor` classes, `AnalysisEngine` methods (mocking CV/OCR), and `RulesEngine` (variable substitution, condition structure). Enhanced edge case coverage. | `pytest`, `pytest-cov`. Mocking external dependencies (Gemini, PyAutoGUI). Refer to `TECHNICAL_DESIGN.MD` Section 13.                                    |
+| v5.0.2                                                                                  | Done        | High     | Testing & DX                          | **Implement Unit Test Infrastructure & Initial Coverage**           | Set up `pytest` framework. Wrote unit tests for: `ConfigManager`, `gui_utils.parse_bgr_string`, all `ConditionEvaluator` classes, all `PrimitiveSubActionExecutor` classes, `AnalysisEngine` methods (mocking CV/OCR), and `RulesEngine` (variable substitution, condition structure). Enhanced edge case coverage. **All reported unit test failures resolved.** | `pytest`, `pytest-cov`. Mocking external dependencies (Gemini, PyAutoGUI). Refer to `TECHNICAL_DESIGN.MD` Section 13.                                    |
 | v5.0.3                                                                                  | Planning    | Critical | Testing                               | **v5.0.0 Manual End-to-End (E2E) Testing**                        | Perform comprehensive manual testing of all v5.0.0 features, including the AI-Driven Profile Generator workflow (goal input, plan generation, interactive element definition with AI-assist, profile saving) and execution of AI-generated profiles. | This is a form of End-to-End (E2E) testing, verifying the entire system flow. Focus on stability, usability, and correctness of generated profiles. |
 | **vFuture (Other Enhancements - Post v5.0.0 or Parallel if scope allows)**              |
 | vFuture                                                                                 | Not Started | Medium   | Advanced Analysis                     | Fuzzy Template Matching & Tolerance                               | Allow template matching with varying degrees of tolerance for slight changes in color, rotation, or scale.                                                                                                                                                  | Advanced `OpenCV-Python` techniques.                                                                                                                    |
@@ -109,12 +111,12 @@ This document tracks planned features and their status for the Mark-I visual aut
 
 **Mark-I v5.0.0, featuring the AI-Driven Profile Generator, is now functionally complete and documented.**
 **Refactoring for v5.0.1 is COMPLETE.**
-**Unit Test Infrastructure & Initial Coverage (including enhanced edge cases) for v5.0.2 is COMPLETE.**
+**Unit Test Infrastructure & Initial Coverage (including enhanced edge cases and resolution of all reported unit test failures) for v5.0.2 is COMPLETE.**
 
 **Current Focus (v5.0.x):**
 - **v5.0.1 Codebase Refactoring:** **DONE.**
 - **v5.0.2 Implement Unit Test Infrastructure & Initial Coverage:** **DONE.**
-    - `pytest` framework setup and comprehensive initial tests (including edge cases) for `ConfigManager`, `gui_utils.parse_bgr_string`, `ConditionEvaluator` classes, `PrimitiveSubActionExecutor` classes, `AnalysisEngine`, and `RulesEngine` (core logic) are complete.
+    - `pytest` framework setup and comprehensive initial tests (including edge cases) for `ConfigManager`, `gui_utils.parse_bgr_string`, `ConditionEvaluator` classes, `PrimitiveSubActionExecutor` classes, `AnalysisEngine`, and `RulesEngine` (core logic) are complete. All reported unit test failures have been successfully resolved.
 - **v5.0.3 Manual End-to-End (E2E) Testing:** (Status: `Planning`) The next logical step is to proceed with comprehensive manual E2E testing of all v5.0.0 features. This will validate the stability and correctness of the system after the refactoring and with the foundational unit tests in place.
 
 **Future Considerations (Post v5.0.x):**
@@ -123,4 +125,4 @@ This document tracks planned features and their status for the Mark-I visual aut
 - Explore items listed under "vFuture" on the roadmap based on user feedback and project priorities.
 - Continuous performance optimization and expansion of unit test coverage for remaining modules (e.g., GUI components, `MainController`) and new features.
 
-The planned work for v5.0.2 (Implement Unit Test Infrastructure & Initial Coverage, including enhanced edge case coverage) is now complete.
+The planned work for v5.0.2 (Implement Unit Test Infrastructure & Initial Coverage, including enhanced edge case coverage and resolving all reported unit test failures) is now complete.
